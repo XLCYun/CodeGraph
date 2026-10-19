@@ -9,6 +9,7 @@ import { Readable } from 'node:stream';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { extractTarXz } from './native-xz-extraction.mjs';
+import { systemTar } from './system-tar.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const nativeTargets = { 'darwin-arm64': 'aarch64-apple-darwin', 'win32-x64': 'x86_64-pc-windows-msvc' };
@@ -102,7 +103,7 @@ export async function provisionToolchains(output, target = nativeTargets[`${proc
         const relativeHome = path.relative(await fs.realpath(extracted), resolvedHome);
         if (relativeHome === '..' || relativeHome.startsWith(`..${path.sep}`) || path.isAbsolute(relativeHome)) throw new Error('Extracted tool home escapes isolated directory');
       } else {
-        execFileSync(process.platform === 'win32' ? path.join(process.env.SystemRoot, 'System32/tar.exe') : '/usr/bin/tar', ['-xf', archive, '-C', extracted], { stdio: 'inherit' });
+        execFileSync(systemTar(), ['-xf', archive, '-C', extracted], { stdio: 'inherit' });
       }
       console.log(`Extracted ${entry.name} in ${((Date.now() - extractionStarted) / 1000).toFixed(1)}s`);
       const home = path.join(extracted, entry.home);

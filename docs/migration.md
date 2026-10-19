@@ -175,3 +175,11 @@ means still alive, never disappeared; other errors and live-member timeouts stil
 fail. No protocol or timeout changed. Separate owner tests and repeated real CLI
 cancellation verify this change; Narrant should carry the reviewed owner fix when
 adapting its consumer in Task 3.
+
+Task 2 review round 1 adapts the source scripts to the actual Windows CI environment:
+all system archive calls share explicit bsdtar selection, and cache-directory tests
+use host-native temporary paths. Real runtime extraction and Cargo license fixtures
+remain enabled. Release tests additionally cover draft retargeting during uploads
+and require pre-publication identity checks plus an exact target commit in the
+publication PATCH. Source hashes remain unchanged; affected destination hashes in
+the migration inventory record these adaptations.

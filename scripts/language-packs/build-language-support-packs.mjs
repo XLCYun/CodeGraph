@@ -9,6 +9,7 @@ import { validateArchive } from './archive-validation.mjs';
 import { packIds, limits, releaseIdentity } from './distribution.mjs';
 import { stageEngine, buildCli } from './build-codegraph.mjs';
 import { verifyAndExtract, safeFilePath } from './verify-distribution.mjs';
+import { systemTar } from './system-tar.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const targets = ['aarch64-apple-darwin', 'x86_64-pc-windows-msvc'];
@@ -97,7 +98,7 @@ export async function buildPack({ id, target, output, cache = path.join(reposito
     const archive = path.join(temporary, nodeArchive);
     await fs.writeFile(archive, bytes);
     const executable = windows ? 'node.exe' : 'bin/node';
-    execFileSync('tar', ['-xf', archive, '-C', temporary, `${nodeRoot}/${executable}`, `${nodeRoot}/LICENSE`]);
+    execFileSync(systemTar(), ['-xf', archive, '-C', temporary, `${nodeRoot}/${executable}`, `${nodeRoot}/LICENSE`]);
     await fs.copyFile(path.join(temporary, nodeRoot, executable), path.join(payload, 'bin', windows ? 'node.exe' : 'node'));
     await fs.copyFile(path.join(temporary, nodeRoot, 'LICENSE'), path.join(payload, 'licenses/Node-LICENSE'));
     for (const { name, version, integrity } of definition.packages) {
@@ -105,10 +106,10 @@ export async function buildPack({ id, target, output, cache = path.join(reposito
       const bytes = await download(`https://registry.npmjs.org/${name}/-/${basename}-${version}.tgz`, integrity, cache);
       const archive = path.join(temporary, `${basename}.tgz`);
       await fs.writeFile(archive, bytes);
-      validateArchive(execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' }), execFileSync('tar', ['-tvzf', archive], { encoding: 'utf8' }));
+      validateArchive(execFileSync(systemTar(), ['-tzf', archive], { encoding: 'utf8' }), execFileSync(systemTar(), ['-tvzf', archive], { encoding: 'utf8' }));
       const destination = path.join(payload, 'runtime', name);
       await fs.mkdir(destination, { recursive: true });
-      execFileSync('tar', ['-xzf', archive, '-C', destination, '--strip-components=1']);
+      execFileSync(systemTar(), ['-xzf', archive, '-C', destination, '--strip-components=1']);
       const metadata = JSON.parse(await fs.readFile(path.join(destination, 'package.json'), 'utf8'));
       if (metadata.name !== name || metadata.version !== version) throw new Error(`Package identity mismatch: ${name}`);
       if (name === 'typescript') {

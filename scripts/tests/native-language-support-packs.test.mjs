@@ -11,10 +11,11 @@ import { promisify } from 'node:util';
 import { packageDirectory } from '../language-packs/build-language-support-packs.mjs';
 import { copyToolTree, smokeNativeHelper, csharpFixturePlatforms, javaFixturePlatforms, goFixturePlatforms } from '../language-packs/native-language-support-packs.mjs';
 import { prepareDotnetFixtureReferences } from '../language-packs/provision-native-toolchains.mjs';
+import { systemTar } from '../language-packs/system-tar.mjs';
 
 /** 私有 runtime 的执行入口必须穿过打包与解压，两个平台都真实启动解包后的文件。 */
 test('native runtime executable survives archive extraction', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'narrant-native-permissions-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'narrant native permissions-'));
   try {
     const input = path.join(root, 'input');
     const windows = process.platform === 'win32';
@@ -28,7 +29,7 @@ test('native runtime executable survives archive extraction', async () => {
     assert.equal(manifest.files.find(file => file.path === entry)?.executable, true);
     const extracted = path.join(root, 'extracted');
     await fs.mkdir(extracted);
-    execFileSync('tar', ['-xzf', path.join(output, 'pack.tar.gz'), '-C', extracted]);
+    execFileSync(systemTar(), ['-xzf', path.join(output, 'pack.tar.gz'), '-C', extracted]);
     const executable = path.join(extracted, entry);
     if (windows) assert.equal(execFileSync(executable, ['--version'], { encoding: 'utf8', timeout: 10_000 }).trim(), process.version);
     else {
@@ -235,7 +236,7 @@ test('Cargo license packaging excludes unreachable development dependencies and 
 /** 用本机 registry 重现 release 缓存没有开发 crate 的情况，收集仍需完整 metadata。 */
 test('Cargo license packaging fetches uncached locked metadata without distributing dev licenses', async () => {
   const repository = fileURLToPath(new URL('../../', import.meta.url));
-  const root = await fs.mkdtemp(path.join(repository, '.license-cache-test-'));
+  const root = await fs.mkdtemp(path.join(repository, '.license cache test-'));
   const run = promisify(execFile);
   let server;
   try {
@@ -249,7 +250,7 @@ test('Cargo license packaging fetches uncached locked metadata without distribut
     await fs.writeFile(path.join(crate, 'LICENSE'), 'development license must not be distributed');
     await fs.writeFile(path.join(crate, 'Cargo.toml'), '[package]\nname="license_development"\nversion="0.1.0"\nedition="2021"\nlicense="MIT"\n[lib]\npath="lib.rs"\n');
     const archive = path.join(root, 'development.crate');
-    execFileSync('tar', ['-czf', archive, '-C', root, 'license_development-0.1.0'], { env: { ...process.env, COPYFILE_DISABLE: '1' } });
+    execFileSync(systemTar(), ['-czf', archive, '-C', root, 'license_development-0.1.0'], { env: { ...process.env, COPYFILE_DISABLE: '1' } });
     const bytes = await fs.readFile(archive), checksum = createHash('sha256').update(bytes).digest('hex');
     const lock = `version = 4\n[[package]]\nname = "license_source"\nversion = "0.1.0"\ndependencies = ["license_development"]\n[[package]]\nname = "license_development"\nversion = "0.1.0"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\nchecksum = "${checksum}"\n`;
     await fs.writeFile(path.join(source, 'Cargo.lock'), lock);

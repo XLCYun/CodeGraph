@@ -26,6 +26,8 @@ export async function publishBundle(bundle, github) {
     return release;
   }
   release ??= await github.createRelease({ tag_name: bundle.tag, target_commitish: bundle.sourceCommit, name: `CodeGraph ${bundle.version}`, body: `Immutable CodeGraph prerelease. Source commit: ${bundle.sourceCommit}. Both native CI targets passed all seven language packages and public CLI acceptance. Verify SHA256SUMS before installation.`, draft: true, prerelease: true, make_latest: 'false' });
+  const releaseId = release.id;
+  if (!Number.isSafeInteger(releaseId) || releaseId <= 0) throw new Error('Invalid draft release ID');
   for (const local of bundle.assets) {
     if (release.assets.some(asset => asset.name === local.name)) continue;
     const asset = await github.uploadAsset(release, local);
@@ -33,7 +35,8 @@ export async function publishBundle(bundle, github) {
     if (bytes.length !== local.size || sha256(bytes) !== local.sha256) throw new Error(`Uploaded asset differs: ${local.name}`);
   }
   const current = await github.findRelease(bundle.tag);
-  if (!current?.draft || JSON.stringify(current.assets.map(asset => asset.name).sort()) !== JSON.stringify(expected)) throw new Error('Draft assets changed during publication');
+  if (!current || current.id !== releaseId || current.draft !== true || current.tag_name !== bundle.tag || current.target_commitish !== bundle.sourceCommit || current.prerelease !== true) throw new Error('Draft identity changed during publication');
+  if (!Array.isArray(current.assets) || JSON.stringify(current.assets.map(asset => asset.name).sort()) !== JSON.stringify(expected)) throw new Error('Draft assets changed during publication');
   for (const asset of current.assets) {
     const local = bundle.assets.find(candidate => candidate.name === asset.name);
     const bytes = await github.readAsset(asset);
@@ -41,13 +44,14 @@ export async function publishBundle(bundle, github) {
   }
   const finalTagCommit = await github.tagCommit(bundle.tag);
   if (finalTagCommit && finalTagCommit !== bundle.sourceCommit) throw new Error('Tag changed during publication');
-  const published = await github.publishRelease(current.id);
-  if (published.draft || !published.prerelease || published.tag_name !== bundle.tag || await github.tagCommit(bundle.tag) !== bundle.sourceCommit) throw new Error('Published release identity differs');
+  // 即使最后读回之后 draft 被改目标，缺失 tag 的创建也只能使用已验证的完整提交。
+  const published = await github.publishRelease(releaseId, { tag_name: bundle.tag, target_commitish: bundle.sourceCommit, draft: false, prerelease: true, make_latest: 'false' });
+  if (published.id !== releaseId || published.draft || !published.prerelease || published.tag_name !== bundle.tag || published.target_commitish !== bundle.sourceCommit || await github.tagCommit(bundle.tag) !== bundle.sourceCommit) throw new Error('Published release identity differs');
   return published;
 }
 
 /** 官方 gh 处理认证和资产跳转；读写固定仓库，不接受任意下载主机或 clobber。 */
-function githubAdapter() {
+export function githubAdapter(run = execFileSync) {
   /** 只把明确 404 当成不存在，其余 API 失败仍关闭发布。 */
   function optional(endpoint) {
     try { return githubJson(endpoint); } catch (error) { if (String(error.stderr).includes('(HTTP 404)')) return undefined; throw error; }
@@ -62,17 +66,17 @@ function githubAdapter() {
     findRelease: tag => optional(`/repos/${releaseRepository}/releases/tags/${tag}`),
     createRelease: body => githubJson(`/repos/${releaseRepository}/releases`, body),
     uploadAsset(release, asset) {
-      execFileSync('gh', ['release', 'upload', release.tag_name, asset.file, '--repo', releaseRepository], { stdio: 'inherit' });
+      run('gh', ['release', 'upload', release.tag_name, asset.file, '--repo', releaseRepository], { stdio: 'inherit' });
       const uploaded = githubJson(`/repos/${releaseRepository}/releases/${release.id}`).assets.find(item => item.name === asset.name);
       if (!uploaded) throw new Error('Uploaded asset missing');
       return uploaded;
     },
     readAsset(asset) {
       if (!Number.isSafeInteger(asset.id) || asset.id <= 0 || asset.state !== 'uploaded' || asset.size <= 0 || asset.size > 256 * 1024 * 1024) throw new Error('Invalid GitHub asset identity');
-      return execFileSync('gh', ['api', `/repos/${releaseRepository}/releases/assets/${asset.id}`, '-H', 'Accept: application/octet-stream'], { maxBuffer: 256 * 1024 * 1024 + 1024 });
+      return run('gh', ['api', `/repos/${releaseRepository}/releases/assets/${asset.id}`, '-H', 'Accept: application/octet-stream'], { maxBuffer: 256 * 1024 * 1024 + 1024 });
     },
-    publishRelease(id) {
-      return JSON.parse(execFileSync('gh', ['api', `/repos/${releaseRepository}/releases/${id}`, '--method', 'PATCH', '--input', '-'], { encoding: 'utf8', input: JSON.stringify({ draft: false, prerelease: true, make_latest: 'false' }) }));
+    publishRelease(id, body) {
+      return JSON.parse(run('gh', ['api', `/repos/${releaseRepository}/releases/${id}`, '--method', 'PATCH', '--input', '-'], { encoding: 'utf8', input: JSON.stringify(body) }));
     },
   };
 }

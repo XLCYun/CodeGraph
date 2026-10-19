@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { publishBundle } from '../release/publish-release.mjs';
+import { publishBundle, githubAdapter } from '../release/publish-release.mjs';
 import { verifyEvidenceRun } from '../release/verify-evidence-run.mjs';
 import { assetNames, packIds, releaseRepository, sha256, targets } from '../language-packs/distribution.mjs';
 
@@ -16,7 +16,7 @@ function fixture() {
     createRelease: async body => { events.push('create'); release = { ...body, id: 1, assets: [] }; return release; },
     uploadAsset: async (_release, local) => { events.push('upload'); const asset = { id: objects.size + 1, name: local.name }; objects.set(local.name, local.bytes); release.assets.push(asset); return asset; },
     readAsset: async asset => objects.get(asset.name),
-    publishRelease: async () => { events.push('publish'); assert.equal(objects.size, 31); tag = bundle.sourceCommit; release.draft = false; return release; },
+    publishRelease: async (id, body) => { events.push('publish'); assert.equal(id, release.id); assert.equal(objects.size, 31); Object.assign(release, body); tag ??= release.target_commitish; release.draft = false; return release; },
   };
   return { bundle, github, events, objects, release: () => release, setTag: value => { tag = value; } };
 }
@@ -92,6 +92,61 @@ test('a verified partial draft can resume without a pre-created tag', async () =
   await publishBundle(f.bundle, f.github);
   assert.equal(f.release().draft, false);
   assert.equal(f.events.filter(event => event === 'create').length, 1);
+});
+
+/** 首发没有 tag 时，上传期间变更 draft 身份也必须在公开发布之前失败。 */
+test('draft identity drift during upload is rejected before publication without a tag', async () => {
+  for (const mutation of [{ target_commitish: 'b'.repeat(40) }, { id: 2 }, { tag_name: 'v9.0.0' }, { prerelease: false }]) {
+    const f = fixture(), find = f.github.findRelease;
+    let reads = 0;
+    f.github.findRelease = async tag => {
+      const release = await find(tag);
+      if (++reads === 2) Object.assign(release, mutation);
+      return release;
+    };
+    await assert.rejects(publishBundle(f.bundle, f.github), /Draft identity changed/);
+    assert.equal(f.events.includes('publish'), false, 'identity drift must fail before publication');
+    assert.equal(f.release().draft, true);
+    assert.equal(await f.github.tagCommit(f.bundle.tag), undefined);
+  }
+});
+
+/** 最终读回后仍可能被改目标，发布写入必须显式绑定已验证 tag 与完整 SHA。 */
+test('publication pins the exact commit even if the draft target changes after the final read', async () => {
+  const f = fixture(), publish = f.github.publishRelease;
+  f.github.publishRelease = async (id, body) => {
+    Object.assign(f.release(), { target_commitish: 'b'.repeat(40), tag_name: 'v9.0.0' });
+    await publish(id, body);
+    assert.deepEqual(body, { tag_name: f.bundle.tag, target_commitish: f.bundle.sourceCommit, draft: false, prerelease: true, make_latest: 'false' });
+    return f.release();
+  };
+  await publishBundle(f.bundle, f.github);
+  assert.equal(await f.github.tagCommit(f.bundle.tag), f.bundle.sourceCommit);
+  assert.equal(f.release().tag_name, f.bundle.tag);
+});
+
+/** target_commitish 对已存在 tag 无效，所以最终 tag 指向漂移也必须在 publish 前拒绝。 */
+test('a tag created at a different commit during upload prevents publication', async () => {
+  const f = fixture();
+  let probes = 0;
+  f.github.tagCommit = async () => ++probes === 1 ? undefined : 'b'.repeat(40);
+  await assert.rejects(publishBundle(f.bundle, f.github), /Tag changed/);
+  assert.equal(f.events.includes('publish'), false);
+  assert.equal(f.release().draft, true);
+});
+
+/** 直接检验实际 gh adapter 的 PATCH 字节，内存服务不会掩盖字段未发送的错误。 */
+test('GitHub publish adapter sends the exact target commit and tag in its PATCH body', async () => {
+  const calls = [], body = { tag_name: 'v0.1.0', target_commitish: 'a'.repeat(40), draft: false, prerelease: true, make_latest: 'false' };
+  const github = githubAdapter((command, args, options) => {
+    calls.push({ command, args, options });
+    return JSON.stringify({ id: 17, ...body });
+  });
+  assert.deepEqual(await github.publishRelease(17, body), { id: 17, ...body });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, 'gh');
+  assert.deepEqual(calls[0].args, ['api', `/repos/${releaseRepository}/releases/17`, '--method', 'PATCH', '--input', '-']);
+  assert.deepEqual(JSON.parse(calls[0].options.input), body);
 });
 
 /** artifact 存在不能冒充测试成功；证据必须逐项匹配身份、语义清单与归档摘要。 */

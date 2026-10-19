@@ -1509,8 +1509,9 @@
       "source": "scripts/tests/rust-cache.test.mjs",
       "destination": "scripts/tests/rust-cache.test.mjs",
       "source_sha256": "d84ed3997ae2c4113f47696d31145546e63bac86ea66aa985ddf258b039b5d60",
-      "destination_sha256": "d84ed3997ae2c4113f47696d31145546e63bac86ea66aa985ddf258b039b5d60",
-      "unchanged": true
+      "destination_sha256": "de65d1f33f2967c52a5dd662f40a5f38e8b69e4686f4351dfc5f398140748351",
+      "unchanged": false,
+      "adaptation": "Task 2 review round 1: explicit system bsdtar and host-native cache test paths; original behavior retained."
     },
     {
       "source": "src-tauri/src/structure_review/tests/config_dir_fixture.rs",
@@ -1754,8 +1755,9 @@
       "source": "scripts/language-packs/build-language-support-packs.mjs",
       "destination": "scripts/language-packs/build-language-support-packs.mjs",
       "source_sha256": "27167d12aeed55ac103cfb5ac37d7a58dcd8ef3914a037597d680eba960d31a8",
-      "destination_sha256": "3ca589c9190462d22117afc86fa073d956be25e6edaeeb617ab43b5eaaca2a34",
-      "unchanged": false
+      "destination_sha256": "0b27a48eb64c79ee3cb9642e0498db1418f43dc8b1ba1d7a77801f7c7d789689",
+      "unchanged": false,
+      "adaptation": "Task 2 review round 1: explicit system bsdtar and host-native cache test paths; original behavior retained."
     },
     {
       "source": "scripts/language-packs/build-migrating-native-helper.mjs",
@@ -1796,8 +1798,9 @@
       "source": "scripts/language-packs/provision-native-toolchains.mjs",
       "destination": "scripts/language-packs/provision-native-toolchains.mjs",
       "source_sha256": "92447c7003928679fcc7f18e040c99777211b9d827e90c97ad3d98108ab63903",
-      "destination_sha256": "92447c7003928679fcc7f18e040c99777211b9d827e90c97ad3d98108ab63903",
-      "unchanged": true
+      "destination_sha256": "b70db78e32dbc66dccc6489c84706b44f152a118b548c33e7684cad4d2e9090c",
+      "unchanged": false,
+      "adaptation": "Task 2 review round 1: explicit system bsdtar and host-native cache test paths; original behavior retained."
     },
     {
       "source": "scripts/language-packs/run-rust-helper-test.mjs",
@@ -1866,8 +1869,9 @@
       "source": "scripts/tests/native-language-support-packs.test.mjs",
       "destination": "scripts/tests/native-language-support-packs.test.mjs",
       "source_sha256": "2196faac0872f05a3ea6a3ef314c2dde4312f65cb6fdad0d028f0b007180625f",
-      "destination_sha256": "2196faac0872f05a3ea6a3ef314c2dde4312f65cb6fdad0d028f0b007180625f",
-      "unchanged": true
+      "destination_sha256": "e5c63960372781bb64bde133456b91e261d50a2b73008d824abc742095139954",
+      "unchanged": false,
+      "adaptation": "Task 2 review round 1: explicit system bsdtar and host-native cache test paths; original behavior retained."
     },
     {
       "source": "scripts/tests/native-xz-extraction.test.mjs",
@@ -1901,8 +1905,9 @@
       "source": "scripts/tests/rust-cache.test.mjs",
       "destination": "scripts/tests/rust-cache.test.mjs",
       "source_sha256": "d84ed3997ae2c4113f47696d31145546e63bac86ea66aa985ddf258b039b5d60",
-      "destination_sha256": "d84ed3997ae2c4113f47696d31145546e63bac86ea66aa985ddf258b039b5d60",
-      "unchanged": true
+      "destination_sha256": "de65d1f33f2967c52a5dd662f40a5f38e8b69e4686f4351dfc5f398140748351",
+      "unchanged": false,
+      "adaptation": "Task 2 review round 1: explicit system bsdtar and host-native cache test paths; original behavior retained."
     },
     {
       "source": "scripts/tests/select-msvc-redist.test.mjs",

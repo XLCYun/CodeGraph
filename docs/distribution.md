@@ -143,6 +143,11 @@ original source/local calls, empty selection and read-only input; Rust covers al
 three dependency scopes. Per-test inventory is
 [semantic-acceptance.json](../resources/semantic-acceptance.json).
 
+Archive commands use the explicit system bsdtar (`SystemRoot/System32/tar.exe` on
+Windows, `/usr/bin/tar` on macOS), including Node ZIP and npm tgz inputs. They do
+not select Git Bash's GNU tar from PATH; paths with drive letters and spaces are
+covered by the real archive tests.
+
 Only successful complete clean-source acceptance emits
 `verification-<target>.json`. Focused/local passes never stand in for this evidence.
 Failed/cancelled jobs upload no release artifacts. `Complete CI` requires both
@@ -165,4 +170,7 @@ releases, failed CI or partial evidence stop the operation. No `--clobber`, asse
 delete or version overwrite exists. An identical already-published version is a
 read-only success; a draft can only receive missing identical intended assets.
 Configure the `codegraph-release` environment protection as appropriate before use.
+The final draft read rechecks its release ID, tag, exact target commit and prerelease
+identity. The publication PATCH also pins that tag and target commit, while the
+existing-tag commit checks remain mandatory before and after publication.
 No workflow has been dispatched and nothing has been published by this implementation.

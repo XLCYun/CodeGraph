@@ -20,22 +20,27 @@ test("macOS 使用官方默认的用户缓存目录", () => {
   assert.equal(directory, path.join("/Users/developer", "Library", "Caches", "Mozilla.sccache"));
 });
 
-test("显式 SCCACHE_DIR 覆盖平台默认目录", () => {
+test("显式 SCCACHE_DIR 覆盖平台默认目录", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "codegraph cache override-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const configured = path.join(root, "team-sccache");
   const directory = resolveCacheDirectory({
-    env: { HOME: "/Users/developer", SCCACHE_DIR: "/tmp/team-sccache" },
-    platform: "darwin",
+    env: { HOME: os.homedir(), SCCACHE_DIR: configured },
   });
 
-  assert.equal(directory, "/tmp/team-sccache");
+  assert.equal(directory, path.resolve(configured));
 });
 
-test("安全校验接受具体的 sccache 目录", () => {
-  const directory = assertSafeCacheDirectory("/tmp/narrant/sccache", {
-    env: { HOME: "/Users/developer" },
-    repositoryRoot: "/workspace/narrant",
+test("安全校验接受具体的 sccache 目录", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "codegraph cache safety-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const configured = path.join(root, "narrant", "sccache");
+  const directory = assertSafeCacheDirectory(configured, {
+    env: { HOME: os.homedir() },
+    repositoryRoot: fileURLToPath(new URL("../../", import.meta.url)),
   });
 
-  assert.equal(directory, "/tmp/narrant/sccache");
+  assert.equal(directory, path.resolve(configured));
 });
 
 test("安全校验拒绝用户目录和无 sccache 标识的目录", () => {
