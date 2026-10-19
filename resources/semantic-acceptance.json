@@ -22,8 +22,7 @@
     "source": "src/native_analyzer/tests/python_graph.rs",
     "name": "native_analyzer::tests::python_graph::internal_links_preserve_selected_paths_and_distinct_identities",
     "platforms": [
-      "darwin",
-      "win32"
+      "darwin"
     ]
   },
   {
@@ -40,8 +39,7 @@
     "source": "src/native_analyzer/tests/python_graph.rs",
     "name": "native_analyzer::tests::python_graph::escaping_context_links_fail_native_loading",
     "platforms": [
-      "darwin",
-      "win32"
+      "darwin"
     ]
   },
   {
@@ -85,8 +83,7 @@
     "source": "src/native_analyzer/tests/python_graph.rs",
     "name": "native_analyzer::tests::python_graph::python_helper_timeout_and_caller_panic_reap_actual_process",
     "platforms": [
-      "darwin",
-      "win32"
+      "darwin"
     ]
   },
   {
@@ -345,8 +342,7 @@
     "source": "src/native_analyzer/tests/rust_graph.rs",
     "name": "native_analyzer::tests::rust_graph::rust_helper_runtime_toolchain_selection_reaches_real_cargo_and_rustc",
     "platforms": [
-      "darwin",
-      "win32"
+      "darwin"
     ]
   },
   {
@@ -363,8 +359,7 @@
     "source": "src/native_analyzer/tests/rust_graph.rs",
     "name": "native_analyzer::tests::rust_graph::rust_helper_escaping_context_link_is_not_promoted_to_repository_symbol",
     "platforms": [
-      "darwin",
-      "win32"
+      "darwin"
     ]
   },
   {
@@ -372,8 +367,7 @@
     "source": "src/native_analyzer/tests/rust_graph.rs",
     "name": "native_analyzer::tests::rust_graph::rust_helper_cancellation_reaps_active_toolchain_probe",
     "platforms": [
-      "darwin",
-      "win32"
+      "darwin"
     ]
   },
   {
@@ -426,8 +420,7 @@
     "source": "src/native_languages/rust/tests/production.rs",
     "name": "native_languages::rust::tests::production_cancellation_reaps_toolchain_probe",
     "platforms": [
-      "darwin",
-      "win32"
+      "darwin"
     ]
   },
   {

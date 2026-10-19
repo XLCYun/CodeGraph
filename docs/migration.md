@@ -126,12 +126,18 @@ exact artifact URLs, manifest fields, local candidate roots and release conditio
 The source checkout remains read-only.
 
 `resources/semantic-acceptance.json` enumerates every retained real-pack ignored
-engine test: 69 on macOS, plus the Windows junction boundary case on Windows.
+engine test: 69 on macOS and 63 on Windows. The original seven `cfg(unix)` tests
+remain macOS-only, while the original Windows junction boundary case remains
+Windows-only; no test or assertion is removed.
 The verifier requires each named test to report `ok`; zero-test Cargo success cannot
 pass. The internal ignored `child_process::test_support::fixture::process_fixture`
 is invoked only by its owning subprocess tests and never by a blanket ignored run.
 Missing requested SDK fixtures fail before suites can skip them. Independent groups
 run serially, retain original failures and aggregate errors without a false success.
+The complete executable command list and portable receipt identities now share
+`scripts/language-packs/verification-commands.mjs`; the verifier retains its public
+module export. Release receipts must match all 16 macOS / 15 Windows groups and
+their parameters, as well as the separate per-test semantic inventory.
 
 | Original verifier command/group | CodeGraph destination / preserved acceptance | Narrant Task 3 ownership |
 | --- | --- | --- |
@@ -142,13 +148,13 @@ run serially, retain original failures and aggregate errors without a false succ
 | TS nine Node test files | Same files, `--test-concurrency=1`, configuration, readonly host, projection, protocol, output and lifecycle | None of these tests deferred |
 | `native_languages::typescript_graph:: --ignored` | 22 retained test names, same Rust assertions | Four listed diff-dependent tests retained above |
 | Rust helper `+1.98.0 test --lib --test initial_protocol --test lifecycle --include-ignored` | Same command, same runner stripping only Cargo build-tool selection, historical fixture matrix | None of these helper tests deferred |
-| `native_analyzer::tests::rust_graph:: --ignored` | 11 retained names including source/provenance, three dependency contexts, read-only loading and lifecycle | Fifteen diff-dependent tests listed above |
+| `native_analyzer::tests::rust_graph:: --ignored` | 11 macOS / 8 Windows retained names including source/provenance, three dependency contexts, read-only loading and lifecycle; three original Unix-only probes remain so | Fifteen diff-dependent tests listed above |
 | `native_analyzer::tests::rust_syntax:: --ignored` | Four retained source/closure/cfg tests | Eleven diff-dependent tests listed above |
-| `native_languages::rust::tests:: --ignored` | Production cancellation and process-probe ownership | One production profile diff test listed above |
+| `native_languages::rust::tests:: --ignored` | Original Unix-only production cancellation/toolchain probe; Windows retains common cancellation, shared Job and public CLI coverage | One production profile diff test listed above |
 | Rust/TS real installed language_support tests | New real archive verifier and real public CLI graph validation replace CodeGraph's app dependency | Application installer/service and cache assertions remain in Narrant |
 | Rust/TS Review-to-DTO tests | Public graph acceptance covers producer boundary | Complete Review lifecycle and DTO assertions remain in Narrant |
 | Python helper `+1.98.0 test --lib --test initial_protocol --test lifecycle` | Same full helper/protocol/lifecycle suite | None of these helper tests deferred |
-| `native_analyzer::tests::python_graph:: --ignored` | Ten retained tests | Six diff tests listed above |
+| `native_analyzer::tests::python_graph:: --ignored` | Ten macOS / seven Windows retained tests; three original Unix-only file-link/process probes remain so | Six diff tests listed above |
 | `native_analyzer::tests::python_native:: --ignored` | 21 retained tests on macOS, 22 on Windows | One overload/docstring diff test listed above |
 | `language_support::python_tests::` | Real Python archive integrity + public CLI acceptance replace CodeGraph application setup | Installation/caching/service tests remain in Narrant |
 | `application::tests::python::` | Public CLI graph acceptance | Review/DTO consumer semantics remain in Narrant |
@@ -156,7 +162,7 @@ run serially, retain original failures and aggregate errors without a false succ
 | `structure_review::application::tests::native::` | Public CLI boundary/lifecycle integration tests | Review application suite remains in Narrant |
 | `real_native_packs_install_and_analyze_through_production_factory` | All seven archives verified/unpacked; actual package CLI and standalone CLI exercised through fixed factory | App installation service assertions remain in Narrant |
 | `native_helper_graphs` graph/diff integration | Public CLI local-call/source/read-only/test-switch graph acceptance for seven packs | Original graph/diff comparisons remain in Narrant; no diff copied |
-| Windows process probe/lifecycle scripts | Same shared production owner crate, early native probe, locked wrapper | Narrant app manifest/Common Controls behavior remains in its app tests |
+| Windows process probe/lifecycle scripts | Same shared production owner crate, early native probe, Cargo wrapper (warns and runs unlocked if lockf/flock is absent) | Narrant app manifest/Common Controls behavior remains in its app tests |
 | Old pack script tests | Archive paths/permissions, licenses, SDK fixtures, pinned toolchains, runner quoting, serial failure aggregation, XZ cleanup, redist selection retained; new CLI/evidence/release failure tests | App-only workflow and application signing tests not copied |
 
 The original publisher and `public-draft-assets.mjs` were not reused: they depend on
@@ -183,3 +189,19 @@ remain enabled. Release tests additionally cover draft retargeting during upload
 and require pre-publication identity checks plus an exact target commit in the
 publication PATCH. Source hashes remain unchanged; affected destination hashes in
 the migration inventory record these adaptations.
+
+Final review fixes add the required Java static project metadata and C/C++
+compilation database to public CLI fixtures and their read-only snapshots. Each
+valid project must succeed before a missing-metadata request is required to fail
+through the same actual packaged CLI. Expected-failure script tests capture and
+assert their diagnostics; production verifier errors and environment warnings
+remain visible. No helper semantics, pins or public protocol changed.
+
+The new Windows run also confirmed that junction subprocess output interrupted
+otherwise successful libtest lines. The fixtures now capture that output and show
+it on assertion failure; the verifier still requires every exact named success.
+The semantic inventory and its source-attribute regression now agree with every
+original function-level `cfg`. The public CLI additionally fixes a scheduling race
+where an immediate invalid-input result could arrive before the output thread took
+`ready`: its bounded output queue now accommodates those two protocol frames. The
+original output deadline and process cleanup requirements remain unchanged.

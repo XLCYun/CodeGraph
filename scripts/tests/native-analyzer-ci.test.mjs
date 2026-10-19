@@ -83,7 +83,7 @@ test('all enabled helpers and narrow absolute platform roots are mandatory', () 
 test('verification uses every helper suite and serialized Cargo host and real graph tests', () => {
   const environment = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`NARRANT_${name}`, '/isolated/tools']));
   const commands = verificationCommands(environment, 'win32');
-  assert.equal(commands.length, 16);
+  assert.equal(commands.length, 15);
   assert.equal(commands[2].environment.NARRANT_TEST_REFS8, path.join('/isolated/tools', 'ref/net8.0'));
   assert.match(commands[0].executable, /go\.exe$/);
   assert.deepEqual(commands.slice(1, 4).map(command => command.args[4]), ['native-helpers/java/tests', 'native-helpers/csharp/tests', 'native-helpers/clang/tests']);
@@ -92,7 +92,7 @@ test('verification uses every helper suite and serialized Cargo host and real gr
     assert.equal(command.args[0], 'scripts/cargo-agent.sh');
   }
   assert.ok(commands.at(-1).args.includes('scripts/language-packs/verify-public-cli.mjs'));
-  assert.equal(commands.flatMap(command => command.requiredTests ?? []).length, 70);
+  assert.equal(commands.flatMap(command => command.requiredTests ?? []).length, 63);
   assert.throws(() => verificationCommands({}), /Missing fixed toolchain/);
 });
 
@@ -103,17 +103,21 @@ test('shared process and native acceptance use the same live groups on both plat
   const windows = verificationCommands(environment, 'win32');
   const macOS = verificationCommands(environment, 'darwin');
   assert.equal(macOS.length, 16);
+  assert.equal(windows.length, 15);
+  assert.ok(macOS.some(command => command.args.includes('native_languages::rust::tests::')));
+  assert.ok(windows.every(command => !command.args.includes('native_languages::rust::tests::')));
   for (const commands of [windows, macOS]) {
     const owners = commands.filter(command => command.args.includes(ownerFilter) && !command.args.includes('--ignored'));
     assert.equal(owners.length, 1);
     assert.deepEqual(owners[0].args, ['scripts/cargo-agent.sh', 'test', '--locked', '--bin', ownerFilter, '--', '--test-threads=1']);
   }
   for (const commands of [windows, macOS]) assert.doesNotMatch(JSON.stringify(commands), /lsp::/);
-  // 两个平台的 runner 可使用不同分隔符；只规范这些路径，其他命令与参数仍严格对照。
+  // 平台特有 cfg 与 runner 路径分隔符除外，共同验收组的命令与参数严格对照。
   const runnerPrefix = "target.'cfg(all())'.runner=";
-  const normalizeRunnerPaths = commands => commands.map(command => ({
+  const commonTests = new Set(windows.flatMap(command => command.requiredTests ?? []).filter(test => macOS.some(command => command.requiredTests?.includes(test))));
+  const normalizeRunnerPaths = commands => commands.filter(command => !command.args.includes('native_languages::rust::tests::')).map(command => ({
     ...command,
-    ...(command.requiredTests ? { requiredTests: command.requiredTests.filter(test => !test.endsWith('native_windows_junction_escape_is_rejected')) } : {}),
+    ...(command.requiredTests ? { requiredTests: command.requiredTests.filter(test => commonTests.has(test)) } : {}),
     args: command.args.map(arg => arg.startsWith(runnerPrefix)
       ? [runnerPrefix, ...JSON.parse(arg.slice(runnerPrefix.length)).map(file => path.normalize(file))]
       : arg),
@@ -124,6 +128,7 @@ test('shared process and native acceptance use the same live groups on both plat
 // 前组真实子进程失败后仍必须执行后组，同时整体保持失败，不能只收集成功日志。
 test('failed validation child does not prevent later child execution or make the result successful', async t => {
   const diagnostics = t.mock.method(console, 'error', () => {});
+  const launches = t.mock.method(console, 'log', () => {});
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'native validation groups '));
   const marker = path.join(directory, 'executed');
   const commands = [7, 0].map(code => ({
@@ -141,6 +146,7 @@ test('failed validation child does not prevent later child execution or make the
     assert.equal(await fs.readFile(marker, 'utf8'), '7\n0\n');
     assert.equal(diagnostics.mock.callCount(), 1);
     assert.match(diagnostics.mock.calls[0].arguments[0].cause.message, /failed \(7\)/);
+    assert.deepEqual(launches.mock.calls.map(call => call.arguments), commands.map(command => [`Native validation: ${command.executable} ${command.args.join(' ')}`]));
   } finally { await fs.rm(directory, { recursive: true, force: true }); }
 });
 
@@ -212,11 +218,11 @@ test('reference package verification checks SHA512 content', async () => {
 });
 
 
-/** 六十九个跨平台语义断言及一个 Windows junction 断言都必须逐名接入。 */
+/** 每个平台编译出的原有语义断言都必须逐名接入。 */
 test('semantic acceptance inventory exactly covers all retained ignored tests', async () => {
   const inventory = JSON.parse(await fs.readFile(new URL('../../resources/semantic-acceptance.json', import.meta.url)));
   assert.equal(inventory.filter(item => item.platforms.includes('darwin')).length, 69);
-  assert.equal(inventory.filter(item => item.platforms.includes('win32')).length, 70);
+  assert.equal(inventory.filter(item => item.platforms.includes('win32')).length, 63);
   const environment = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`NARRANT_${name}`, '/isolated/tools']));
   for (const platform of ['darwin', 'win32']) {
     const commands = verificationCommands(environment, platform);
@@ -238,6 +244,23 @@ test('semantic acceptance inventory exactly covers all retained ignored tests', 
   assert.ok(verificationCommands({}, 'darwin', 'typescript-javascript')[0].args.includes('--test-concurrency=1'));
   assert.throws(() => verificationCommands({}, 'darwin', 'go'), /Missing fixed toolchain/);
   assert.throws(() => verificationCommands({}, 'darwin', 'typo'), /not enabled/);
+});
+
+/** 清单逐项服从原测试的函数级 cfg，函数体中的链接实现 cfg 不改变测试平台。 */
+test('semantic inventory platforms exactly follow retained Rust cfg boundaries', async () => {
+  const inventory = JSON.parse(await fs.readFile(new URL('../../resources/semantic-acceptance.json', import.meta.url)));
+  for (const file of new Set(inventory.map(item => item.source))) {
+    const source = (await fs.readFile(new URL(`../../${file}`, import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+    const functions = [...source.matchAll(/^((?:#\[[^\n]+\]\n)+)fn (\w+)\(/gm)].filter(match => match[1].includes('#[ignore'));
+    assert.equal(functions.length, inventory.filter(item => item.source === file).length, `Every retained test must have parsed attributes: ${file}`);
+    for (const [, attributes, name] of functions) {
+      const cfg = [...attributes.matchAll(/#\[cfg\(([^\n]+)\)\]/g)].map(match => match[1]);
+      assert.ok(cfg.length === 0 || (cfg.length === 1 && ['unix', 'windows'].includes(cfg[0])), `Review unsupported cfg for ${file}:${name}`);
+      const platforms = cfg[0] === 'unix' ? ['darwin'] : cfg[0] === 'windows' ? ['win32'] : ['darwin', 'win32'];
+      const entry = inventory.find(item => item.source === file && item.name.endsWith(`::${name}`));
+      assert.deepEqual(entry?.platforms, platforms, `${file}:${name}`);
+    }
+  }
 });
 
 /** 双平台任务不能跳过完整构建；上传必须发生在成功验收以后。 */
@@ -281,9 +304,14 @@ test('requested native fixtures must exist before running suites', async () => {
 
 /** 即使子进程退出 0，漏跑的已登记语义断言也必须关闭验收。 */
 test('missing named semantic success rejects an otherwise successful subprocess', async t => {
-  t.mock.method(console, 'error', () => {});
-  await assert.rejects(runVerificationCommands([{ executable: process.execPath, args: ['-e', 'process.exit(0)'], requiredTests: ['required::real_semantic_case'] }], process.env), error => {
+  const diagnostics = t.mock.method(console, 'error', () => {});
+  const launches = t.mock.method(console, 'log', () => {});
+  const command = { executable: process.execPath, args: ['-e', 'process.exit(0)'], requiredTests: ['required::real_semantic_case'] };
+  await assert.rejects(runVerificationCommands([command], process.env), error => {
     assert.match(error.errors[0].cause.message, /Required semantic test did not pass/);
     return true;
   });
+  assert.deepEqual(launches.mock.calls.map(call => call.arguments), [[`Native validation: ${command.executable} ${command.args.join(' ')}`]]);
+  assert.equal(diagnostics.mock.callCount(), 1);
+  assert.match(diagnostics.mock.calls[0].arguments[0].cause.message, /Required semantic test did not pass: required::real_semantic_case/);
 });

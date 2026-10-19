@@ -137,13 +137,16 @@ fn native_internal_links_do_not_rewrite_definition_ownership() {
     #[cfg(unix)]
     std::os::unix::fs::symlink("impl", root.path().join("alias")).unwrap();
     #[cfg(windows)]
-    assert!(std::process::Command::new("cmd")
-        .args(["/C", "mklink", "/J"])
-        .arg(root.path().join("alias"))
-        .arg(root.path().join("impl"))
-        .status()
-        .unwrap()
-        .success());
+    {
+        // 保留失败诊断，同时避免 mklink 输出打断 libtest 的完整结果行。
+        let output = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(root.path().join("alias"))
+            .arg(root.path().join("impl"))
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+    }
     let analyzer = analyzer();
     let input = |files: &[&str]| AnalysisInput {
         repository_root: root.path().into(),
@@ -808,13 +811,13 @@ fn native_windows_junction_escape_is_rejected() {
     let outside = tempfile::tempdir().unwrap();
     fs::write(root.path().join("main.py"), "def run(): pass\n").unwrap();
     fs::write(outside.path().join("external.py"), "def external(): pass\n").unwrap();
-    let status = std::process::Command::new("cmd")
+    let output = std::process::Command::new("cmd")
         .args(["/C", "mklink", "/J"])
         .arg(root.path().join("escaped"))
         .arg(outside.path())
-        .status()
+        .output()
         .unwrap();
-    assert!(status.success());
+    assert!(output.status.success(), "{output:?}");
     let error = analyzer()
         .analyze(&AnalysisInput {
             repository_root: root.path().into(),

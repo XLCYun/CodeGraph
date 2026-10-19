@@ -97,8 +97,13 @@ Use Node 24.18.0 and pnpm 11.13.1 (`pnpm install --frozen-lockfile`). The only N
 build dependency is pinned `tar@7.5.22`. All Cargo commands use
 `scripts/cargo-agent.sh`; root is binary-only, so use `--bin codegraph`, not `--lib`.
 Helper manifests retain separate targets, `+1.98.0`, upstream revisions and locks.
-Keep incremental and each worktree's own targets. `sccache` is optional and shared
-by the wrapper when installed.
+Keep incremental and each worktree's own targets. The wrapper uses `lockf` or
+`flock` when available; if neither exists, it prints a warning and runs without a
+repository lock. When `sccache` is absent and no custom `RUSTC_WRAPPER` is set, it
+prints a warning and falls back to ordinary Cargo compilation. A custom wrapper
+is preserved. Calling the wrapper alone therefore proves neither lock acquisition
+nor cache use. Hosted jobs still run their build/test groups serially; GitHub's
+artifact/cache restore is separate from this compiler-cache behavior.
 
 For the light checks and a real TypeScript pack on a supported native host:
 
@@ -136,11 +141,19 @@ are not a product target-version allowlist.
 Host architecture is independently checked by native builders. Windows runs the
 shared process probe before expensive downloads, then selects exact MSVC/SDK/redist
 from the unchanged pins. macOS selects Xcode 16.4 / SDK 15.5. All seven helper suites,
-69 retained semantic tests (70 on Windows), the full engine and public CLI lifecycle
+69 retained semantic tests on macOS (63 on Windows), the full engine and public CLI lifecycle
 suites, and real unpacked public CLI graph acceptance run serially by group.
 Public acceptance checks both executable choices, all seven languages, test switches,
 original source/local calls, empty selection and read-only input; Rust covers all
-three dependency scopes. Per-test inventory is
+three dependency scopes. Java uses `src/Sample.java` with a `java-static-v1`
+`narrant-java.json` declaring `src` and release 17. C/C++ uses a compilation
+database bound to the actual temporary project root with `clang++`, `-std=c++20`
+and the selected source. The fixed factory supplies one approved native target
+SDK, so this database selects that target without guessing its deployment triple.
+Both metadata files belong to the read-only snapshot. After valid analysis passes,
+removing the required metadata must produce the public `analysis_failed` outcome
+and exit 1; a spawn error, timeout or successful empty graph cannot pass this check.
+Per-test inventory is
 [semantic-acceptance.json](../resources/semantic-acceptance.json).
 
 Archive commands use the explicit system bsdtar (`SystemRoot/System32/tar.exe` on
@@ -150,6 +163,23 @@ covered by the real archive tests.
 
 Only successful complete clean-source acceptance emits
 `verification-<target>.json`. Focused/local passes never stand in for this evidence.
+The shared [command specification](../scripts/language-packs/verification-commands.mjs)
+defines all 16 macOS / 15 Windows groups, including their argv, working directories, environment
+parameters and required semantic names. Before recording evidence, the writer
+compares the actual executed command list with that full specification. The
+receipt stores portable identities using tool/repository path placeholders; the
+release validator compares the complete platform-specific list exactly. Missing,
+replaced or duplicate commands cannot substitute for any helper, engine, CLI or
+public acceptance group. These receipt identities are internal CI metadata, not
+an executable configuration or a consumer pack contract.
+The platform lists follow the original test `cfg`: seven shell/file-symlink probe
+cases exist only on Unix, and one Python junction-escape case exists only on
+Windows. The Unix-only production-probe group is not sent to Windows as a zero-test
+command. Windows still runs real helper cancellation, directory alias ownership,
+junction escape, shared process Job tests and public CLI cancellation/parent-kill
+acceptance. Junction command output is captured for assertion diagnostics so it
+cannot split libtest's required named-success lines. Zero-test Cargo groups and
+missing named results remain failures.
 Failed/cancelled jobs upload no release artifacts. `Complete CI` requires both
 platform jobs. No manual quality-gate workflow exists or is dispatched here.
 

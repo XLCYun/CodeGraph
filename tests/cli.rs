@@ -4,7 +4,7 @@ use std::{
     fs,
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
+    process::{Child, Command, Output, Stdio},
     time::{Duration, Instant},
 };
 
@@ -120,17 +120,22 @@ impl Fixture {
     }
     /// 对有限输入关闭 stdin，确保 `< request.json` 用法能够正常完成。
     fn run(&self, bytes: &[u8]) -> (std::process::ExitStatus, Vec<Value>) {
-        let mut child = self.spawn();
-        child.stdin.take().unwrap().write_all(bytes).unwrap();
-        wait(&mut child, Duration::from_secs(12));
-        let output = child.wait_with_output().unwrap();
-        assert!(output.stderr.len() <= 256 * 1024);
+        let output = self.run_output(bytes);
         let lines = String::from_utf8(output.stdout)
             .unwrap()
             .lines()
             .map(|line| serde_json::from_str(line).unwrap())
             .collect();
         (output.status, lines)
+    }
+    /// 协议失败用例保留原始 stdout/stderr，断言失败时能定位具体输入和退出路径。
+    fn run_output(&self, bytes: &[u8]) -> Output {
+        let mut child = self.spawn();
+        child.stdin.take().unwrap().write_all(bytes).unwrap();
+        wait(&mut child, Duration::from_secs(12));
+        let output = child.wait_with_output().unwrap();
+        assert!(output.stderr.len() <= 256 * 1024);
+        output
     }
     /// 返回 helper 的隔离测试标记路径。
     fn marker(&self, name: &str) -> PathBuf {
@@ -226,16 +231,27 @@ fn invalid_protocol_and_pack_inputs_fail() {
     duplicate.extend(line(&request));
     let wrong_cancel =
         line(&json!({"protocol":"codegraph.analyzer/1","type":"cancel","id":"wrong"}));
-    for input in [
-        b"{\"protocol\":".to_vec(),
-        duplicate,
-        wrong_cancel,
-        line(&json!({"protocol":"codegraph.analyzer/2","type":"analyze","id":"bad"})),
-        b"".to_vec(),
+    for (case, input) in [
+        ("truncated", b"{\"protocol\":".to_vec()),
+        ("duplicate", duplicate),
+        ("wrong cancel", wrong_cancel),
+        (
+            "wrong protocol",
+            line(&json!({"protocol":"codegraph.analyzer/2","type":"analyze","id":"bad"})),
+        ),
+        ("empty stdin", b"".to_vec()),
     ] {
-        let (status, messages) = fixture.run(&input);
-        assert!(!status.success());
-        assert_eq!(messages.last().unwrap()["outcome"], "error");
+        let output = fixture.run_output(&input);
+        let context = format!("case={case}, input={input:?}, output={output:?}");
+        let messages: Vec<Value> = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(|line| serde_json::from_str(line).expect(&context))
+            .collect();
+        assert_eq!(output.status.code(), Some(1), "{context}");
+        assert_eq!(messages.len(), 2, "{context}");
+        assert_eq!(messages[0]["type"], "ready", "{context}");
+        assert_eq!(messages[1]["type"], "completed", "{context}");
+        assert_eq!(messages[1]["outcome"], "error", "{context}");
         assert!(messages.last().unwrap().get("graph").is_none());
     }
     fs::write(fixture.pack.join("control/codegraph.json"),r#"{"schema_version":1,"pack_id":"go","pack_version":"0.1.0","engine_version":"0.1.0","protocol":"codegraph.analyzer/1"}"#).unwrap();

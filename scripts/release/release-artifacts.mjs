@@ -1,8 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import { assetNames, nativeTarget, packIds, releaseIdentity, sha256, targets } from '../language-packs/distribution.mjs';
 import { verifyDistribution } from '../language-packs/verify-distribution.mjs';
+import { recordVerifiedCommands, verificationCommandIdentities } from '../language-packs/verification-commands.mjs';
 
 /** 对一平台全部八种产物做完整字节验证，并保证语言包使用同一 CLI。 */
 async function readTarget(artifacts, identity, target, requireClean) {
@@ -24,21 +26,24 @@ async function readTarget(artifacts, identity, target, requireClean) {
 }
 
 /** 只有所有串行验收成功且源码干净时才能写可发布证据；focused 验收不会调用此入口。 */
-export async function writeVerificationEvidence(artifacts, commands) {
+export async function writeVerificationEvidence(artifacts, commands, environment) {
   const identity = await releaseIdentity(), target = nativeTarget();
   if (identity.sourceDirty) throw new Error('Cannot attest a dirty source tree; development tests are not release evidence');
+  const recordedCommands = recordVerifiedCommands(commands, environment);
   const { receipts } = await readTarget(artifacts, identity, target, true);
   const semanticTests = commands.flatMap(command => command.requiredTests ?? []).sort();
   const expected = JSON.parse(await fs.readFile(new URL('../../resources/semantic-acceptance.json', import.meta.url))).filter(test => test.platforms.includes(process.platform)).map(test => test.name).sort();
   if (JSON.stringify(semanticTests) !== JSON.stringify(expected)) throw new Error('Incomplete semantic test evidence');
-  const evidence = { schemaVersion: 1, status: 'passed', ...identity, target, languages: packIds, semanticTests, commands: commands.map(command => ({ ...command, outcome: 'passed' })), artifacts: receipts };
+  const evidence = { schemaVersion: 1, status: 'passed', ...identity, target, languages: packIds, semanticTests, commands: recordedCommands, artifacts: receipts };
   await fs.writeFile(path.join(artifacts, `verification-${target}.json`), `${JSON.stringify(evidence, null, 2)}\n`, { flag: 'wx' });
 }
 
 /** 精确核对成功状态、全部测试、平台身份和归档 receipt，缺项即关闭发布。 */
 export function validateVerificationEvidence(evidence, identity, target, receipts, inventory) {
-  const expectedTests = inventory.filter(test => test.platforms.includes(target.includes('windows') ? 'win32' : 'darwin')).map(test => test.name).sort();
-  if (evidence.schemaVersion !== 1 || evidence.status !== 'passed' || evidence.sourceCommit !== identity.sourceCommit || evidence.sourceDirty !== false || evidence.version !== identity.version || evidence.engineVersion !== identity.engineVersion || evidence.protocol !== identity.protocol || evidence.target !== target || JSON.stringify(evidence.languages) !== JSON.stringify(packIds) || JSON.stringify(evidence.semanticTests) !== JSON.stringify(expectedTests) || !Array.isArray(evidence.commands) || evidence.commands.length < 10 || evidence.commands.some(command => command.outcome !== 'passed') || !evidence.commands.some(command => command.args?.includes('scripts/language-packs/verify-public-cli.mjs')) || JSON.stringify(evidence.artifacts) !== JSON.stringify(receipts)) throw new Error(`Missing complete successful verification evidence: ${target}`);
+  const platform = target.includes('windows') ? 'win32' : 'darwin';
+  const expectedTests = inventory.filter(test => test.platforms.includes(platform)).map(test => test.name).sort();
+  const expectedCommands = verificationCommandIdentities(platform).map(command => ({ ...command, outcome: 'passed' }));
+  if (evidence.schemaVersion !== 1 || evidence.status !== 'passed' || evidence.sourceCommit !== identity.sourceCommit || evidence.sourceDirty !== false || evidence.version !== identity.version || evidence.engineVersion !== identity.engineVersion || evidence.protocol !== identity.protocol || evidence.target !== target || JSON.stringify(evidence.languages) !== JSON.stringify(packIds) || JSON.stringify(evidence.semanticTests) !== JSON.stringify(expectedTests) || !isDeepStrictEqual(evidence.commands, expectedCommands) || JSON.stringify(evidence.artifacts) !== JSON.stringify(receipts)) throw new Error(`Missing complete successful verification evidence: ${target}`);
   return evidence;
 }
 

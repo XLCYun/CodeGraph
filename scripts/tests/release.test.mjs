@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
 import { publishBundle, githubAdapter } from '../release/publish-release.mjs';
 import { verifyEvidenceRun } from '../release/verify-evidence-run.mjs';
 import { assetNames, packIds, releaseRepository, sha256, targets } from '../language-packs/distribution.mjs';
+import { verificationCommands } from '../language-packs/verify-native-analyzers.mjs';
+import { verificationCommandIdentities, recordVerifiedCommands } from '../language-packs/verification-commands.mjs';
 
 /** 完整双平台三十一资产和内存 GitHub，覆盖实际发布顺序与不可变规则。 */
 function fixture() {
@@ -154,8 +157,46 @@ test('partial or stale local evidence is rejected before preparing release asset
   const { validateVerificationEvidence } = await import('../release/release-artifacts.mjs');
   const identity = { version: '0.1.0', engineVersion: '0.1.0', protocol: 'codegraph.analyzer/1', sourceCommit: 'a'.repeat(40) };
   const target = targets[0], receipts = [{ id: 'rust', archiveSha256: 'b'.repeat(64) }];
-  const inventory = [{ name: 'required::semantic', platforms: ['darwin', 'win32'] }];
-  const evidence = { schemaVersion: 1, status: 'passed', ...identity, sourceDirty: false, target, languages: packIds, semanticTests: ['required::semantic'], commands: Array.from({ length: 10 }, () => ({ args: ['scripts/language-packs/verify-public-cli.mjs'], outcome: 'passed' })), artifacts: receipts };
+  const inventory = JSON.parse(await fs.readFile(new URL('../../resources/semantic-acceptance.json', import.meta.url)));
+  const evidence = { schemaVersion: 1, status: 'passed', ...identity, sourceDirty: false, target, languages: packIds, semanticTests: inventory.filter(test => test.platforms.includes('darwin')).map(test => test.name).sort(), commands: verificationCommandIdentities('darwin').map(command => ({ ...command, outcome: 'passed' })), artifacts: receipts };
   assert.equal(validateVerificationEvidence(evidence, identity, target, receipts, inventory), evidence);
   for (const mutation of [{ status: 'failed' }, { sourceDirty: true }, { sourceCommit: 'c'.repeat(40) }, { target: targets[1] }, { engineVersion: '9.0.0' }, { protocol: 'other/1' }, { semanticTests: [] }, { languages: packIds.slice(0, 3) }, { commands: [] }, { artifacts: [] }, { commands: evidence.commands.map(command => ({ ...command, outcome: 'skipped' })) }]) assert.throws(() => validateVerificationEvidence({ ...evidence, ...mutation }, identity, target, receipts, inventory), /complete successful/);
+});
+
+/** 全量 receipt 必须保留每个验收组，成功命令不能重复补位。 */
+test('complete receipt rejects omitted or duplicate command identities', async () => {
+  const { validateVerificationEvidence } = await import('../release/release-artifacts.mjs');
+  const inventory = JSON.parse(await fs.readFile(new URL('../../resources/semantic-acceptance.json', import.meta.url)));
+  const environment = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`NARRANT_${name}`, '/fixture/tools']));
+  const identity = { version: '0.1.0', engineVersion: '0.1.0', protocol: 'codegraph.analyzer/1', sourceCommit: 'a'.repeat(40) };
+  for (const [platform, target] of [['darwin', targets[0]], ['win32', targets[1]]]) {
+    const actual = verificationCommands(environment, platform);
+    const commands = recordVerifiedCommands(actual, environment, platform);
+    assert.deepEqual(commands, verificationCommandIdentities(platform).map(command => ({ ...command, outcome: 'passed' })));
+    const evidence = { schemaVersion: 1, status: 'passed', ...identity, sourceDirty: false, target, languages: packIds, semanticTests: inventory.filter(test => test.platforms.includes(platform)).map(test => test.name).sort(), commands, artifacts: [] };
+    assert.equal(validateVerificationEvidence(evidence, identity, target, [], inventory), evidence);
+    for (let index = 0; index < commands.length; index++) {
+      assert.throws(() => validateVerificationEvidence({ ...evidence, commands: commands.filter((_, at) => at !== index) }, identity, target, [], inventory), /complete successful/);
+      const repeated = [...commands]; repeated[index] = commands[(index + 1) % commands.length];
+      assert.throws(() => validateVerificationEvidence({ ...evidence, commands: repeated }, identity, target, [], inventory), /complete successful/);
+      const replaced = structuredClone(commands); replaced[index].args = ['--version'];
+      assert.throws(() => validateVerificationEvidence({ ...evidence, commands: replaced }, identity, target, [], inventory), /complete successful/);
+      const changedExecution = structuredClone(actual); changedExecution[index].args.push('--unapproved');
+      assert.throws(() => recordVerifiedCommands(changedExecution, environment, platform), /command identity/);
+    }
+    const parameterChanges = [
+      commands => { commands[0].cwd = '.'; },
+      commands => { commands[0].executable = 'other-go'; },
+      commands => { commands[2].environment.NARRANT_TEST_REFS9_VERSION = '9.0.0'; },
+      commands => { commands.find(command => command.requiredTests).requiredTests.pop(); },
+      commands => { commands.at(-1).args[2] = 'typescript-javascript'; },
+    ];
+    for (const change of parameterChanges) {
+      const replaced = structuredClone(commands); change(replaced);
+      assert.throws(() => validateVerificationEvidence({ ...evidence, commands: replaced }, identity, target, [], inventory), /complete successful/);
+    }
+    assert.throws(() => recordVerifiedCommands(actual.slice(1), environment, platform), /command identity/);
+    assert.throws(() => recordVerifiedCommands(actual.map(() => actual.at(-1)), environment, platform), /command identity/);
+    assert.throws(() => validateVerificationEvidence({ ...evidence, commands: commands.map(() => commands.at(-1)) }, identity, target, [], inventory), /complete successful/);
+  }
 });

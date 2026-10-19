@@ -1239,15 +1239,17 @@
       "source": "src-tauri/src/structure_review/native_analyzer/tests/python_native.rs",
       "destination": "src/native_analyzer/tests/python_native.rs",
       "source_sha256": "086c1accdbab038b485177fcbeff20140dbc04549697f6808fa6fbcd15e0c995",
-      "destination_sha256": "f468350f9f5159a25671141d9fd6c057c8d8035896a1a8c9c58be1897ffa7646",
-      "unchanged": false
+      "destination_sha256": "3ccf37f268b8b25ea6ce6b7c02842b40b7c49ecc01bfc854e770e08dde8ed5fe",
+      "unchanged": false,
+      "adaptation": "Final CI verification: capture Windows junction command output for failure diagnostics, preserving exact assertions and libtest named-success lines."
     },
     {
       "source": "src-tauri/src/structure_review/native_analyzer/tests/rust_graph.rs",
       "destination": "src/native_analyzer/tests/rust_graph.rs",
       "source_sha256": "9eba423df577505183973d9ece4083e9f69375c0edf125d1cda2ba9c0d20354f",
-      "destination_sha256": "dc07b123038deede2d6c5240a31968cf7f3d6c661c8c0431dcfdf33dac6f898a",
-      "unchanged": false
+      "destination_sha256": "e1629ad4b395fa89c082ebd9eefcd7b2e6e93cf96af1fef792ce6c330af280b9",
+      "unchanged": false,
+      "adaptation": "Final CI verification: capture Windows junction command output for failure diagnostics, preserving exact assertions and libtest named-success lines."
     },
     {
       "source": "src-tauri/src/structure_review/native_analyzer/tests/rust_syntax.rs",
@@ -1372,8 +1374,9 @@
       "source": "src-tauri/src/structure_review/native_languages/tests/typescript_graph.rs",
       "destination": "src/native_languages/tests/typescript_graph.rs",
       "source_sha256": "2e6b27d1f2e6d085c51bf93682fa1ec9ce3f666e4eda012b8432437bfe956b8f",
-      "destination_sha256": "f3fd968ebf7439e664d7159eea83637d2c0b07741308debf408993618c5eb16e",
-      "unchanged": false
+      "destination_sha256": "e6ebafaa756b0f5dfd8228ecf53a770c469a6fd56ca489b3ba52cc4eb1d7f8e8",
+      "unchanged": false,
+      "adaptation": "Final CI verification: capture Windows junction command output for failure diagnostics, preserving exact assertions and libtest named-success lines."
     },
     {
       "source": "src-tauri/src/structure_review/native_languages/tests/platforms/java.rs",
@@ -1841,8 +1844,9 @@
       "source": "scripts/language-packs/verify-native-analyzers.mjs",
       "destination": "scripts/language-packs/verify-native-analyzers.mjs",
       "source_sha256": "94a3ae990f6e36f8a82f5e1ade8158aa13ea306bfb968f442f5f7a57d5e0e3f3",
-      "destination_sha256": "314c0b1e4cc4a1a6e36bc322b85bae1e86a29fb8f3a9e189c3693504e01ce37a",
-      "unchanged": false
+      "destination_sha256": "3ded0a04c238f7eaaf495cf3354c20bdb632a874edb23fe0a6ef978aa1829683",
+      "unchanged": false,
+      "adaptation": "Final review: preserved complete execution command specification moved to verification-commands.mjs and shared with exact release receipt validation."
     },
     {
       "source": "scripts/tests/archive-validation.test.mjs",
@@ -1862,8 +1866,9 @@
       "source": "scripts/tests/native-analyzer-ci.test.mjs",
       "destination": "scripts/tests/native-analyzer-ci.test.mjs",
       "source_sha256": "f95c416258aafb9bf765fc572c84123c0c5fe99f7b64df5949ef884f77970dc5",
-      "destination_sha256": "ec0f64928cd04270be1eeb2803848a981f34c6ab3539ac1f4c08794fc2430a3b",
-      "unchanged": false
+      "destination_sha256": "d3984f1d630186d012d1eb04cca3d1cfdd9091deb9a45311d387e47d6b34cc45",
+      "unchanged": false,
+      "adaptation": "Final review: capture expected failure diagnostics; audit retained test cfg against the platform-specific semantic inventory and command specification."
     },
     {
       "source": "scripts/tests/native-language-support-packs.test.mjs",
@@ -1929,15 +1934,24 @@
       "source_sha256": "eccc288132cc366f3778ad4a9655687db66bf835e2c6ae067da8f08ba9124425",
       "destination_sha256": "eccc288132cc366f3778ad4a9655687db66bf835e2c6ae067da8f08ba9124425",
       "unchanged": true
+    },
+    {
+      "source": "scripts/language-packs/verify-native-analyzers.mjs",
+      "destination": "scripts/language-packs/verification-commands.mjs",
+      "source_sha256": "94a3ae990f6e36f8a82f5e1ade8158aa13ea306bfb968f442f5f7a57d5e0e3f3",
+      "destination_sha256": "66979962b57a0bee5ad3a5f2160910a878054586223cd28bd84031b7d7a8fbf1",
+      "unchanged": false,
+      "adaptation": "Final review: extract the original command specification, preserve all suites and parameters on applicable platforms, omit the Unix-only zero-test probe on Windows, and generate exact portable CI receipt identities."
     }
   ],
   "distribution_acceptance": {
-    "command_inventory": "scripts/language-packs/verify-native-analyzers.mjs",
+    "command_inventory": "scripts/language-packs/verification-commands.mjs",
     "semantic_tests": "resources/semantic-acceptance.json",
     "macos_real_semantic_tests": 69,
-    "windows_real_semantic_tests": 70,
+    "windows_real_semantic_tests": 63,
     "public_cli": "scripts/language-packs/verify-public-cli.mjs",
     "mapping": "docs/migration.md#task-2-independent-distribution-and-acceptance",
-    "deferred": "Narrant retains all 38 diff-dependent tests and application installation/Review/DTO tests; no difference implementation migrated."
+    "deferred": "Narrant retains all 38 diff-dependent tests and application installation/Review/DTO tests; no difference implementation migrated.",
+    "platform_boundary": "Original function-level cfg retained: seven Unix-only cases and one Windows-only junction case; no test is removed. The Unix-only production probe group is not launched as a zero-test Windows command."
   }
 }

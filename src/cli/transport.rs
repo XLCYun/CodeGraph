@@ -125,13 +125,13 @@ impl Transport {
         Ok(())
     }
 
-    /// 每个写线程最多积压一条消息，并向状态机报告真正写完的时间。
+    /// 输出允许 ready 与 completed 的有界突发，并向状态机报告真正写完的时间。
     pub fn writer(
         &mut self,
         mut pipe: impl Write + Send + 'static,
         source: Source,
     ) -> io::Result<SyncSender<Vec<u8>>> {
-        let (sender, input) = mpsc::sync_channel::<Vec<u8>>(1);
+        let (sender, input) = writer_channel(source);
         let events = self.sender.clone();
         let stop = self.stop.clone();
         self.workers.push(
@@ -221,6 +221,13 @@ impl Drop for Transport {
     }
 }
 
+/// 独立构造有界写入队列，使线程首次调度之前的合法消息突发也可验证。
+fn writer_channel(source: Source) -> (SyncSender<Vec<u8>>, Receiver<Vec<u8>>) {
+    // 输出线程尚未首次调度时，非法输入也能紧接 ready 产生 completed。
+    // 请求通道仍只排队一条；stdout 背压继续由原有五秒期限限制。
+    mpsc::sync_channel(if source == Source::Output { 2 } else { 1 })
+}
+
 /// 接收方停止时有限队列不能卡住生产者。
 fn emit(sender: &SyncSender<Event>, stop: &AtomicBool, mut event: Event) -> bool {
     while !stop.load(Ordering::Acquire) {
@@ -264,3 +271,7 @@ pub(super) fn encode(value: &serde_json::Value) -> Result<Vec<u8>, Failure> {
     bytes.push(b'\n');
     Ok(bytes)
 }
+
+#[cfg(test)]
+#[path = "tests/transport.rs"]
+mod tests;

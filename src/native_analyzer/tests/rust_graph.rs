@@ -258,13 +258,16 @@ fn rust_helper_deduplicates_aliases_with_stable_graph_content() {
     #[cfg(unix)]
     std::os::unix::fs::symlink(root.path().join("src"), root.path().join("alias")).unwrap();
     #[cfg(windows)]
-    assert!(std::process::Command::new("cmd")
-        .args(["/c", "mklink", "/J"])
-        .arg(root.path().join("alias"))
-        .arg(root.path().join("src"))
-        .status()
-        .unwrap()
-        .success());
+    {
+        // 子命令输出随失败断言展示，不能插入 libtest 的逐名成功记录。
+        let output = std::process::Command::new("cmd")
+            .args(["/c", "mklink", "/J"])
+            .arg(root.path().join("alias"))
+            .arg(root.path().join("src"))
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+    }
     let input = AnalysisInput {
         repository_root: root.path().into(),
         files: vec![
