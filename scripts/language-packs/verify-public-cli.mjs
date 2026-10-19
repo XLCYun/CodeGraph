@@ -98,6 +98,21 @@ export function assertGraph(graph) {
   assert.equal(seen.size, nodes.size);
 }
 
+/** 各语言独立串行验收；完整保留失败，再统一阻止成功 receipt。 */
+export async function runPublicPackAcceptances(ids, verify) {
+  const failures = [];
+  for (const id of ids) {
+    try {
+      await verify(id);
+    } catch (cause) {
+      const failure = new Error(`Public CLI acceptance failed: ${id}`, { cause });
+      failures.push(failure);
+      console.error(failure);
+    }
+  }
+  if (failures.length) throw new AggregateError(failures, `${failures.length} public pack acceptance(s) failed`);
+}
+
 /** 对实际解包后的 CLI 与语言包做端到端分析，保留原文件内容与文件集合。 */
 export async function verifyPublicCli(artifacts, language = 'all') {
   const target = nativeTarget(), identity = await releaseIdentity();
@@ -107,7 +122,7 @@ export async function verifyPublicCli(artifacts, language = 'all') {
     await verifyAndExtract(path.join(artifacts, 'codegraph', identity.version, target), cliRoot, { id: 'codegraph', target, version: identity.version });
     const executableName = `codegraph${process.platform === 'win32' ? '.exe' : ''}`;
     const standalone = path.join(cliRoot, 'bin', executableName);
-    for (const id of selectedNativePacks(language)) {
+    await runPublicPackAcceptances(selectedNativePacks(language), async id => {
       const pack = path.join(scratch, id);
       await verifyAndExtract(path.join(artifacts, id, identity.version, target), pack, { id, target, version: identity.version });
       assert.equal(sha256(await fs.readFile(standalone)), sha256(await fs.readFile(path.join(pack, 'bin', executableName))), 'Pack CLI must equal standalone CLI');
@@ -136,7 +151,7 @@ export async function verifyPublicCli(artifacts, language = 'all') {
         await assertPublicProjectUnchanged(fixture);
       }
       console.log(`Public CLI verified: ${id} (${scopes.join(', ')}), read-only, include_tests, source, call graph, empty selection${fixture.prerequisite ? ', missing metadata rejected' : ''}`);
-    }
+    });
   } finally { await fs.rm(scratch, { recursive: true, force: true }); }
 }
 

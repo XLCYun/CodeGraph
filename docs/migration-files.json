@@ -1325,8 +1325,9 @@
       "source": "src-tauri/src/structure_review/native_languages/mod.rs",
       "destination": "src/native_languages/mod.rs",
       "source_sha256": "07ffaf021a763da521b669e3967dc4fbc4cc342412330c11cb001781c2a3d80c",
-      "destination_sha256": "6fc28e217990f900bb0a2278eb298a39bf7ff4ef1154dd670232164cd4faf621",
-      "unchanged": false
+      "destination_sha256": "d62446ed97f04c16c1cb5924d41854c309b75e23d42935b62f80f1734762ed58",
+      "unchanged": false,
+      "adaptation": " Add explicit real C# production-factory acceptance with internal failure diagnostics; public protocol and helper behavior unchanged."
     },
     {
       "source": "src-tauri/src/structure_review/native_languages/rust.rs",

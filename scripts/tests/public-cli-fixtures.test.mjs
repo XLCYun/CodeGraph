@@ -3,7 +3,50 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { preparePublicProject, assertPublicProjectUnchanged } from '../language-packs/verify-public-cli.mjs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { preparePublicProject, assertPublicProjectUnchanged, runPublicPackAcceptances } from '../language-packs/verify-public-cli.mjs';
+
+/** 前一包真实退出失败后仍验证下一包，最终保留每个原始错误且不能转为成功。 */
+test('public pack failures preserve diagnostics and do not prevent later real children', async t => {
+  const diagnostics = t.mock.method(console, 'error', () => {});
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codegraph public groups-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const marker = path.join(root, 'executed'), original = [];
+  let failure;
+  try {
+    await runPublicPackAcceptances(['csharp', 'c-cpp', 'python'], async id => {
+      const status = { csharp: 1, 'c-cpp': 0, python: 2 }[id];
+      try {
+        await promisify(execFile)(process.execPath, ['-e', "require('node:fs').appendFileSync(process.argv[1], process.argv[2] + '\\n'); console.error('original-' + process.argv[2]); process.exit(Number(process.argv[3]));", marker, id, String(status)]);
+      } catch (error) { original.push(error); throw error; }
+    });
+  } catch (error) { failure = error; }
+  assert.equal(await fs.readFile(marker, 'utf8'), 'csharp\nc-cpp\npython\n');
+  assert.ok(failure instanceof AggregateError);
+  assert.equal(failure.errors.length, 2);
+  assert.deepEqual(failure.errors.map(error => error.cause), original);
+  assert.match(failure.errors[0].message, /csharp/);
+  assert.match(failure.errors[1].message, /python/);
+  assert.match(original[0].stderr, /original-csharp/);
+  assert.match(original[1].stderr, /original-python/);
+  assert.deepEqual(diagnostics.mock.calls.map(call => call.arguments[0]), failure.errors);
+});
+
+/** 全部验收成功才可让上层继续写成功 receipt，且始终串行完成。 */
+test('public pack success requires every complete callback without overlapping', async () => {
+  const visited = [];
+  let running = false;
+  await runPublicPackAcceptances(['csharp', 'c-cpp'], async id => {
+    assert.equal(running, false);
+    running = true;
+    visited.push(`start:${id}`);
+    await new Promise(resolve => setImmediate(resolve));
+    visited.push(`end:${id}`);
+    running = false;
+  });
+  assert.deepEqual(visited, ['start:csharp', 'end:csharp', 'start:c-cpp', 'end:c-cpp']);
+});
 
 /** Java 的公开验收必须提供 helper 支持的声明式源码根与确切目标 release。 */
 test('public Java project declares its source root and target release', async t => {

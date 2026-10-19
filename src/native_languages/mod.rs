@@ -255,6 +255,10 @@ mod tests;
 #[path = "tests/typescript_graph.rs"]
 mod typescript_graph;
 
+#[cfg(test)]
+#[path = "tests/csharp_graph.rs"]
+mod csharp_graph;
+
 /// TS/JS 文件测试开关与 helper 保持一致；全被排除的语言组不启动或准备工具。
 pub(crate) fn typescript_needs_tools(
     path: &Path,

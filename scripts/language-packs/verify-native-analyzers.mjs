@@ -101,6 +101,10 @@ export async function verifyNativeAnalyzers(artifacts, build = false, language =
     environment.NARRANT_TYPESCRIPT_PACK = path.join(artifacts, 'smoke-installed/typescript-javascript', catalog.packs['typescript-javascript'].version, target);
     environment.NARRANT_LANGUAGE_PACK_FIXTURE = artifacts;
   }
+  if (ids.includes('csharp')) {
+    const catalog = JSON.parse(await fs.readFile(path.join(repository, 'resources/language-support-packs.json'), 'utf8'));
+    environment.NARRANT_CSHARP_PACK = path.join(artifacts, 'smoke-installed/csharp', catalog.packs.csharp.version, target);
+  }
   if (ids.includes('rust')) Object.assign(environment, await prepareRustNativeTests(environment));
   const commands = verificationCommands(environment, process.platform, language);
   await fs.mkdir(artifacts, { recursive: true });

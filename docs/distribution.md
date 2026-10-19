@@ -131,6 +131,32 @@ JDK declarations; Go discovers installed SDK sources; C# discovers .NET referenc
 packs; C/C++ uses approved macOS SDK or Windows SDK/MSVC headers. TS/JS and Python
 carry their required runtime/declarations. SDK discovery does not install tools.
 
+Consumers can expose already-installed target SDKs through these standard entry
+points before starting the public CLI; no private `NARRANT_*` variables or helper
+configuration file is needed:
+
+- Java reads `JAVA_HOME`, `JDK_HOME`, every `java` executable on `PATH`, and
+  conventional JDK install directories. Put each custom installation's `bin` on
+  `PATH` to discover multiple versions. `JAVA_HOME_17_X64` and similar CI-specific
+  variable names are not scanned; map one to `JAVA_HOME` or add its `bin` to `PATH`.
+  Discovery keeps the highest stable patch per Java major version; the project's
+  declared release selects the target declarations.
+- Go reads `GOROOT`, every `go` executable on `PATH`, and conventional SDK install
+  directories. Multiple custom SDK `bin` directories may appear on `PATH`.
+  Discovery keeps the highest stable patch per major/minor version; project
+  declarations and the helper's supported semantics determine the selected target.
+- C# reads `DOTNET_ROOT`, `DOTNET_ROOT_ARM64`, `DOTNET_ROOT_X64`, `DOTNET_ROOT_X86`,
+  `DOTNET_ROOT(x86)`, the user's `.dotnet`, and conventional .NET install directories.
+  Each root must contain installed `packs/Microsoft.NETCore.App.Ref/<version>/ref/<tfm>`
+  declarations; a runtime-only install is insufficient. Discovery keeps the highest
+  stable patch for each supported modern TFM and the project chooses its TFM. These
+  variables locate target references; the pack still uses its own private runtime.
+
+These entry points add discovery candidates rather than restricting discovery to
+one installation. Equal versions retain the first discovered candidate. Analysis
+reads installed declarations and project metadata without installing SDKs or
+running project builds.
+
 Full Rust acceptance additionally requires `NARRANT_PROJECT_RUST_TOOLCHAIN=stable`,
 an isolated absolute `CARGO_HOME`, stable `rust-src` and historical 1.81.0, 1.94.0,
 1.96.0 toolchains; run `prepare-rust-native-tests.mjs --prepare` to prepare only
@@ -141,8 +167,14 @@ are not a product target-version allowlist.
 Host architecture is independently checked by native builders. Windows runs the
 shared process probe before expensive downloads, then selects exact MSVC/SDK/redist
 from the unchanged pins. macOS selects Xcode 16.4 / SDK 15.5. All seven helper suites,
-69 retained semantic tests on macOS (63 on Windows), the full engine and public CLI lifecycle
-suites, and real unpacked public CLI graph acceptance run serially by group.
+70 named real-pack tests on macOS (64 on Windows), including all 69/63 retained
+semantic tests, the full engine and public CLI lifecycle suites, and real unpacked
+public CLI graph acceptance run serially by group.
+The C# factory group exercises the packaged runtime through the production factory
+and standard SDK discovery; its internal assertion retains diagnostics without
+changing the public protocol's redacted errors. Public acceptance continues with
+later languages after a package failure, then reports all original failures and
+exits unsuccessfully. No partial run emits a successful receipt.
 Public acceptance checks both executable choices, all seven languages, test switches,
 original source/local calls, empty selection and read-only input; Rust covers all
 three dependency scopes. Java uses `src/Sample.java` with a `java-static-v1`
@@ -164,7 +196,7 @@ covered by the real archive tests.
 Only successful complete clean-source acceptance emits
 `verification-<target>.json`. Focused/local passes never stand in for this evidence.
 The shared [command specification](../scripts/language-packs/verification-commands.mjs)
-defines all 16 macOS / 15 Windows groups, including their argv, working directories, environment
+defines all 17 macOS / 16 Windows groups, including their argv, working directories, environment
 parameters and required semantic names. Before recording evidence, the writer
 compares the actual executed command list with that full specification. The
 receipt stores portable identities using tool/repository path placeholders; the

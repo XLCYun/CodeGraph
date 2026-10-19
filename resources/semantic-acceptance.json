@@ -620,5 +620,14 @@
       "darwin",
       "win32"
     ]
+  },
+  {
+    "language": "csharp",
+    "source": "src/native_languages/tests/csharp_graph.rs",
+    "name": "native_languages::csharp_graph::factory_preserves_source_and_local_calls",
+    "platforms": [
+      "darwin",
+      "win32"
+    ]
   }
 ]

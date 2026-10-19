@@ -83,16 +83,19 @@ test('all enabled helpers and narrow absolute platform roots are mandatory', () 
 test('verification uses every helper suite and serialized Cargo host and real graph tests', () => {
   const environment = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`NARRANT_${name}`, '/isolated/tools']));
   const commands = verificationCommands(environment, 'win32');
-  assert.equal(commands.length, 15);
+  assert.equal(commands.length, 16);
   assert.equal(commands[2].environment.NARRANT_TEST_REFS8, path.join('/isolated/tools', 'ref/net8.0'));
   assert.match(commands[0].executable, /go\.exe$/);
-  assert.deepEqual(commands.slice(1, 4).map(command => command.args[4]), ['native-helpers/java/tests', 'native-helpers/csharp/tests', 'native-helpers/clang/tests']);
-  for (const command of commands.slice(4).filter(command => command.executable === 'bash')) {
+  assert.deepEqual(commands.filter(command => command.args[0] === '-m').map(command => command.args[4]), ['native-helpers/java/tests', 'native-helpers/csharp/tests', 'native-helpers/clang/tests']);
+  for (const command of commands.filter(command => command.executable === 'bash')) {
     assert.equal(command.executable, 'bash');
     assert.equal(command.args[0], 'scripts/cargo-agent.sh');
   }
+  const csharpFactory = commands.find(command => command.args.includes('native_languages::csharp_graph::'));
+  assert.deepEqual(csharpFactory.args, ['scripts/cargo-agent.sh', 'test', '--locked', '--bin', 'codegraph', 'native_languages::csharp_graph::', '--', '--ignored', '--test-threads=1']);
+  assert.deepEqual(csharpFactory.requiredTests, ['native_languages::csharp_graph::factory_preserves_source_and_local_calls']);
   assert.ok(commands.at(-1).args.includes('scripts/language-packs/verify-public-cli.mjs'));
-  assert.equal(commands.flatMap(command => command.requiredTests ?? []).length, 63);
+  assert.equal(commands.flatMap(command => command.requiredTests ?? []).length, 64);
   assert.throws(() => verificationCommands({}), /Missing fixed toolchain/);
 });
 
@@ -102,8 +105,8 @@ test('shared process and native acceptance use the same live groups on both plat
   const ownerFilter = 'codegraph';
   const windows = verificationCommands(environment, 'win32');
   const macOS = verificationCommands(environment, 'darwin');
-  assert.equal(macOS.length, 16);
-  assert.equal(windows.length, 15);
+  assert.equal(macOS.length, 17);
+  assert.equal(windows.length, 16);
   assert.ok(macOS.some(command => command.args.includes('native_languages::rust::tests::')));
   assert.ok(windows.every(command => !command.args.includes('native_languages::rust::tests::')));
   for (const commands of [windows, macOS]) {
@@ -122,7 +125,8 @@ test('shared process and native acceptance use the same live groups on both plat
       ? [runnerPrefix, ...JSON.parse(arg.slice(runnerPrefix.length)).map(file => path.normalize(file))]
       : arg),
   }));
-  assert.deepEqual(normalizeRunnerPaths(windows.slice(4)), normalizeRunnerPaths(macOS.slice(4)));
+  const shared = commands => commands.filter(command => command.executable === 'bash' || command.executable === process.execPath);
+  assert.deepEqual(normalizeRunnerPaths(shared(windows)), normalizeRunnerPaths(shared(macOS)));
 });
 
 // 前组真实子进程失败后仍必须执行后组，同时整体保持失败，不能只收集成功日志。
@@ -221,8 +225,8 @@ test('reference package verification checks SHA512 content', async () => {
 /** 每个平台编译出的原有语义断言都必须逐名接入。 */
 test('semantic acceptance inventory exactly covers all retained ignored tests', async () => {
   const inventory = JSON.parse(await fs.readFile(new URL('../../resources/semantic-acceptance.json', import.meta.url)));
-  assert.equal(inventory.filter(item => item.platforms.includes('darwin')).length, 69);
-  assert.equal(inventory.filter(item => item.platforms.includes('win32')).length, 63);
+  assert.equal(inventory.filter(item => item.platforms.includes('darwin')).length, 70);
+  assert.equal(inventory.filter(item => item.platforms.includes('win32')).length, 64);
   const environment = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`NARRANT_${name}`, '/isolated/tools']));
   for (const platform of ['darwin', 'win32']) {
     const commands = verificationCommands(environment, platform);

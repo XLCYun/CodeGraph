@@ -126,8 +126,9 @@ exact artifact URLs, manifest fields, local candidate roots and release conditio
 The source checkout remains read-only.
 
 `resources/semantic-acceptance.json` enumerates every retained real-pack ignored
-engine test: 69 on macOS and 63 on Windows. The original seven `cfg(unix)` tests
-remain macOS-only, while the original Windows junction boundary case remains
+engine test: 69 on macOS and 63 on Windows. The additional C# production-factory
+regression brings the named real-pack totals to 70 and 64 respectively. The original
+seven `cfg(unix)` tests remain macOS-only, while the original Windows junction boundary case remains
 Windows-only; no test or assertion is removed.
 The verifier requires each named test to report `ok`; zero-test Cargo success cannot
 pass. The internal ignored `child_process::test_support::fixture::process_fixture`
@@ -136,7 +137,7 @@ Missing requested SDK fixtures fail before suites can skip them. Independent gro
 run serially, retain original failures and aggregate errors without a false success.
 The complete executable command list and portable receipt identities now share
 `scripts/language-packs/verification-commands.mjs`; the verifier retains its public
-module export. Release receipts must match all 16 macOS / 15 Windows groups and
+module export. Release receipts must match all 17 macOS / 16 Windows groups and
 their parameters, as well as the separate per-test semantic inventory.
 
 | Original verifier command/group | CodeGraph destination / preserved acceptance | Narrant Task 3 ownership |
