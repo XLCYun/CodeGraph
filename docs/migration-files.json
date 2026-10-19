@@ -1,0 +1,1740 @@
+{
+  "source_repository": "XLCYun/narrant",
+  "source_commit": "890ae4960aba2fc64946423093ff064c41d6ebf7",
+  "files": [
+    {
+      "source": "native-helpers/clang/.gitignore",
+      "destination": "native-helpers/clang/.gitignore",
+      "source_sha256": "0cf256cc9234b415f912f5b0e9f8c9364688466041611047cd3f599c35f4efa6",
+      "destination_sha256": "0cf256cc9234b415f912f5b0e9f8c9364688466041611047cd3f599c35f4efa6",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/clang/CMakeLists.txt",
+      "destination": "native-helpers/clang/CMakeLists.txt",
+      "source_sha256": "04a2741123d630633c8addd7d46000024a33deeb0521777fcc03a7e2b260dd7e",
+      "destination_sha256": "04a2741123d630633c8addd7d46000024a33deeb0521777fcc03a7e2b260dd7e",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/clang/LICENSE-Clang.txt",
+      "destination": "native-helpers/clang/LICENSE-Clang.txt",
+      "source_sha256": "ebcd9bbf783a73d05c53ba4d586b8d5813dcdf3bbec50265860ccc885e606f47",
+      "destination_sha256": "ebcd9bbf783a73d05c53ba4d586b8d5813dcdf3bbec50265860ccc885e606f47",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/clang/LICENSE-LLVM.txt",
+      "destination": "native-helpers/clang/LICENSE-LLVM.txt",
+      "source_sha256": "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee",
+      "destination_sha256": "3340babe8ac7bc6ae294d93aa01c310a250d43d5b760e5c12954882d4e5c83c7",
+      "unchanged": false,
+      "adaptation": "Remove one trailing blank line only for git diff --check; license text unchanged."
+    },
+    {
+      "source": "native-helpers/clang/README.md",
+      "destination": "native-helpers/clang/README.md",
+      "source_sha256": "80c20571e9a464b90cb32f84e1ab7bf3f511a0b1f97f18db57e649cf37cce41a",
+      "destination_sha256": "80c20571e9a464b90cb32f84e1ab7bf3f511a0b1f97f18db57e649cf37cce41a",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/clang/build.ps1",
+      "destination": "native-helpers/clang/build.ps1",
+      "source_sha256": "c9d02003fa2cce6225a27db5c781b225e2165ee0930e246d55ed3bcb22f5a6ff",
+      "destination_sha256": "c9d02003fa2cce6225a27db5c781b225e2165ee0930e246d55ed3bcb22f5a6ff",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/clang/build.sh",
+      "destination": "native-helpers/clang/build.sh",
+      "source_sha256": "8b6bbd35c786c9a35618e9998ba0d437ae3f255dd993258a2edeede895a57cd3",
+      "destination_sha256": "8b6bbd35c786c9a35618e9998ba0d437ae3f255dd993258a2edeede895a57cd3",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/clang/cmake/RelocateWindowsDia.cmake",
+      "destination": "native-helpers/clang/cmake/RelocateWindowsDia.cmake",
+      "source_sha256": "0d71e728fefeab1134dae967916f7b2a6c4f924b0ecb23553fec76e1da80d240",
+      "destination_sha256": "0d71e728fefeab1134dae967916f7b2a6c4f924b0ecb23553fec76e1da80d240",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/clang/src/main.cpp",
+      "destination": "native-helpers/clang/src/main.cpp",
+      "source_sha256": "ee2229019439347ac21e155c509a315b3939531d636d7129f42f50a6e3a9388f",
+      "destination_sha256": "ee2229019439347ac21e155c509a315b3939531d636d7129f42f50a6e3a9388f",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/clang/tests/test_helper.py",
+      "destination": "native-helpers/clang/tests/test_helper.py",
+      "source_sha256": "de3fd4d3b045efb342aa51cb3a3b3809f145b10b2b312f4f7d1c250dc1b908a2",
+      "destination_sha256": "de3fd4d3b045efb342aa51cb3a3b3809f145b10b2b312f4f7d1c250dc1b908a2",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/clang/tests/test_windows_dia.py",
+      "destination": "native-helpers/clang/tests/test_windows_dia.py",
+      "source_sha256": "fb85808f8bb34e12164867677712d81e03f58db6d8356fbc7db58dc13f62bd6c",
+      "destination_sha256": "fb85808f8bb34e12164867677712d81e03f58db6d8356fbc7db58dc13f62bd6c",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/clang/toolchain.json",
+      "destination": "native-helpers/clang/toolchain.json",
+      "source_sha256": "860dbb6d541d96eb92a567a2815184f7eb1eb8768324a66063c3c6d0668a97b9",
+      "destination_sha256": "860dbb6d541d96eb92a567a2815184f7eb1eb8768324a66063c3c6d0668a97b9",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/common/Cargo.toml",
+      "destination": "native-helpers/common/Cargo.toml",
+      "source_sha256": "1479838fcf3c25fda344585b11a852b3b416cca8097b6d3cb2e38d547ad5a6f9",
+      "destination_sha256": "3476fbfcf127aab63eec033fdb39131e87fcf935c89bfaf9a6aaec85409227d2",
+      "unchanged": false
+    },
+    {
+      "source": "native-helpers/common/src/lib.rs",
+      "destination": "native-helpers/common/src/lib.rs",
+      "source_sha256": "b95164a0ff16182c2b1ab840c2af05e1f9eb1cc5a1757b2760c0b7fc8a544bb8",
+      "destination_sha256": "eab4353cfcc44a65ed2dadd2b71b9c3458cb27ceb445ad1876c7c4cc14eb20e4",
+      "unchanged": false
+    },
+    {
+      "source": "native-helpers/common/src/model.rs",
+      "destination": "native-helpers/common/src/model.rs",
+      "source_sha256": "9864c49e6d54bc46769c5b7fcf0ce00fa59b5f56074d95cf3a86f9966fcd80d8",
+      "destination_sha256": "9864c49e6d54bc46769c5b7fcf0ce00fa59b5f56074d95cf3a86f9966fcd80d8",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/common/src/one_shot.rs",
+      "destination": "native-helpers/common/src/one_shot.rs",
+      "source_sha256": "f7ce8cac5aca0d4f9cf64cde9548c50f5366574f7fd660c9eedeec8fa0ca4b57",
+      "destination_sha256": "f7ce8cac5aca0d4f9cf64cde9548c50f5366574f7fd660c9eedeec8fa0ca4b57",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/common/src/tests/initial.rs",
+      "destination": "native-helpers/common/src/tests/initial.rs",
+      "source_sha256": "e28800378dceccccac24b8adf4e40c101f69a115623606f3fc4795631c3615c1",
+      "destination_sha256": "e28800378dceccccac24b8adf4e40c101f69a115623606f3fc4795631c3615c1",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/csharp/.gitignore",
+      "destination": "native-helpers/csharp/.gitignore",
+      "source_sha256": "f04a39a5dad075577d8c8ca340ccb0190dfc2848680a2855634f2a4eccf34e5d",
+      "destination_sha256": "f04a39a5dad075577d8c8ca340ccb0190dfc2848680a2855634f2a4eccf34e5d",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/csharp/Analyzer.cs",
+      "destination": "native-helpers/csharp/Analyzer.cs",
+      "source_sha256": "1faf76b88497f3c93c20f6e322748163aaf37d0744b1a3233122bce4dfa406a6",
+      "destination_sha256": "1faf76b88497f3c93c20f6e322748163aaf37d0744b1a3233122bce4dfa406a6",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/csharp/Configuration.cs",
+      "destination": "native-helpers/csharp/Configuration.cs",
+      "source_sha256": "682a649c95d834eb833c0cb3cbf1639d7200e554f8f0d3680772d6cbf0e0855b",
+      "destination_sha256": "682a649c95d834eb833c0cb3cbf1639d7200e554f8f0d3680772d6cbf0e0855b",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/csharp/GraphAccumulator.cs",
+      "destination": "native-helpers/csharp/GraphAccumulator.cs",
+      "source_sha256": "e46d4b609bdd50b3b84f4b472cbb1d01473023aded7a9303902d7f86f394d99b",
+      "destination_sha256": "e46d4b609bdd50b3b84f4b472cbb1d01473023aded7a9303902d7f86f394d99b",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/csharp/Narrant.CSharp.Helper.csproj",
+      "destination": "native-helpers/csharp/Narrant.CSharp.Helper.csproj",
+      "source_sha256": "434eb567457b7544ee4ebabf890559c02401dce04c97cf8ba9d068a05be4b88d",
+      "destination_sha256": "434eb567457b7544ee4ebabf890559c02401dce04c97cf8ba9d068a05be4b88d",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/csharp/Program.cs",
+      "destination": "native-helpers/csharp/Program.cs",
+      "source_sha256": "69aae6791404ba7a47ac9ad57e7b355ff15c29eec8923ab043aa3fcf814893be",
+      "destination_sha256": "69aae6791404ba7a47ac9ad57e7b355ff15c29eec8923ab043aa3fcf814893be",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/csharp/Protocol.cs",
+      "destination": "native-helpers/csharp/Protocol.cs",
+      "source_sha256": "3f7fb7974f42fb776ba79417db43562c35bcab73388f878e45630e42684eb141",
+      "destination_sha256": "3f7fb7974f42fb776ba79417db43562c35bcab73388f878e45630e42684eb141",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/csharp/README.md",
+      "destination": "native-helpers/csharp/README.md",
+      "source_sha256": "f00b53c6aa3240ad9cf3d796916efe0ebcc308423fa3ac67fc4618acd6a93b71",
+      "destination_sha256": "f00b53c6aa3240ad9cf3d796916efe0ebcc308423fa3ac67fc4618acd6a93b71",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/csharp/global.json",
+      "destination": "native-helpers/csharp/global.json",
+      "source_sha256": "3539053fdc4cd4e9c9e32e64351bdd2ae68557e926a9d78a1eb3f8b86883737d",
+      "destination_sha256": "3539053fdc4cd4e9c9e32e64351bdd2ae68557e926a9d78a1eb3f8b86883737d",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/csharp/tests/test_helper.py",
+      "destination": "native-helpers/csharp/tests/test_helper.py",
+      "source_sha256": "15e98aec317453be41e4d091c71493b0c36ae77aac0ee4d515e305ff5f4a2d68",
+      "destination_sha256": "15e98aec317453be41e4d091c71493b0c36ae77aac0ee4d515e305ff5f4a2d68",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/go/.gitignore",
+      "destination": "native-helpers/go/.gitignore",
+      "source_sha256": "2af6f2d9bf1fc0f85fd2802439b2bce603016021feed4809d52fef0a87c794a2",
+      "destination_sha256": "2af6f2d9bf1fc0f85fd2802439b2bce603016021feed4809d52fef0a87c794a2",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/go/README.md",
+      "destination": "native-helpers/go/README.md",
+      "source_sha256": "e1247a2521d8d6778a6a235601ad23c63ac60d4ec2aa246be52ace7a0d230559",
+      "destination_sha256": "e1247a2521d8d6778a6a235601ad23c63ac60d4ec2aa246be52ace7a0d230559",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/go/analyze.go",
+      "destination": "native-helpers/go/analyze.go",
+      "source_sha256": "f2359df5d82154e7ff5336d50d3571753c2a6773a8f572b81e636dfbbc69f91c",
+      "destination_sha256": "f2359df5d82154e7ff5336d50d3571753c2a6773a8f572b81e636dfbbc69f91c",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/go/analyze_test.go",
+      "destination": "native-helpers/go/analyze_test.go",
+      "source_sha256": "f3eec04faf24f398c7a4d72d2eef23a052fca892a7b79a29ddf3e7d1c54d06e8",
+      "destination_sha256": "f3eec04faf24f398c7a4d72d2eef23a052fca892a7b79a29ddf3e7d1c54d06e8",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/go/go.mod",
+      "destination": "native-helpers/go/go.mod",
+      "source_sha256": "4b2d8b2ad85657a0c62ee357f3c2c213572d24a4b3a79a377f88cc062b09aee5",
+      "destination_sha256": "4b2d8b2ad85657a0c62ee357f3c2c213572d24a4b3a79a377f88cc062b09aee5",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/go/language_errors_test.go",
+      "destination": "native-helpers/go/language_errors_test.go",
+      "source_sha256": "c9a3d8076e94ac153d2494de4da1c73ccb4c5cc27fb5f06837f6d799aa778148",
+      "destination_sha256": "c9a3d8076e94ac153d2494de4da1c73ccb4c5cc27fb5f06837f6d799aa778148",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/go/project.go",
+      "destination": "native-helpers/go/project.go",
+      "source_sha256": "4ec402a899dcf1546743b984ea6c70f162c738cb07be66593196c0ebb1386c29",
+      "destination_sha256": "4ec402a899dcf1546743b984ea6c70f162c738cb07be66593196c0ebb1386c29",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/go/protocol.go",
+      "destination": "native-helpers/go/protocol.go",
+      "source_sha256": "9fb8a3773c2cdb7116487013c07f658963c2e2aa09f3dcbb13e195805e0e1a5d",
+      "destination_sha256": "9fb8a3773c2cdb7116487013c07f658963c2e2aa09f3dcbb13e195805e0e1a5d",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/go/review_test.go",
+      "destination": "native-helpers/go/review_test.go",
+      "source_sha256": "58e5ca086bfd200a4c138e5ea45a5dbd767b1318d8d22b8c98d13db23469a3e6",
+      "destination_sha256": "58e5ca086bfd200a4c138e5ea45a5dbd767b1318d8d22b8c98d13db23469a3e6",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/go/sdk_tags.go",
+      "destination": "native-helpers/go/sdk_tags.go",
+      "source_sha256": "eb99f5260f514d5fbb48a48a9aabea153089fa6f667a2bb184721b9cf9c72b29",
+      "destination_sha256": "eb99f5260f514d5fbb48a48a9aabea153089fa6f667a2bb184721b9cf9c72b29",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/go/sdk_tags_test.go",
+      "destination": "native-helpers/go/sdk_tags_test.go",
+      "source_sha256": "1fff092115af66f7c3319328e731eadce8b36bd8e71d0865a2d9c4d3c2c32a4b",
+      "destination_sha256": "1fff092115af66f7c3319328e731eadce8b36bd8e71d0865a2d9c4d3c2c32a4b",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/go/versions.go",
+      "destination": "native-helpers/go/versions.go",
+      "source_sha256": "bae28e03c276c583ce5005ff0edd5e436c1162338cd7fa2bf4587d8ae297fb35",
+      "destination_sha256": "bae28e03c276c583ce5005ff0edd5e436c1162338cd7fa2bf4587d8ae297fb35",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/go/versions_test.go",
+      "destination": "native-helpers/go/versions_test.go",
+      "source_sha256": "2a0400d8c5ce8ea1ca98ef474756073f4da2e2f02ec9e2519e9d77eeb9b913a5",
+      "destination_sha256": "2a0400d8c5ce8ea1ca98ef474756073f4da2e2f02ec9e2519e9d77eeb9b913a5",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/java/.gitignore",
+      "destination": "native-helpers/java/.gitignore",
+      "source_sha256": "43aec94b5594b9af7a15e5204c099cfa314a64946ce2f2861083ffd211ea8b95",
+      "destination_sha256": "43aec94b5594b9af7a15e5204c099cfa314a64946ce2f2861083ffd211ea8b95",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/java/README.md",
+      "destination": "native-helpers/java/README.md",
+      "source_sha256": "bd2f16344b46f1432964f5305de946cb2469e1bdb8807d91d60c721d13a23e73",
+      "destination_sha256": "bd2f16344b46f1432964f5305de946cb2469e1bdb8807d91d60c721d13a23e73",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/java/build.py",
+      "destination": "native-helpers/java/build.py",
+      "source_sha256": "140297a5c9d588d85e6d5451835ab7ae6d4925a92fb3577970fed805f457bbb7",
+      "destination_sha256": "140297a5c9d588d85e6d5451835ab7ae6d4925a92fb3577970fed805f457bbb7",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/java/build.sh",
+      "destination": "native-helpers/java/build.sh",
+      "source_sha256": "c958bcc0d2a4aa8c486cf3caca20b27b5a71e76181430609d99ce45b866e8d92",
+      "destination_sha256": "c958bcc0d2a4aa8c486cf3caca20b27b5a71e76181430609d99ce45b866e8d92",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/java/dependencies.lock.json",
+      "destination": "native-helpers/java/dependencies.lock.json",
+      "source_sha256": "313d3be1b44d0f42059a159b0484f1cb9b654070549c235906fec9598455f150",
+      "destination_sha256": "313d3be1b44d0f42059a159b0484f1cb9b654070549c235906fec9598455f150",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/java/src/dev/narrant/java/Analyzer.java",
+      "destination": "native-helpers/java/src/dev/narrant/java/Analyzer.java",
+      "source_sha256": "3900f7d2c01a9cc87f50044b185301fd4a2e998cb1d3e94187179c6cf29f1e6f",
+      "destination_sha256": "3900f7d2c01a9cc87f50044b185301fd4a2e998cb1d3e94187179c6cf29f1e6f",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/java/src/dev/narrant/java/Main.java",
+      "destination": "native-helpers/java/src/dev/narrant/java/Main.java",
+      "source_sha256": "eab665efb28587542dba2d4959cd1cb87749362b701674722b96bf57fee584a2",
+      "destination_sha256": "eab665efb28587542dba2d4959cd1cb87749362b701674722b96bf57fee584a2",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/java/src/dev/narrant/java/ProjectModel.java",
+      "destination": "native-helpers/java/src/dev/narrant/java/ProjectModel.java",
+      "source_sha256": "84b63bf9062bd3aa43a0d4d8c856903d601358b32b32bfb97de3610c7efc71be",
+      "destination_sha256": "84b63bf9062bd3aa43a0d4d8c856903d601358b32b32bfb97de3610c7efc71be",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/java/tests/test_helper.py",
+      "destination": "native-helpers/java/tests/test_helper.py",
+      "source_sha256": "c75204bc7fa96823dd6b629e0f3d5813ef900c5efba50d03724d2e1c242bf7ea",
+      "destination_sha256": "c75204bc7fa96823dd6b629e0f3d5813ef900c5efba50d03724d2e1c242bf7ea",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/java/tests/test_target_versions.py",
+      "destination": "native-helpers/java/tests/test_target_versions.py",
+      "source_sha256": "bd3aecbb49380cf27e4fce1cd3f82743c10ea5efb278d917365bf9fbd9291f6b",
+      "destination_sha256": "bd3aecbb49380cf27e4fce1cd3f82743c10ea5efb278d917365bf9fbd9291f6b",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/java/tools/Probe.java",
+      "destination": "native-helpers/java/tools/Probe.java",
+      "source_sha256": "71d54eaff653303e89c729b57aa9ae40538d1641edaf1d861b356de7302d1983",
+      "destination_sha256": "71d54eaff653303e89c729b57aa9ae40538d1641edaf1d861b356de7302d1983",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/java/tools/classpath.py",
+      "destination": "native-helpers/java/tools/classpath.py",
+      "source_sha256": "74043bfe37cc94630f848dd96de11a4b526c5104d2c5817c821fa0b3ddf30861",
+      "destination_sha256": "74043bfe37cc94630f848dd96de11a4b526c5104d2c5817c821fa0b3ddf30861",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/java/tools/fetch-deps.py",
+      "destination": "native-helpers/java/tools/fetch-deps.py",
+      "source_sha256": "068da987072ea178c552a9f8e5f5ff86a00b99fc70f84bf66d80a3318d7aaeb1",
+      "destination_sha256": "068da987072ea178c552a9f8e5f5ff86a00b99fc70f84bf66d80a3318d7aaeb1",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/.gitignore",
+      "destination": "native-helpers/python/.gitignore",
+      "source_sha256": "306fd52e74fca6746e12acc750f232de15e71da917756a1270d74c91f5eb7368",
+      "destination_sha256": "306fd52e74fca6746e12acc750f232de15e71da917756a1270d74c91f5eb7368",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/Cargo.lock",
+      "destination": "native-helpers/python/Cargo.lock",
+      "source_sha256": "3c147a331aa80e52631577a43869adc84ab852e90bd46504876fe8ff15368958",
+      "destination_sha256": "3c147a331aa80e52631577a43869adc84ab852e90bd46504876fe8ff15368958",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/Cargo.toml",
+      "destination": "native-helpers/python/Cargo.toml",
+      "source_sha256": "64f9f03596bc265eeafef44ea545c57d8a18340c7bb0c07f6d45aa25a7d2d52a",
+      "destination_sha256": "64f9f03596bc265eeafef44ea545c57d8a18340c7bb0c07f6d45aa25a7d2d52a",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/README.md",
+      "destination": "native-helpers/python/README.md",
+      "source_sha256": "d5a601a8ea3727ac0bc7f23b1efc1f4fb2098fa789edcccef7df55e8c60df898",
+      "destination_sha256": "d5a601a8ea3727ac0bc7f23b1efc1f4fb2098fa789edcccef7df55e8c60df898",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/licenses/MIT-standard-terms.txt",
+      "destination": "native-helpers/python/licenses/MIT-standard-terms.txt",
+      "source_sha256": "34b000bf3a2dd36c8e5bd9982f4d749d30674f77f862ce41116c4c511f5a6ec7",
+      "destination_sha256": "34b000bf3a2dd36c8e5bd9982f4d749d30674f77f862ce41116c4c511f5a6ec7",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/licenses/Pubgrub-LICENSE",
+      "destination": "native-helpers/python/licenses/Pubgrub-LICENSE",
+      "source_sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5",
+      "destination_sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/licenses/collection_literals-1.0.2-Cargo.toml.orig",
+      "destination": "native-helpers/python/licenses/collection_literals-1.0.2-Cargo.toml.orig",
+      "source_sha256": "49bb5e0d5e061e65e5a209a3a224490ae1f0c8ea4d0e03ba2d37308912be2184",
+      "destination_sha256": "49bb5e0d5e061e65e5a209a3a224490ae1f0c8ea4d0e03ba2d37308912be2184",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/licenses/fallbacks.json",
+      "destination": "native-helpers/python/licenses/fallbacks.json",
+      "source_sha256": "a4dd5a0aa3859625e13a3bf40d77992c34e69b4da78ff7662fbfc0bdd28c2a96",
+      "destination_sha256": "a4dd5a0aa3859625e13a3bf40d77992c34e69b4da78ff7662fbfc0bdd28c2a96",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/licenses/quote-use-0.8.4-Cargo.toml.orig",
+      "destination": "native-helpers/python/licenses/quote-use-0.8.4-Cargo.toml.orig",
+      "source_sha256": "ecfc7dc2e4798974d187be845eb0ebf237172b81ba92d3c9975dbc6d7afd7491",
+      "destination_sha256": "ecfc7dc2e4798974d187be845eb0ebf237172b81ba92d3c9975dbc6d7afd7491",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/licenses/quote-use-macros-0.8.4-Cargo.toml.orig",
+      "destination": "native-helpers/python/licenses/quote-use-macros-0.8.4-Cargo.toml.orig",
+      "source_sha256": "ab413120579469d0386e6f00afa18ac18457d3d20d81b4fd81ef558e4fa7094e",
+      "destination_sha256": "ab413120579469d0386e6f00afa18ac18457d3d20d81b4fd81ef558e4fa7094e",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/licenses/ruff-LICENSE",
+      "destination": "native-helpers/python/licenses/ruff-LICENSE",
+      "source_sha256": "2597d854122b77ddc71971564ca2350a37608575ce324adc5650a2b2051c8f18",
+      "destination_sha256": "2597d854122b77ddc71971564ca2350a37608575ce324adc5650a2b2051c8f18",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/licenses/seahash-4.1.0-Cargo.toml.orig",
+      "destination": "native-helpers/python/licenses/seahash-4.1.0-Cargo.toml.orig",
+      "source_sha256": "dd213de338ca98b7ef7a2562bcf4e4214d215d1a8277750a6a72b4e809c8d0dd",
+      "destination_sha256": "dd213de338ca98b7ef7a2562bcf4e4214d215d1a8277750a6a72b4e809c8d0dd",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/licenses/sources.json",
+      "destination": "native-helpers/python/licenses/sources.json",
+      "source_sha256": "46b6423044ea4a280a773441e1a1860c65f7d598efc3f7d3e873814bfe2186a8",
+      "destination_sha256": "46b6423044ea4a280a773441e1a1860c65f7d598efc3f7d3e873814bfe2186a8",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/licenses/typeshed-LICENSE",
+      "destination": "native-helpers/python/licenses/typeshed-LICENSE",
+      "source_sha256": "295f8538c94ae5c3043301cf7cff1c852dab6a786a8ddee471e061b40d5ecabe",
+      "destination_sha256": "295f8538c94ae5c3043301cf7cff1c852dab6a786a8ddee471e061b40d5ecabe",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/rust-toolchain.toml",
+      "destination": "native-helpers/python/rust-toolchain.toml",
+      "source_sha256": "b4ea3c94c934d96a2772b7878c12ccbf3e486313d0988a9c960e0bd87bafc8fe",
+      "destination_sha256": "b4ea3c94c934d96a2772b7878c12ccbf3e486313d0988a9c960e0bd87bafc8fe",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/lib.rs",
+      "destination": "native-helpers/python/src/lib.rs",
+      "source_sha256": "50c5a5e09e5d1cf5c45876e33255ffa8f06d7e8c534d2efda39939265143db0b",
+      "destination_sha256": "50c5a5e09e5d1cf5c45876e33255ffa8f06d7e8c534d2efda39939265143db0b",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/loading.rs",
+      "destination": "native-helpers/python/src/loading.rs",
+      "source_sha256": "90950f9170229561cf2c0bb67c7f1b1e72cef86914edccfacecabb93967b132e",
+      "destination_sha256": "90950f9170229561cf2c0bb67c7f1b1e72cef86914edccfacecabb93967b132e",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/main.rs",
+      "destination": "native-helpers/python/src/main.rs",
+      "source_sha256": "84c0575605038c5c4007b57a8e9248228619b4502322c9257471e8a9f750c794",
+      "destination_sha256": "84c0575605038c5c4007b57a8e9248228619b4502322c9257471e8a9f750c794",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/projection/bindings.rs",
+      "destination": "native-helpers/python/src/projection/bindings.rs",
+      "source_sha256": "3d187c918d8cbb981cce700981e0209daf5a7c7da7d3dd065c2ba97f1f11575d",
+      "destination_sha256": "3d187c918d8cbb981cce700981e0209daf5a7c7da7d3dd065c2ba97f1f11575d",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/projection/fields.rs",
+      "destination": "native-helpers/python/src/projection/fields.rs",
+      "source_sha256": "5e9c7b1261dd62926e05332a8ffd00c67755f4088f90e0a25ba0e290b6fd493e",
+      "destination_sha256": "5e9c7b1261dd62926e05332a8ffd00c67755f4088f90e0a25ba0e290b6fd493e",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/projection/known.rs",
+      "destination": "native-helpers/python/src/projection/known.rs",
+      "source_sha256": "6a905a41f2b9a0c593580de72170b70621c2ac4ff845e505b23527d608a8db54",
+      "destination_sha256": "6a905a41f2b9a0c593580de72170b70621c2ac4ff845e505b23527d608a8db54",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/projection/mod.rs",
+      "destination": "native-helpers/python/src/projection/mod.rs",
+      "source_sha256": "a451cdfd3c3627f72b7d975795358973834b4fa48e493306f641ff32d75cdf10",
+      "destination_sha256": "a451cdfd3c3627f72b7d975795358973834b4fa48e493306f641ff32d75cdf10",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/projection/project.rs",
+      "destination": "native-helpers/python/src/projection/project.rs",
+      "source_sha256": "28a6526f64aeb9f0b944f82f7bb6f10711e0a9ebf9dfb02f33af9d1f2b07d2a5",
+      "destination_sha256": "28a6526f64aeb9f0b944f82f7bb6f10711e0a9ebf9dfb02f33af9d1f2b07d2a5",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/projection/references.rs",
+      "destination": "native-helpers/python/src/projection/references.rs",
+      "source_sha256": "0ca59891e04e5f366f2da7855ec38bc351056e5d562344bc622c3ed2b9428a92",
+      "destination_sha256": "0ca59891e04e5f366f2da7855ec38bc351056e5d562344bc622c3ed2b9428a92",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/projection/syntax.rs",
+      "destination": "native-helpers/python/src/projection/syntax.rs",
+      "source_sha256": "196085702322669c9fc76607dc06e4689604631eeb059d0c1d568424c2f5c3b0",
+      "destination_sha256": "196085702322669c9fc76607dc06e4689604631eeb059d0c1d568424c2f5c3b0",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/projection/tests/project.rs",
+      "destination": "native-helpers/python/src/projection/tests/project.rs",
+      "source_sha256": "00e0b37060fa4bb3fafeda5a8182207dcc961f6e59cbb62cb6946b14cc291602",
+      "destination_sha256": "00e0b37060fa4bb3fafeda5a8182207dcc961f6e59cbb62cb6946b14cc291602",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/protocol.rs",
+      "destination": "native-helpers/python/src/protocol.rs",
+      "source_sha256": "344eda55f9f310c7c97351995a47c9f639abfcebd20da91db20542f4f2c8820c",
+      "destination_sha256": "344eda55f9f310c7c97351995a47c9f639abfcebd20da91db20542f4f2c8820c",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/symbols.rs",
+      "destination": "native-helpers/python/src/symbols.rs",
+      "source_sha256": "be51dea38c2d5ab59f7cc8ce0f3a01ac15a0e625e8a8f68fcb122fa18f0db3b3",
+      "destination_sha256": "be51dea38c2d5ab59f7cc8ce0f3a01ac15a0e625e8a8f68fcb122fa18f0db3b3",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/system.rs",
+      "destination": "native-helpers/python/src/system.rs",
+      "source_sha256": "5e5b5c7402c1a5cc58928c87aaaa68230fb805dcd2f7c4d3ebe1c691043eacc5",
+      "destination_sha256": "5e5b5c7402c1a5cc58928c87aaaa68230fb805dcd2f7c4d3ebe1c691043eacc5",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/tests/core.rs",
+      "destination": "native-helpers/python/src/tests/core.rs",
+      "source_sha256": "df703b07f629a2fa967e93a24b85ad9a7e74a5770a568a285a5ee5fed34a57a2",
+      "destination_sha256": "df703b07f629a2fa967e93a24b85ad9a7e74a5770a568a285a5ee5fed34a57a2",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/tests/fixtures/full.json",
+      "destination": "native-helpers/python/src/tests/fixtures/full.json",
+      "source_sha256": "8f5e6ab27c7338b3c3c0e1d2d8438204184c53d0977509e3758031ca23a97356",
+      "destination_sha256": "8f5e6ab27c7338b3c3c0e1d2d8438204184c53d0977509e3758031ca23a97356",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/tests/fixtures/minor-10.json",
+      "destination": "native-helpers/python/src/tests/fixtures/minor-10.json",
+      "source_sha256": "d054daca7bcf94ca66c9fb15da2131e6c52a6d6827b617df4ae2137542398e52",
+      "destination_sha256": "d054daca7bcf94ca66c9fb15da2131e6c52a6d6827b617df4ae2137542398e52",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/tests/fixtures/minor-11.json",
+      "destination": "native-helpers/python/src/tests/fixtures/minor-11.json",
+      "source_sha256": "26945a56b4883428c7e90f970381dff972e2fd0c3c9463efdecacd3b54da0bde",
+      "destination_sha256": "26945a56b4883428c7e90f970381dff972e2fd0c3c9463efdecacd3b54da0bde",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/tests/fixtures/minor-12.json",
+      "destination": "native-helpers/python/src/tests/fixtures/minor-12.json",
+      "source_sha256": "95274182c9b57d672761775abc91c008cefbf8aa9569982e7fb7e39b9302a233",
+      "destination_sha256": "95274182c9b57d672761775abc91c008cefbf8aa9569982e7fb7e39b9302a233",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/tests/fixtures/minor-13.json",
+      "destination": "native-helpers/python/src/tests/fixtures/minor-13.json",
+      "source_sha256": "7722c4e55df78d307e44ed0fe601a1f80a5cea34287634a842136bb7d848001c",
+      "destination_sha256": "7722c4e55df78d307e44ed0fe601a1f80a5cea34287634a842136bb7d848001c",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/tests/fixtures/minor-14.json",
+      "destination": "native-helpers/python/src/tests/fixtures/minor-14.json",
+      "source_sha256": "5894b303f8d5861e32612723bae30cfe6310dac92ac5791fee13e54b44777198",
+      "destination_sha256": "5894b303f8d5861e32612723bae30cfe6310dac92ac5791fee13e54b44777198",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/tests/fixtures/minor-7.json",
+      "destination": "native-helpers/python/src/tests/fixtures/minor-7.json",
+      "source_sha256": "1584d0b2cd3906964cde671b62a4a754b7c399feab87cb15c42b47833dca3c37",
+      "destination_sha256": "1584d0b2cd3906964cde671b62a4a754b7c399feab87cb15c42b47833dca3c37",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/tests/fixtures/minor-8.json",
+      "destination": "native-helpers/python/src/tests/fixtures/minor-8.json",
+      "source_sha256": "3c7bf872053ed45798fd85e4183767cceb123647d9d4bdbbd841f66a9c77da4c",
+      "destination_sha256": "3c7bf872053ed45798fd85e4183767cceb123647d9d4bdbbd841f66a9c77da4c",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/tests/fixtures/minor-9.json",
+      "destination": "native-helpers/python/src/tests/fixtures/minor-9.json",
+      "source_sha256": "c48bc1401fa9a056dd9c2bac696a879c80279d2a71ea6c37625485d3078ecfd8",
+      "destination_sha256": "c48bc1401fa9a056dd9c2bac696a879c80279d2a71ea6c37625485d3078ecfd8",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/tests/lifecycle.rs",
+      "destination": "native-helpers/python/src/tests/lifecycle.rs",
+      "source_sha256": "997a0fbbfff3769d5c9e54e751ecf1c6791632bb37388a74a06eda6dd7a29c8d",
+      "destination_sha256": "997a0fbbfff3769d5c9e54e751ecf1c6791632bb37388a74a06eda6dd7a29c8d",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/tests/projection.rs",
+      "destination": "native-helpers/python/src/tests/projection.rs",
+      "source_sha256": "915ef0c2d663b7b918dec2435afdb8fa8850ed56edf08a65841410c5954077ad",
+      "destination_sha256": "915ef0c2d663b7b918dec2435afdb8fa8850ed56edf08a65841410c5954077ad",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/python/src/tests/protocol.rs",
+      "destination": "native-helpers/python/src/tests/protocol.rs",
+      "source_sha256": "5d28166b7946614664812e21dd022c0b183e5b0ef7d85d4c21a71502101ee98c",
+      "destination_sha256": "5d28166b7946614664812e21dd022c0b183e5b0ef7d85d4c21a71502101ee98c",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/.gitignore",
+      "destination": "native-helpers/rust/.gitignore",
+      "source_sha256": "306fd52e74fca6746e12acc750f232de15e71da917756a1270d74c91f5eb7368",
+      "destination_sha256": "306fd52e74fca6746e12acc750f232de15e71da917756a1270d74c91f5eb7368",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/Cargo.lock",
+      "destination": "native-helpers/rust/Cargo.lock",
+      "source_sha256": "b65218eb812377476a921df0b7278beca402c825f061f3275fc2211957cd62c2",
+      "destination_sha256": "b65218eb812377476a921df0b7278beca402c825f061f3275fc2211957cd62c2",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/Cargo.toml",
+      "destination": "native-helpers/rust/Cargo.toml",
+      "source_sha256": "dbf142bdebe980f92f864e97b96896dce896404016beada893a59e3c04b3aba7",
+      "destination_sha256": "dbf142bdebe980f92f864e97b96896dce896404016beada893a59e3c04b3aba7",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/README.md",
+      "destination": "native-helpers/rust/README.md",
+      "source_sha256": "8b3926ca0d75d61bf3c7e3b3dd17ee65503f35033479050ac64d673d4c8d0b9e",
+      "destination_sha256": "8b3926ca0d75d61bf3c7e3b3dd17ee65503f35033479050ac64d673d4c8d0b9e",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/licenses/LineIndex-LICENSE-APACHE",
+      "destination": "native-helpers/rust/licenses/LineIndex-LICENSE-APACHE",
+      "source_sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "destination_sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/licenses/LineIndex-LICENSE-MIT",
+      "destination": "native-helpers/rust/licenses/LineIndex-LICENSE-MIT",
+      "source_sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+      "destination_sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/licenses/Pulldown-LICENSE-APACHE",
+      "destination": "native-helpers/rust/licenses/Pulldown-LICENSE-APACHE",
+      "source_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "destination_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/licenses/Rust-LICENSE-APACHE",
+      "destination": "native-helpers/rust/licenses/Rust-LICENSE-APACHE",
+      "source_sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "destination_sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/licenses/Rust-LICENSE-MIT",
+      "destination": "native-helpers/rust/licenses/Rust-LICENSE-MIT",
+      "source_sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "destination_sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/licenses/RustAnalyzer-LICENSE-APACHE",
+      "destination": "native-helpers/rust/licenses/RustAnalyzer-LICENSE-APACHE",
+      "source_sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "destination_sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/licenses/RustAnalyzer-LICENSE-MIT",
+      "destination": "native-helpers/rust/licenses/RustAnalyzer-LICENSE-MIT",
+      "source_sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+      "destination_sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/licenses/fallbacks.json",
+      "destination": "native-helpers/rust/licenses/fallbacks.json",
+      "source_sha256": "d96d56115e044cf1fae9ee766096b9d5b9fb1d68592920c78339f0042bd900c4",
+      "destination_sha256": "d96d56115e044cf1fae9ee766096b9d5b9fb1d68592920c78339f0042bd900c4",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/licenses/sources.json",
+      "destination": "native-helpers/rust/licenses/sources.json",
+      "source_sha256": "8e81f962c4a873eefb6b166969134f82f9a240a6a13f18d98d68a3ef1c070a7d",
+      "destination_sha256": "8e81f962c4a873eefb6b166969134f82f9a240a6a13f18d98d68a3ef1c070a7d",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/rust-toolchain.toml",
+      "destination": "native-helpers/rust/rust-toolchain.toml",
+      "source_sha256": "b4ea3c94c934d96a2772b7878c12ccbf3e486313d0988a9c960e0bd87bafc8fe",
+      "destination_sha256": "b4ea3c94c934d96a2772b7878c12ccbf3e486313d0988a9c960e0bd87bafc8fe",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/discovery.rs",
+      "destination": "native-helpers/rust/src/discovery.rs",
+      "source_sha256": "5a8740547258f68c77bd51fbeff944a43397da17e2fa879074ae1b96071d826f",
+      "destination_sha256": "5a8740547258f68c77bd51fbeff944a43397da17e2fa879074ae1b96071d826f",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/lib.rs",
+      "destination": "native-helpers/rust/src/lib.rs",
+      "source_sha256": "edd7da97e167d23e0f34fc5bc460b68df86fc8ab27cc49ac7f37e9419272f2aa",
+      "destination_sha256": "edd7da97e167d23e0f34fc5bc460b68df86fc8ab27cc49ac7f37e9419272f2aa",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/loading.rs",
+      "destination": "native-helpers/rust/src/loading.rs",
+      "source_sha256": "9ed61831a72517be69f59448f998be0089f72e85393046805f46741151ed1967",
+      "destination_sha256": "9ed61831a72517be69f59448f998be0089f72e85393046805f46741151ed1967",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/main.rs",
+      "destination": "native-helpers/rust/src/main.rs",
+      "source_sha256": "721c8e8e98b910feca1cebc6a449410f0c20d5b1be31e12cd6cd1d1a2b380214",
+      "destination_sha256": "721c8e8e98b910feca1cebc6a449410f0c20d5b1be31e12cd6cd1d1a2b380214",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/projection/mod.rs",
+      "destination": "native-helpers/rust/src/projection/mod.rs",
+      "source_sha256": "6af602fe523f25ae71b85b6a90f60143ec118f63a40a378bddf87eb47f858e20",
+      "destination_sha256": "6af602fe523f25ae71b85b6a90f60143ec118f63a40a378bddf87eb47f858e20",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/projection/model.rs",
+      "destination": "native-helpers/rust/src/projection/model.rs",
+      "source_sha256": "2c2efe18e4d9dfac75576153f0b97eb724779d713b0a9816670b288dc2c09c7d",
+      "destination_sha256": "2c2efe18e4d9dfac75576153f0b97eb724779d713b0a9816670b288dc2c09c7d",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/projection/references.rs",
+      "destination": "native-helpers/rust/src/projection/references.rs",
+      "source_sha256": "c78a3bf0b18f5c9003343958b39f257bccfbf22768e65a75c208fdb6b533de3b",
+      "destination_sha256": "c78a3bf0b18f5c9003343958b39f257bccfbf22768e65a75c208fdb6b533de3b",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/projection/symbols.rs",
+      "destination": "native-helpers/rust/src/projection/symbols.rs",
+      "source_sha256": "0f486f449eeaf96971f28a402a0bca0df6281782dbc8d6dda8467b9b48617c79",
+      "destination_sha256": "0f486f449eeaf96971f28a402a0bca0df6281782dbc8d6dda8467b9b48617c79",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/projection/syntax.rs",
+      "destination": "native-helpers/rust/src/projection/syntax.rs",
+      "source_sha256": "4b7a6f57fbac41c4d82cc9a8414970e3b73cac89f2145e0f8f3d15e03e092b33",
+      "destination_sha256": "4b7a6f57fbac41c4d82cc9a8414970e3b73cac89f2145e0f8f3d15e03e092b33",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/projection/test_code.rs",
+      "destination": "native-helpers/rust/src/projection/test_code.rs",
+      "source_sha256": "39ac4689db4621ab5302079a60aa1098cf294dc47cb23dc01833a88950367936",
+      "destination_sha256": "39ac4689db4621ab5302079a60aa1098cf294dc47cb23dc01833a88950367936",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/projection/tests/syntax.rs",
+      "destination": "native-helpers/rust/src/projection/tests/syntax.rs",
+      "source_sha256": "8349a16bcf13f5141f9df3fdc33fa86de9413959f3cec81472f58aca252118ef",
+      "destination_sha256": "8349a16bcf13f5141f9df3fdc33fa86de9413959f3cec81472f58aca252118ef",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/projection/tests/test_code.rs",
+      "destination": "native-helpers/rust/src/projection/tests/test_code.rs",
+      "source_sha256": "886fad03aae3660d626f7d9aeb58645003e9f0a22015400254c2868ba0fbb0bf",
+      "destination_sha256": "886fad03aae3660d626f7d9aeb58645003e9f0a22015400254c2868ba0fbb0bf",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/protocol.rs",
+      "destination": "native-helpers/rust/src/protocol.rs",
+      "source_sha256": "15d10f03b14ad96c17ea059bed6e59f4a51268b1a0631ba5b7bad333814f4d3a",
+      "destination_sha256": "15d10f03b14ad96c17ea059bed6e59f4a51268b1a0631ba5b7bad333814f4d3a",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/readonly_metadata.rs",
+      "destination": "native-helpers/rust/src/readonly_metadata.rs",
+      "source_sha256": "aec334d6fbb5c96e954c30a8e8802420c75390fe00f09bbba4036be9d0f9e280",
+      "destination_sha256": "aec334d6fbb5c96e954c30a8e8802420c75390fe00f09bbba4036be9d0f9e280",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/tests/core.rs",
+      "destination": "native-helpers/rust/src/tests/core.rs",
+      "source_sha256": "3d0b73a390e0cf0e2c4093f8b940db50bf36bbaa10807432304da6560e5bcab1",
+      "destination_sha256": "3d0b73a390e0cf0e2c4093f8b940db50bf36bbaa10807432304da6560e5bcab1",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/tests/fixtures/core/Cargo.toml",
+      "destination": "native-helpers/rust/src/tests/fixtures/core/Cargo.toml",
+      "source_sha256": "06dc137ef42558ee78e6d96aa42d8647845eee8661e78d39459991bcf59b2cdb",
+      "destination_sha256": "06dc137ef42558ee78e6d96aa42d8647845eee8661e78d39459991bcf59b2cdb",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/tests/fixtures/core/build.rs",
+      "destination": "native-helpers/rust/src/tests/fixtures/core/build.rs",
+      "source_sha256": "d4c5e4f5e14d271b870388df57f4f3dc5fc1d935bc3c4001c105469252abde95",
+      "destination_sha256": "d4c5e4f5e14d271b870388df57f4f3dc5fc1d935bc3c4001c105469252abde95",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/tests/fixtures/core/macros/Cargo.toml",
+      "destination": "native-helpers/rust/src/tests/fixtures/core/macros/Cargo.toml",
+      "source_sha256": "cb547d1cbf97216e685e0390be44deebb840d486b230babbb920f5d75ba01c5f",
+      "destination_sha256": "cb547d1cbf97216e685e0390be44deebb840d486b230babbb920f5d75ba01c5f",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/tests/fixtures/core/macros/src/lib.rs",
+      "destination": "native-helpers/rust/src/tests/fixtures/core/macros/src/lib.rs",
+      "source_sha256": "2cce16bd85d8f86ee355dfbcdcc1fe4f52a2aac4e434f82812147ca2841b43df",
+      "destination_sha256": "2cce16bd85d8f86ee355dfbcdcc1fe4f52a2aac4e434f82812147ca2841b43df",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/tests/fixtures/core/src/lib.rs",
+      "destination": "native-helpers/rust/src/tests/fixtures/core/src/lib.rs",
+      "source_sha256": "32dd0ffe836e32535f17d55dea6f9393975e30ca7bc72fc78e3a8bab5416dde1",
+      "destination_sha256": "32dd0ffe836e32535f17d55dea6f9393975e30ca7bc72fc78e3a8bab5416dde1",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/tests/fixtures/core/src/specs.rs",
+      "destination": "native-helpers/rust/src/tests/fixtures/core/src/specs.rs",
+      "source_sha256": "ff552a523ce4efd5a08ce0b459270c1a48908823822633187384dd3489404590",
+      "destination_sha256": "ff552a523ce4efd5a08ce0b459270c1a48908823822633187384dd3489404590",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/tests/fixtures/core/src/store.rs",
+      "destination": "native-helpers/rust/src/tests/fixtures/core/src/store.rs",
+      "source_sha256": "c164e42299f4e86742c791ec18992e67941889f1c19c4b42c95b8bac17dc2920",
+      "destination_sha256": "c164e42299f4e86742c791ec18992e67941889f1c19c4b42c95b8bac17dc2920",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/tests/fixtures/core/tests/smoke.rs",
+      "destination": "native-helpers/rust/src/tests/fixtures/core/tests/smoke.rs",
+      "source_sha256": "0dd535cea5c70aeead0ec61b6caf39c6a81c6f696228c45646d83df9bab206a5",
+      "destination_sha256": "0dd535cea5c70aeead0ec61b6caf39c6a81c6f696228c45646d83df9bab206a5",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/tests/lifecycle.rs",
+      "destination": "native-helpers/rust/src/tests/lifecycle.rs",
+      "source_sha256": "3d5d2173429164ee86bb4e7ba0f69e7df83b1f0f4b655d9c80f5c0efb7749416",
+      "destination_sha256": "3d5d2173429164ee86bb4e7ba0f69e7df83b1f0f4b655d9c80f5c0efb7749416",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/tests/loading.rs",
+      "destination": "native-helpers/rust/src/tests/loading.rs",
+      "source_sha256": "200d6251ac08d513309e923b53c30303e01b05eee835eb5a643a29fddff66611",
+      "destination_sha256": "200d6251ac08d513309e923b53c30303e01b05eee835eb5a643a29fddff66611",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/tests/projection.rs",
+      "destination": "native-helpers/rust/src/tests/projection.rs",
+      "source_sha256": "f65a55b900583b6d2bd6bbde05f87fae0c796aa179b784f906cda9e95c7808cf",
+      "destination_sha256": "f65a55b900583b6d2bd6bbde05f87fae0c796aa179b784f906cda9e95c7808cf",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/tests/protocol.rs",
+      "destination": "native-helpers/rust/src/tests/protocol.rs",
+      "source_sha256": "6c49b352b8cdc7006bbfc48a20cecd25585d8360532ffea89838fbd3ba1dd763",
+      "destination_sha256": "6c49b352b8cdc7006bbfc48a20cecd25585d8360532ffea89838fbd3ba1dd763",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/tests/readonly_metadata.rs",
+      "destination": "native-helpers/rust/src/tests/readonly_metadata.rs",
+      "source_sha256": "fd65e3051260aa9a6ec01d7604aca1ee5ce8106447eb9f7c92ca80b3fe55b172",
+      "destination_sha256": "fd65e3051260aa9a6ec01d7604aca1ee5ce8106447eb9f7c92ca80b3fe55b172",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/rust/src/tests/support.rs",
+      "destination": "native-helpers/rust/src/tests/support.rs",
+      "source_sha256": "6c5622494d9fa8b64884f041efc1470c7a126c54ce4304401d626f4806d170af",
+      "destination_sha256": "6c5622494d9fa8b64884f041efc1470c7a126c54ce4304401d626f4806d170af",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/README.md",
+      "destination": "native-helpers/typescript/README.md",
+      "source_sha256": "7f1625e32c5f1f2c18988dec4a28213d234b09d62cd36251e18c7bd059f42daf",
+      "destination_sha256": "7f1625e32c5f1f2c18988dec4a28213d234b09d62cd36251e18c7bd059f42daf",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/analyze.mjs",
+      "destination": "native-helpers/typescript/analyze.mjs",
+      "source_sha256": "c7eebeff5604d174f460544abc4553ebc0f2b67fd313344044fea331b2d475e3",
+      "destination_sha256": "c7eebeff5604d174f460544abc4553ebc0f2b67fd313344044fea331b2d475e3",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/config.mjs",
+      "destination": "native-helpers/typescript/config.mjs",
+      "source_sha256": "cb3a6ccddb5c623cb7edea61e9d7ccdafb7b77772ff133ef919aad1fea925770",
+      "destination_sha256": "cb3a6ccddb5c623cb7edea61e9d7ccdafb7b77772ff133ef919aad1fea925770",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/main.mjs",
+      "destination": "native-helpers/typescript/main.mjs",
+      "source_sha256": "81cb9bf61ab1f9d6bbcd1252bdb4c8d3717c803b72e5fd1f1a5f9de238b399a3",
+      "destination_sha256": "81cb9bf61ab1f9d6bbcd1252bdb4c8d3717c803b72e5fd1f1a5f9de238b399a3",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/projection.mjs",
+      "destination": "native-helpers/typescript/projection.mjs",
+      "source_sha256": "06a5335243af53d7ff01e56dbc4ba1db13a60d0a614f2820b9ca328b1ffb2e87",
+      "destination_sha256": "06a5335243af53d7ff01e56dbc4ba1db13a60d0a614f2820b9ca328b1ffb2e87",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/request.mjs",
+      "destination": "native-helpers/typescript/request.mjs",
+      "source_sha256": "a15760d8893c4893cf4ee5e9781f335d0b763daa5593d0282655e82515fe8f52",
+      "destination_sha256": "a15760d8893c4893cf4ee5e9781f335d0b763daa5593d0282655e82515fe8f52",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/syntax.mjs",
+      "destination": "native-helpers/typescript/syntax.mjs",
+      "source_sha256": "b60f1462ce2ebdd1e1ceb969b4d609feb9a23bea25e46cd6d6be6f7416a86807",
+      "destination_sha256": "b60f1462ce2ebdd1e1ceb969b4d609feb9a23bea25e46cd6d6be6f7416a86807",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/tests/benchmark.mjs",
+      "destination": "native-helpers/typescript/tests/benchmark.mjs",
+      "source_sha256": "019d70c85795e176348cdde83d9c0e04b095872f796af9cd3db1edb64afb2f7f",
+      "destination_sha256": "019d70c85795e176348cdde83d9c0e04b095872f796af9cd3db1edb64afb2f7f",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/tests/config.test.mjs",
+      "destination": "native-helpers/typescript/tests/config.test.mjs",
+      "source_sha256": "a177c068fe7a13a98f325b5cca92f63bcd2b48d17ba69190ee60fce1414a3535",
+      "destination_sha256": "a177c068fe7a13a98f325b5cca92f63bcd2b48d17ba69190ee60fce1414a3535",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/tests/helper.test.mjs",
+      "destination": "native-helpers/typescript/tests/helper.test.mjs",
+      "source_sha256": "46bdbd87a2c14d310617643955dba6e5c035d2ca64002ba418c84961d327f513",
+      "destination_sha256": "46bdbd87a2c14d310617643955dba6e5c035d2ca64002ba418c84961d327f513",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/tests/lifecycle.test.mjs",
+      "destination": "native-helpers/typescript/tests/lifecycle.test.mjs",
+      "source_sha256": "8306a6d8912c322d28b78d162bafc72e4a6797f08dc376d1202ab85bfb6f268d",
+      "destination_sha256": "8306a6d8912c322d28b78d162bafc72e4a6797f08dc376d1202ab85bfb6f268d",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/tests/occurrences.test.mjs",
+      "destination": "native-helpers/typescript/tests/occurrences.test.mjs",
+      "source_sha256": "291ec130369992d1004a51dfbaf0eecaa662940216051c0304e1d892021c6073",
+      "destination_sha256": "291ec130369992d1004a51dfbaf0eecaa662940216051c0304e1d892021c6073",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/tests/output.test.mjs",
+      "destination": "native-helpers/typescript/tests/output.test.mjs",
+      "source_sha256": "dbc02d648a629956689ffc144c31cd8f6bf04f90278932690b9a915b08b54fe1",
+      "destination_sha256": "dbc02d648a629956689ffc144c31cd8f6bf04f90278932690b9a915b08b54fe1",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/tests/projection.test.mjs",
+      "destination": "native-helpers/typescript/tests/projection.test.mjs",
+      "source_sha256": "60e328498820f8f5f3676b9c36390244cf1e4af4df2fdb8a8ccd4e444caeef3d",
+      "destination_sha256": "60e328498820f8f5f3676b9c36390244cf1e4af4df2fdb8a8ccd4e444caeef3d",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/tests/protocol.test.mjs",
+      "destination": "native-helpers/typescript/tests/protocol.test.mjs",
+      "source_sha256": "c874cfd1ea44bbc40d464a103d9acaa62dad9220c9786878f07934641c24dbda",
+      "destination_sha256": "c874cfd1ea44bbc40d464a103d9acaa62dad9220c9786878f07934641c24dbda",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/tests/support.mjs",
+      "destination": "native-helpers/typescript/tests/support.mjs",
+      "source_sha256": "e78577abade6e7fd8f699426d7462a1cee9e0dacb25966710bbdd4a92385fc0c",
+      "destination_sha256": "e78577abade6e7fd8f699426d7462a1cee9e0dacb25966710bbdd4a92385fc0c",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/tests/syntax.test.mjs",
+      "destination": "native-helpers/typescript/tests/syntax.test.mjs",
+      "source_sha256": "b15350982061a8165c70445d48da9c4961c98af5e050cb93144d789ae49b8b6d",
+      "destination_sha256": "b15350982061a8165c70445d48da9c4961c98af5e050cb93144d789ae49b8b6d",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/tests/workspace.test.mjs",
+      "destination": "native-helpers/typescript/tests/workspace.test.mjs",
+      "source_sha256": "ff53323199699707e97803683b0a91ea347607e23e4fdf8deccac4e2546a0ec4",
+      "destination_sha256": "ff53323199699707e97803683b0a91ea347607e23e4fdf8deccac4e2546a0ec4",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/typescript/workspace.mjs",
+      "destination": "native-helpers/typescript/workspace.mjs",
+      "source_sha256": "a1f5327951331bf8bf2eea0ba9fc41d61ab681635eb979bb8b782464e5a1d54c",
+      "destination_sha256": "a1f5327951331bf8bf2eea0ba9fc41d61ab681635eb979bb8b782464e5a1d54c",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/windows-process-probe/.gitignore",
+      "destination": "native-helpers/windows-process-probe/.gitignore",
+      "source_sha256": "306fd52e74fca6746e12acc750f232de15e71da917756a1270d74c91f5eb7368",
+      "destination_sha256": "306fd52e74fca6746e12acc750f232de15e71da917756a1270d74c91f5eb7368",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/windows-process-probe/Cargo.lock",
+      "destination": "native-helpers/windows-process-probe/Cargo.lock",
+      "source_sha256": "5e2b5243ecbb151ff89b3b687d5697a078a387dc2bd6a9bfbfc95b0dc1003c4f",
+      "destination_sha256": "5e2b5243ecbb151ff89b3b687d5697a078a387dc2bd6a9bfbfc95b0dc1003c4f",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/windows-process-probe/Cargo.toml",
+      "destination": "native-helpers/windows-process-probe/Cargo.toml",
+      "source_sha256": "166e8cce79651a171dc75d72ceccc6956629e6496cd9f2f4390dd5f251b22906",
+      "destination_sha256": "166e8cce79651a171dc75d72ceccc6956629e6496cd9f2f4390dd5f251b22906",
+      "unchanged": true
+    },
+    {
+      "source": "native-helpers/windows-process-probe/src/lib.rs",
+      "destination": "native-helpers/windows-process-probe/src/lib.rs",
+      "source_sha256": "5dfeef29ae15ee3486f5f66048d378696c8b8ce0971060ad501d946603a26b17",
+      "destination_sha256": "8d51d640ade76e7c75e70355180e0fd60fde91852f3f116bc8837f54b4861330",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/code_graph/analyzer.rs",
+      "destination": "src/code_graph/analyzer.rs",
+      "source_sha256": "80d4d73188293d9f39657accd7dee4189776e023ebc539a040723bd9b234d130",
+      "destination_sha256": "80d4d73188293d9f39657accd7dee4189776e023ebc539a040723bd9b234d130",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/code_graph/graph.rs",
+      "destination": "src/code_graph/graph.rs",
+      "source_sha256": "49137f192dc645c6aa93eedff040ed2d40f7ca85351fc9b4a3ad76471883eea1",
+      "destination_sha256": "675a2a79707360c8bd5abcb4c744662886af2637065639efbdabad2bead7c08d",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/code_graph/error.rs",
+      "destination": "src/code_graph/error.rs",
+      "source_sha256": "d09d74c5751746950248a65f5bb3e50faa92ae9596099fa99d7cac4c0a404462",
+      "destination_sha256": "7ab814e47ef42c2e738242dd3da2c6510b6010966d72ba59231129f0946e623f",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/code_graph/mod.rs",
+      "destination": "src/code_graph/mod.rs",
+      "source_sha256": "e07477320b43d2bdf52a42374eb2cb49fabe00b2d103e5bb86bbc6239fc089d3",
+      "destination_sha256": "f1a38772d0516eacf87ae0051fa5526ec211de9a427fb969d1e4631daf81128c",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/code_graph/validation.rs",
+      "destination": "src/code_graph/validation.rs",
+      "source_sha256": "8ba3d2e49213335d08f06d8ebeca1fa44364b8186601a260f2f7bf80d9902f5e",
+      "destination_sha256": "8ba3d2e49213335d08f06d8ebeca1fa44364b8186601a260f2f7bf80d9902f5e",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/code_graph/node.rs",
+      "destination": "src/code_graph/node.rs",
+      "source_sha256": "5dd5aa52d877ee77640c6b0c3da7088aafb7f543a87ad415db506ec15882ffd7",
+      "destination_sha256": "5dd5aa52d877ee77640c6b0c3da7088aafb7f543a87ad415db506ec15882ffd7",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/code_graph/tests/graph.rs",
+      "destination": "src/code_graph/tests/graph.rs",
+      "source_sha256": "1b4c4e4362c1cccfa0e38fb157e1bbac9ec08dfa16b3d5ede8d6e3172a9e01a5",
+      "destination_sha256": "9569a05c879b874b302837741a12681a7947f3974015b19dda2a44c9af4b194b",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/code_graph/tests/mod.rs",
+      "destination": "src/code_graph/tests/mod.rs",
+      "source_sha256": "19cf52e76ee3a131139c634c30127bbcc052fe6009df8b5ef0392feea97a1f99",
+      "destination_sha256": "43a5c4c250f6041ace4f0bfe14f050e0c88795fd09b06398fbb894b4e7e8e9fe",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/code_graph/tests/fixtures.rs",
+      "destination": "src/code_graph/tests/fixtures.rs",
+      "source_sha256": "ffdafa819bc107aa221addb1892bf0d30647144f98f0536cbb8deb595bb60f2f",
+      "destination_sha256": "9f0e255b0d65c31230b7fa7e2b17c74ce618d4b2a9de3226363f2a67e40acca6",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/graph.rs",
+      "destination": "src/native_analyzer/graph.rs",
+      "source_sha256": "58466928e35db0dd957dad5716ef537d4c8ee385d38920ecd959295af0606f59",
+      "destination_sha256": "0dee41f20ab60de041d3e147525af29a2b96311ee2d2db5ed5699fc1d2e8a7c6",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/protocol.rs",
+      "destination": "src/native_analyzer/protocol.rs",
+      "source_sha256": "887073a4fe6278707e1f55bc5dd8238323f993dc5035681c29d8f3d888c6dadd",
+      "destination_sha256": "076e16c615b9c9d4070b2d193107cc00963019de8c3a0a76356df107af208d3a",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/profiles.rs",
+      "destination": "src/native_analyzer/profiles.rs",
+      "source_sha256": "35f1eca1a595dc17268e92e16fe3340794a2dfcff0e0c544ff8596ac22e722ee",
+      "destination_sha256": "35f1eca1a595dc17268e92e16fe3340794a2dfcff0e0c544ff8596ac22e722ee",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/mod.rs",
+      "destination": "src/native_analyzer/mod.rs",
+      "source_sha256": "8b0c1c715ee41041a421198d43a4753e3d2652d305127d6a63f71a72c0a5fdff",
+      "destination_sha256": "8b0c1c715ee41041a421198d43a4753e3d2652d305127d6a63f71a72c0a5fdff",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/input.rs",
+      "destination": "src/native_analyzer/input.rs",
+      "source_sha256": "664a6aa47260c22580f492997f96f8fd6b95be2d60912dd84ca2f83ace044eee",
+      "destination_sha256": "4bda5546d452f8bcac5f053857a2d50505dd02948528f7a8158a58a9ce8d203c",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/process.rs",
+      "destination": "src/native_analyzer/process.rs",
+      "source_sha256": "15f81da90c4c326454505aa1501cca8b4be6c7fc3b4859e05724cdd1ea2b7e67",
+      "destination_sha256": "5a6b720f65844101e750cbea5b760f5a673350c9ecd89a432dfe9cafecbea525",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/tests/python_native.rs",
+      "destination": "src/native_analyzer/tests/python_native.rs",
+      "source_sha256": "086c1accdbab038b485177fcbeff20140dbc04549697f6808fa6fbcd15e0c995",
+      "destination_sha256": "f468350f9f5159a25671141d9fd6c057c8d8035896a1a8c9c58be1897ffa7646",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/tests/rust_graph.rs",
+      "destination": "src/native_analyzer/tests/rust_graph.rs",
+      "source_sha256": "9eba423df577505183973d9ece4083e9f69375c0edf125d1cda2ba9c0d20354f",
+      "destination_sha256": "dc07b123038deede2d6c5240a31968cf7f3d6c661c8c0431dcfdf33dac6f898a",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/tests/rust_syntax.rs",
+      "destination": "src/native_analyzer/tests/rust_syntax.rs",
+      "source_sha256": "335a73220962202e365c6f670dfd5fbc1f9a009babfe85ce6ec688733a9d4867",
+      "destination_sha256": "7beeb03ee8f2575278cbfdf13669763d436395a439a1a77ed752d8bca0d0a34a",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/tests/fake-helper.mjs",
+      "destination": "src/native_analyzer/tests/fake-helper.mjs",
+      "source_sha256": "e4b3d1145b49634c5885e461546226efe6f551cae18327e5bd61efaa1e5862ec",
+      "destination_sha256": "e4b3d1145b49634c5885e461546226efe6f551cae18327e5bd61efaa1e5862ec",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/tests/python_graph.rs",
+      "destination": "src/native_analyzer/tests/python_graph.rs",
+      "source_sha256": "4b34b0bcd5cd65fd3573c265ce0134cec36ccfab8d0a4f6f5122f2f0d3bb25ba",
+      "destination_sha256": "fb14dda6805fdc2020339de22a48dc053c50173d2a92e9897b55c177d86ebf2e",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/tests/mod.rs",
+      "destination": "src/native_analyzer/tests/mod.rs",
+      "source_sha256": "dcc1eca6b0514e7c38bba5699f5428ec6dddf692cb3220ef84290d0df5e46e8e",
+      "destination_sha256": "c7d3d38e4d8ad42c862061db1a92735192ffb8a9a1acf80c0fbc57f53a12677d",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/tests/migration.rs",
+      "destination": "src/native_analyzer/tests/migration.rs",
+      "source_sha256": "1f3bcdbc6c66ba2863fb2658ca493d2c047f8f513249d03323b5946caa8e75e3",
+      "destination_sha256": "e20f6f1ec87ad87c9a70c6ee1fef085a10aaf9a8d5fc5980c29893e358e55a99",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/tests/fixtures/pr31_github_discovery.rs",
+      "destination": "src/native_analyzer/tests/fixtures/pr31_github_discovery.rs",
+      "source_sha256": "b89a486fd3e428b80202ee2b7cdd1e4fd7eb7f1e61981ef42a64a71c9ed843c6",
+      "destination_sha256": "b89a486fd3e428b80202ee2b7cdd1e4fd7eb7f1e61981ef42a64a71c9ed843c6",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/tests/fixtures/python-historical/bindings.json",
+      "destination": "src/native_analyzer/tests/fixtures/python-historical/bindings.json",
+      "source_sha256": "710ca51b17ea16293467d6a158a52d57b0724e794332650261da0ca459312383",
+      "destination_sha256": "710ca51b17ea16293467d6a158a52d57b0724e794332650261da0ca459312383",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/tests/fixtures/python-historical/projects.json",
+      "destination": "src/native_analyzer/tests/fixtures/python-historical/projects.json",
+      "source_sha256": "625d7b10c8afd995fcb84c3d0573e6fa53ad3fa9782c58ffbac296212722fb80",
+      "destination_sha256": "625d7b10c8afd995fcb84c3d0573e6fa53ad3fa9782c58ffbac296212722fb80",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/tests/fixtures/python-historical/relationships.json",
+      "destination": "src/native_analyzer/tests/fixtures/python-historical/relationships.json",
+      "source_sha256": "3e21e0270b30c6e1b35825bcbe0f30b30391842c5ec185d3ed6ce3a6e759f633",
+      "destination_sha256": "3e21e0270b30c6e1b35825bcbe0f30b30391842c5ec185d3ed6ce3a6e759f633",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_languages/platforms.rs",
+      "destination": "src/native_languages/platforms.rs",
+      "source_sha256": "68370a7a397d925911c9751f96c62a8095a459e8d585ab8e32b2b9987b7912e7",
+      "destination_sha256": "68370a7a397d925911c9751f96c62a8095a459e8d585ab8e32b2b9987b7912e7",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_languages/mod.rs",
+      "destination": "src/native_languages/mod.rs",
+      "source_sha256": "07ffaf021a763da521b669e3967dc4fbc4cc342412330c11cb001781c2a3d80c",
+      "destination_sha256": "6fc28e217990f900bb0a2278eb298a39bf7ff4ef1154dd670232164cd4faf621",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_languages/rust.rs",
+      "destination": "src/native_languages/rust.rs",
+      "source_sha256": "7ee60c51ac142ab87bcb296cb66cf43bbc9a3571a025199040f7cc5959423e9b",
+      "destination_sha256": "9c944a86de9f736334f391b401bc24b874fd0955fff4298015c7277e35f22a1d",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_languages/platforms/java.rs",
+      "destination": "src/native_languages/platforms/java.rs",
+      "source_sha256": "82d2f709753e543b9be46133cc7a3cf3632553b4991c248730f4a512b4587132",
+      "destination_sha256": "82d2f709753e543b9be46133cc7a3cf3632553b4991c248730f4a512b4587132",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_languages/platforms/go.rs",
+      "destination": "src/native_languages/platforms/go.rs",
+      "source_sha256": "e75cdcddae33a8d8f34a38a13d22ed7de06008b280c074f1467eeb4b0f361a85",
+      "destination_sha256": "e75cdcddae33a8d8f34a38a13d22ed7de06008b280c074f1467eeb4b0f361a85",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_languages/rust/toolchain.rs",
+      "destination": "src/native_languages/rust/toolchain.rs",
+      "source_sha256": "4b6cea9b0ba3e52bbfb3912bf2bb574c33ef892f6a5f090de3e9bfa4042a80da",
+      "destination_sha256": "c1f08e58677fe34d6011cac3307c85e2673046466a4300295ab075092cf05a82",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_languages/tests/factory.rs",
+      "destination": "src/native_languages/tests/factory.rs",
+      "source_sha256": "64f620ce6271008f1a93382e03d56cbebcad8ce151a372cacb4b442392fdb1f8",
+      "destination_sha256": "3e46f3bae5f71eede816cce031cc8757c12291638913ca585d8228d3b176fda3",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_languages/tests/platforms.rs",
+      "destination": "src/native_languages/tests/platforms.rs",
+      "source_sha256": "bb7d8773fbc93977e19bb45eee474a2966e2912230e47cedb9dd25a2d911d276",
+      "destination_sha256": "bb7d8773fbc93977e19bb45eee474a2966e2912230e47cedb9dd25a2d911d276",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_languages/tests/typescript_graph.rs",
+      "destination": "src/native_languages/tests/typescript_graph.rs",
+      "source_sha256": "2e6b27d1f2e6d085c51bf93682fa1ec9ce3f666e4eda012b8432437bfe956b8f",
+      "destination_sha256": "f3fd968ebf7439e664d7159eea83637d2c0b07741308debf408993618c5eb16e",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_languages/tests/platforms/java.rs",
+      "destination": "src/native_languages/tests/platforms/java.rs",
+      "source_sha256": "4f3f51df281bf4b861cb7705f4c06a8acb0f64f9de2ee75f4f7930c8550b0ce7",
+      "destination_sha256": "4f3f51df281bf4b861cb7705f4c06a8acb0f64f9de2ee75f4f7930c8550b0ce7",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_languages/tests/platforms/go.rs",
+      "destination": "src/native_languages/tests/platforms/go.rs",
+      "source_sha256": "740a9eebf5b8d48dc1221fbe906255398f55877dfa8c2e4881e2b6db0c6b6961",
+      "destination_sha256": "740a9eebf5b8d48dc1221fbe906255398f55877dfa8c2e4881e2b6db0c6b6961",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_languages/tests/fixtures/typescript-historical-identity.json",
+      "destination": "src/native_languages/tests/fixtures/typescript-historical-identity.json",
+      "source_sha256": "3b41df51ed228ab018a5124a69a7a894a7a851aedb8ab36078024cc91838c530",
+      "destination_sha256": "3b41df51ed228ab018a5124a69a7a894a7a851aedb8ab36078024cc91838c530",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_languages/rust/tests/production.rs",
+      "destination": "src/native_languages/rust/tests/production.rs",
+      "source_sha256": "d54d274de1746fc8f20795393c6af1eb13653c86c4bfb07407472fd5cfddea93",
+      "destination_sha256": "40078d430947149411202ed70466438fc9387732e9cccaf6fe772a4a4a6b9978",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_languages/rust/tests/toolchain.rs",
+      "destination": "src/native_languages/rust/tests/toolchain.rs",
+      "source_sha256": "b7a8e9df4e73819cf807fa368363f6d170e2c71c3d94393d8d816ae8b115a1ee",
+      "destination_sha256": "b7a8e9df4e73819cf807fa368363f6d170e2c71c3d94393d8d816ae8b115a1ee",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/child_process.rs",
+      "destination": "src/child_process.rs",
+      "source_sha256": "e3f02c1050ec89f51ada4c420cfd64298453de52e91cb394c0df5a2339506e18",
+      "destination_sha256": "25adf9506f280303b896a5d7a196b15b23096650dc2749c81614898d3501c74e",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/child_process/tests/fixture.rs",
+      "destination": "src/child_process/tests/fixture.rs",
+      "source_sha256": "b8267fb024073411ae0085539d69b86676d27b7c3e3e835541a29db92d3b4ede",
+      "destination_sha256": "b8267fb024073411ae0085539d69b86676d27b7c3e3e835541a29db92d3b4ede",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/child_process/tests/process_tree.rs",
+      "destination": "src/child_process/tests/process_tree.rs",
+      "source_sha256": "d42e5d4ca69a07ff37e3e45c30fa0338d3d6f54003d6ecb8ad1e997b3e011c6b",
+      "destination_sha256": "d42e5d4ca69a07ff37e3e45c30fa0338d3d6f54003d6ecb8ad1e997b3e011c6b",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/child_process/tests/support.rs",
+      "destination": "src/child_process/tests/support.rs",
+      "source_sha256": "d254cd463dc694f52b1b06c6ce326346065583146910d3343ffab13412f6ef1d",
+      "destination_sha256": "d254cd463dc694f52b1b06c6ce326346065583146910d3343ffab13412f6ef1d",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/child_process/tests/windows_job.rs",
+      "destination": "src/child_process/tests/windows_job.rs",
+      "source_sha256": "c45c30110e90883b296f954fd9baf2c0440cd664f9dfc454aa0851fc68de649e",
+      "destination_sha256": "c45c30110e90883b296f954fd9baf2c0440cd664f9dfc454aa0851fc68de649e",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/child_process/tests/windows_support.rs",
+      "destination": "src/child_process/tests/windows_support.rs",
+      "source_sha256": "45f151bbdf0d14495064a02e96e5525038764aa1bd662eae6e94f651717645f3",
+      "destination_sha256": "45f151bbdf0d14495064a02e96e5525038764aa1bd662eae6e94f651717645f3",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/child_process/tests/windows_tracking.rs",
+      "destination": "src/child_process/tests/windows_tracking.rs",
+      "source_sha256": "50bb861d51571bcd2fd957a4bc104e0d4ff54e1845c07645e01a64e733f1c06a",
+      "destination_sha256": "50bb861d51571bcd2fd957a4bc104e0d4ff54e1845c07645e01a64e733f1c06a",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/child_process/tests/windows_validation.rs",
+      "destination": "src/child_process/tests/windows_validation.rs",
+      "source_sha256": "c6999cf4415df7e4e426773986a068685e54a0f907b1eff41e39952ec8d66180",
+      "destination_sha256": "c6999cf4415df7e4e426773986a068685e54a0f907b1eff41e39952ec8d66180",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/child_process/unix_group.rs",
+      "destination": "src/child_process/unix_group.rs",
+      "source_sha256": "56fb5737cc818de07c395c78863cd7f493f6f49e88710a263b1a57c32e3d1a83",
+      "destination_sha256": "3fbda4798ea463245d0233c66f9f402c6de9e8995b831cf5bf96765e6fe853c2",
+      "unchanged": false
+    },
+    {
+      "source": "src-tauri/src/child_process/windows_job.rs",
+      "destination": "src/child_process/windows_job.rs",
+      "source_sha256": "9b688230afadd9192282bd63184b59b9d819cb55deb5dcd05235c0536c7d15be",
+      "destination_sha256": "9b688230afadd9192282bd63184b59b9d819cb55deb5dcd05235c0536c7d15be",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/child_process/windows_tracking.rs",
+      "destination": "src/child_process/windows_tracking.rs",
+      "source_sha256": "53b960dd9efa8aee7e5b8a74bebbf42ff2c429c55f99dcbae2f731279d185dec",
+      "destination_sha256": "53b960dd9efa8aee7e5b8a74bebbf42ff2c429c55f99dcbae2f731279d185dec",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/cargo-agent.sh",
+      "destination": "scripts/cargo-agent.sh",
+      "source_sha256": "8f483b946f929253c1a5693af7880fe530cf72d52d203006366c88b11d2847c7",
+      "destination_sha256": "cc5d601e8ae11046329edc994cafc033029704201519d54981b49a6fa4292429",
+      "unchanged": false
+    },
+    {
+      "source": "scripts/dev/rust-cache.mjs",
+      "destination": "scripts/dev/rust-cache.mjs",
+      "source_sha256": "35611c4c25a87c00fcaca8749956f81db8a70027250248d4c6c03118de4d283c",
+      "destination_sha256": "35611c4c25a87c00fcaca8749956f81db8a70027250248d4c6c03118de4d283c",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/tests/rust-cache.test.mjs",
+      "destination": "scripts/tests/rust-cache.test.mjs",
+      "source_sha256": "d84ed3997ae2c4113f47696d31145546e63bac86ea66aa985ddf258b039b5d60",
+      "destination_sha256": "d84ed3997ae2c4113f47696d31145546e63bac86ea66aa985ddf258b039b5d60",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/structure_review/tests/config_dir_fixture.rs",
+      "destination": "src/config_dir_fixture.rs",
+      "source_sha256": "21ea9714c2352889973316bbdd4d7f805a5751532cc726c19f4d53bac48cf814",
+      "destination_sha256": "21ea9714c2352889973316bbdd4d7f805a5751532cc726c19f4d53bac48cf814",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/language-packs/typescript-native-smoke.mjs",
+      "destination": "scripts/language-packs/typescript-native-smoke.mjs",
+      "source_sha256": "200e763be2540900ac4a97dcee8a01a1faa7787b88e9da7402a3b153a2d6da2c",
+      "destination_sha256": "200e763be2540900ac4a97dcee8a01a1faa7787b88e9da7402a3b153a2d6da2c",
+      "unchanged": true
+    },
+    {
+      "source": "src-tauri/src/language_support/model.rs",
+      "destination": "src/pack.rs",
+      "source_sha256": "55906339c5513a5fac712c6ce269f88f7e3c83735b154d5e42539487c64100cb",
+      "destination_sha256": "0c82663f679221a3dac73d3038e3fdd9addf1702e4e98f49296362a1b897c28a",
+      "unchanged": false,
+      "adaptation": "Extract only PackId and fixed required-entry definitions; append public descriptor validation."
+    },
+    {
+      "source": "src-tauri/src/structure_review/native_analyzer/protocol.rs",
+      "destination": "src/strict_json.rs",
+      "source_sha256": "887073a4fe6278707e1f55bc5dd8238323f993dc5035681c29d8f3d888c6dadd",
+      "destination_sha256": "25f7254fab0e42c93b1d462ef4c8dae12026d326cdadb45ee665cbfa864c5e33",
+      "unchanged": false,
+      "adaptation": "Extract only the recursive UniqueValue JSON decoder for shared internal use."
+    }
+  ],
+  "retained_difference_tests": [
+    {
+      "file": "native_analyzer/tests/rust_graph.rs",
+      "test": "rust_helper_compares_prepared_repositories",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_graph.rs",
+      "test": "rust_helper_keeps_closure_references_without_closure_nodes",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_graph.rs",
+      "test": "rust_helper_resolves_graph_local_field_types",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_graph.rs",
+      "test": "rust_helper_omits_non_field_type_uses_and_data_accesses",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_graph.rs",
+      "test": "rust_helper_preserves_crate_roots",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_graph.rs",
+      "test": "rust_helper_excludes_test_code_before_graph_analysis",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_graph.rs",
+      "test": "rust_helper_all_dependency_profiles_use_real_project_platform",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_graph.rs",
+      "test": "rust_helper_syntax_diff_nested_items_in_type_expressions",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_graph.rs",
+      "test": "rust_helper_syntax_diff_preserves_literal_contents",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_graph.rs",
+      "test": "rust_helper_syntax_diff_preserves_usage_but_ignores_item_order",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_graph.rs",
+      "test": "rust_helper_syntax_diff_top_level_macro_arguments",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_graph.rs",
+      "test": "rust_helper_syntax_diff_macro_punctuation_jointness",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_graph.rs",
+      "test": "rust_helper_syntax_diff_excludes_nested_tests_under_glob_imports",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_graph.rs",
+      "test": "rust_helper_syntax_diff_excludes_nested_test_edits",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_graph.rs",
+      "test": "rust_helper_whole_graph_project_form_matrix",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_syntax.rs",
+      "test": "preserves_original_source_without_changing_structural_comparison",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_syntax.rs",
+      "test": "nested_body_edits_belong_only_to_their_owner",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_syntax.rs",
+      "test": "closures_are_code_of_their_enclosing_function_or_value",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_syntax.rs",
+      "test": "named_items_inside_closures_keep_their_own_content",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_syntax.rs",
+      "test": "adding_fields_does_not_modify_the_type_own_content",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_syntax.rs",
+      "test": "nested_items_in_type_expressions_have_separate_content",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_syntax.rs",
+      "test": "normalization_preserves_literal_contents",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_syntax.rs",
+      "test": "preserves_child_expression_usage_but_ignores_item_order",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_syntax.rs",
+      "test": "top_level_macro_invocations_have_content",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_syntax.rs",
+      "test": "macro_punctuation_jointness_is_significant",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/rust_syntax.rs",
+      "test": "unicode_and_crlf_keep_precise_source_and_stable_identity",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/python_graph.rs",
+      "test": "function_body_change_belongs_to_callable",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/python_graph.rs",
+      "test": "class_method_body_and_local_class_do_not_change_parent_content",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/python_graph.rs",
+      "test": "conditional_declarations_preserve_execution_order_without_copying_child_content",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/python_graph.rs",
+      "test": "fields_deduplicate_receiver_bindings_without_stealing_method_content",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/python_graph.rs",
+      "test": "normalization_and_field_order_distinguish_semantic_content",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/python_graph.rs",
+      "test": "shared_initializers_and_repeated_fields_are_not_duplicated",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_analyzer/tests/python_native.rs",
+      "test": "native_overload_docstrings_participate_in_content_comparison",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_languages/tests/typescript_graph.rs",
+      "test": "graph_test_membership_lazy_context_and_stable_external_symbols",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_languages/tests/typescript_graph.rs",
+      "test": "graph_diff_format_child_parent_and_inline_callback",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_languages/tests/typescript_graph.rs",
+      "test": "graph_dynamic_unknown_names_ignore_format_but_preserve_literal_values",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_languages/tests/typescript_graph.rs",
+      "test": "typescript_jsx_leading_and_space_only_text_changes_graph_content",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    },
+    {
+      "file": "native_languages/rust/tests/production.rs",
+      "test": "production_profiles_keep_graph_policy_and_readonly_project",
+      "reason": "Complete difference-dependent test retained in Narrant; Task 3 must run it through CLI consumption."
+    }
+  ],
+  "omitted_production_files": [
+    "src-tauri/src/structure_review/code_graph/diff.rs"
+  ],
+  "omitted_test_files": [
+    "src-tauri/src/structure_review/code_graph/tests/diff.rs"
+  ]
+}
