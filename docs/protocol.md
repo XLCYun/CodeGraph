@@ -159,5 +159,6 @@ Run the checked example with:
 python3 scripts/examples/empty-selection.py target/debug/codegraph
 ```
 
-The current stage has local CLI/Host fixtures, not published artifacts or completed
-Windows/seven-language release acceptance.
+The distribution pipeline now includes real seven-pack public CLI acceptance on
+both supported CI targets. No published artifacts or successful remote CI runs are
+claimed by this local implementation; see [distribution.md](distribution.md).

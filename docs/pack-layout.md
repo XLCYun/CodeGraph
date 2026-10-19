@@ -47,5 +47,8 @@ CodeGraph consumer API. Sources under `native-helpers/common` and
 Authoritative implementation links: [fixed factory](../src/native_languages/mod.rs),
 [platform validation](../src/native_analyzer/input.rs),
 [public descriptor](../src/pack.rs), [Rust policies](../src/native_languages/rust.rs).
-Task 2 packaging must add this descriptor without adding public fields to the
+Distribution tooling adds this descriptor and the version-matched public CLI without adding public fields to the
 `deny_unknown_fields` private `native.json` schema.
+
+Distribution manifests, artifact names, size limits, fixed URL templates and local
+candidate paths are specified in [distribution.md](distribution.md).

@@ -302,7 +302,8 @@ fn cancellation_reaps_nested_helpers() {
         assert_eq!(
             messages.last().unwrap()["outcome"],
             "cancelled",
-            "{messages:?}"
+            "mode={mode} helper={helper} worker={worker} descendant={descendant} {messages:?}; stderr={}",
+            String::from_utf8_lossy(&output.stderr)
         );
         assert_eq!(output.status.code(), Some(130));
         let scratch = fs::read_to_string(fixture.marker("scratch")).unwrap();

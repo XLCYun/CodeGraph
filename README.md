@@ -7,7 +7,9 @@ Tauri dependency, Git repository, or Review state is required.
 
 This is the **0.1.0 development extraction**. No executable or language-pack release
 is published by this stage. macOS ARM64 and Windows x64 are the intended targets;
-real language-pack and Windows acceptance remains required before release.
+complete dual-platform CI acceptance remains required before release. Independent
+builds, package verification and the release contract are in
+[distribution.md](docs/distribution.md).
 
 ## Build and verify
 

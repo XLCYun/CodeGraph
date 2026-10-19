@@ -85,7 +85,12 @@ impl ProcessGroup {
         let deadline = Instant::now() + Duration::from_secs(2);
         loop {
             // SAFETY: 信号 0 仅查询自有组及此前记录的成员，不发送终止信号。
-            let alive = unsafe { libc::kill(-self.id, 0) } == 0
+            let probe = if unsafe { libc::kill(-self.id, 0) } == 0 {
+                Ok(())
+            } else {
+                Err(io::Error::last_os_error())
+            };
+            let alive = group_probe_alive(probe)?
                 || self
                     .members
                     .iter()
@@ -238,3 +243,17 @@ fn identity(pid: i32) -> Option<(u64, u64)> {
 fn children(_: i32) -> Vec<i32> {
     Vec::new()
 }
+
+/// 只有 ESRCH 能证明组已消失；权限失败仍按存活等待，其他查询错误直接失败。
+fn group_probe_alive(probe: io::Result<()>) -> io::Result<bool> {
+    match probe {
+        Ok(()) => Ok(true),
+        Err(error) if error.raw_os_error() == Some(libc::ESRCH) => Ok(false),
+        Err(error) if error.raw_os_error() == Some(libc::EPERM) => Ok(true),
+        Err(error) => Err(error),
+    }
+}
+
+#[cfg(test)]
+#[path = "tests/unix_group.rs"]
+mod tests;

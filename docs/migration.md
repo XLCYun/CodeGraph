@@ -113,3 +113,65 @@ Windows cross-checking can catch API/type errors locally but does not replace
 Windows runtime lifecycle tests. No release, GitHub operation or published artifact
 is part of this stage. Downstream contracts are [protocol.md](protocol.md) and
 [pack-layout.md](pack-layout.md).
+
+## Task 2: independent distribution and acceptance
+
+CodeGraph now owns `resources/language-support-packs.json`, unchanged
+`resources/native-toolchains.json`, all native build/provision/license/archive
+scripts, independent Node dependency lock, full PR CI and immutable-release
+preparation. The old helper pins and semantics are unchanged; the three original
+`1.1.0` package identities become a separate CodeGraph `0.1.0` series. Every pack
+contains the same versioned public CLI. See [distribution.md](distribution.md) for
+exact artifact URLs, manifest fields, local candidate roots and release conditions.
+The source checkout remains read-only.
+
+`resources/semantic-acceptance.json` enumerates every retained real-pack ignored
+engine test: 69 on macOS, plus the Windows junction boundary case on Windows.
+The verifier requires each named test to report `ok`; zero-test Cargo success cannot
+pass. The internal ignored `child_process::test_support::fixture::process_fixture`
+is invoked only by its owning subprocess tests and never by a blanket ignored run.
+Missing requested SDK fixtures fail before suites can skip them. Independent groups
+run serially, retain original failures and aggregate errors without a false success.
+
+| Original verifier command/group | CodeGraph destination / preserved acceptance | Narrant Task 3 ownership |
+| --- | --- | --- |
+| Go `go test ./...` | Same command, fixed build + target SDKs, offline settings | Review/Diff only |
+| Java `unittest discover native-helpers/java/tests` | Same complete suite; JDK 8/17/25 declarations, JDT source/protocol/lifecycle | Review/Diff only |
+| C# `unittest discover native-helpers/csharp/tests` | Same complete suite; real net8/net9 nonzero patch/net10 reference roots | Review/Diff only |
+| C/C++ `unittest discover native-helpers/clang/tests` | Same complete suite; LLVM resources and exact platform SDKs | Review/Diff only |
+| TS nine Node test files | Same files, `--test-concurrency=1`, configuration, readonly host, projection, protocol, output and lifecycle | None of these tests deferred |
+| `native_languages::typescript_graph:: --ignored` | 22 retained test names, same Rust assertions | Four listed diff-dependent tests retained above |
+| Rust helper `+1.98.0 test --lib --test initial_protocol --test lifecycle --include-ignored` | Same command, same runner stripping only Cargo build-tool selection, historical fixture matrix | None of these helper tests deferred |
+| `native_analyzer::tests::rust_graph:: --ignored` | 11 retained names including source/provenance, three dependency contexts, read-only loading and lifecycle | Fifteen diff-dependent tests listed above |
+| `native_analyzer::tests::rust_syntax:: --ignored` | Four retained source/closure/cfg tests | Eleven diff-dependent tests listed above |
+| `native_languages::rust::tests:: --ignored` | Production cancellation and process-probe ownership | One production profile diff test listed above |
+| Rust/TS real installed language_support tests | New real archive verifier and real public CLI graph validation replace CodeGraph's app dependency | Application installer/service and cache assertions remain in Narrant |
+| Rust/TS Review-to-DTO tests | Public graph acceptance covers producer boundary | Complete Review lifecycle and DTO assertions remain in Narrant |
+| Python helper `+1.98.0 test --lib --test initial_protocol --test lifecycle` | Same full helper/protocol/lifecycle suite | None of these helper tests deferred |
+| `native_analyzer::tests::python_graph:: --ignored` | Ten retained tests | Six diff tests listed above |
+| `native_analyzer::tests::python_native:: --ignored` | 21 retained tests on macOS, 22 on Windows | One overload/docstring diff test listed above |
+| `language_support::python_tests::` | Real Python archive integrity + public CLI acceptance replace CodeGraph application setup | Installation/caching/service tests remain in Narrant |
+| `application::tests::python::` | Public CLI graph acceptance | Review/DTO consumer semantics remain in Narrant |
+| `child_process::`, `native_analyzer::`, `native_languages::` non-ignored | Full `--bin codegraph` suite (no public lib), serial tests; all retained assertions run | Application-specific wrappers only |
+| `structure_review::application::tests::native::` | Public CLI boundary/lifecycle integration tests | Review application suite remains in Narrant |
+| `real_native_packs_install_and_analyze_through_production_factory` | All seven archives verified/unpacked; actual package CLI and standalone CLI exercised through fixed factory | App installation service assertions remain in Narrant |
+| `native_helper_graphs` graph/diff integration | Public CLI local-call/source/read-only/test-switch graph acceptance for seven packs | Original graph/diff comparisons remain in Narrant; no diff copied |
+| Windows process probe/lifecycle scripts | Same shared production owner crate, early native probe, locked wrapper | Narrant app manifest/Common Controls behavior remains in its app tests |
+| Old pack script tests | Archive paths/permissions, licenses, SDK fixtures, pinned toolchains, runner quoting, serial failure aggregation, XZ cleanup, redist selection retained; new CLI/evidence/release failure tests | App-only workflow and application signing tests not copied |
+
+The original publisher and `public-draft-assets.mjs` were not reused: they depend on
+Narrant's app release layout. A small independent publisher uses official `gh`
+asset API operations, verifies exact CI/source identity and all asset bytes, and
+has dedicated immutable-version and failed-upload tests. It never accesses Narrant
+releases. Original helper README historical text is provenance, not CodeGraph
+publication evidence; this repository's distribution document is authoritative.
+
+Task 2's real CLI acceptance also exposed a macOS cancellation race in the shared
+process owner: a group containing only an unreaped zombie returns `EPERM` to group
+signals. A deterministic `waitid(WNOWAIT)` regression failed before the fix. The
+owner now accepts that signal race only after both direct Child wait and the full
+group/observed-descendant exit barrier succeed. A permission-denied group probe
+means still alive, never disappeared; other errors and live-member timeouts still
+fail. No protocol or timeout changed. Separate owner tests and repeated real CLI
+cancellation verify this change; Narrant should carry the reviewed owner fix when
+adapting its consumer in Task 3.

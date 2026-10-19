@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# Cargo Agent 和 Tauri 共用同一套 sccache 环境，同时保留 Cargo profile 的增量编译默认值。
+# Cargo Agent 使用仓库统一的 sccache 环境，同时保留 Cargo profile 的增量编译默认值。
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 rust_cache_runner="$script_dir/dev/rust-cache.mjs"
 

@@ -1414,8 +1414,9 @@
       "source": "src-tauri/src/child_process.rs",
       "destination": "src/child_process.rs",
       "source_sha256": "e3f02c1050ec89f51ada4c420cfd64298453de52e91cb394c0df5a2339506e18",
-      "destination_sha256": "25adf9506f280303b896a5d7a196b15b23096650dc2749c81614898d3501c74e",
-      "unchanged": false
+      "destination_sha256": "6049592bd277b1e8989d36ff41ac30d483f28feb565a598b3b721adb4047eefc",
+      "unchanged": false,
+      "task_2_adaptation": "Independent distribution wrapper wording or verified macOS zombie-only process-group cleanup fix; see docs/migration.md."
     },
     {
       "source": "src-tauri/src/child_process/tests/fixture.rs",
@@ -1428,8 +1429,9 @@
       "source": "src-tauri/src/child_process/tests/process_tree.rs",
       "destination": "src/child_process/tests/process_tree.rs",
       "source_sha256": "d42e5d4ca69a07ff37e3e45c30fa0338d3d6f54003d6ecb8ad1e997b3e011c6b",
-      "destination_sha256": "d42e5d4ca69a07ff37e3e45c30fa0338d3d6f54003d6ecb8ad1e997b3e011c6b",
-      "unchanged": true
+      "destination_sha256": "ba4aa49537a87df903105095e9c0a0ef776be7bcc16675a8b9fe3117ae28f876",
+      "unchanged": false,
+      "task_2_adaptation": "Independent distribution wrapper wording or verified macOS zombie-only process-group cleanup fix; see docs/migration.md."
     },
     {
       "source": "src-tauri/src/child_process/tests/support.rs",
@@ -1470,8 +1472,9 @@
       "source": "src-tauri/src/child_process/unix_group.rs",
       "destination": "src/child_process/unix_group.rs",
       "source_sha256": "56fb5737cc818de07c395c78863cd7f493f6f49e88710a263b1a57c32e3d1a83",
-      "destination_sha256": "3fbda4798ea463245d0233c66f9f402c6de9e8995b831cf5bf96765e6fe853c2",
-      "unchanged": false
+      "destination_sha256": "b701bd7814aeac85f523bfe114e629f2a04daf444f165e4ba15986d0bc0914ca",
+      "unchanged": false,
+      "task_2_adaptation": "Independent distribution wrapper wording or verified macOS zombie-only process-group cleanup fix; see docs/migration.md."
     },
     {
       "source": "src-tauri/src/child_process/windows_job.rs",
@@ -1491,8 +1494,9 @@
       "source": "scripts/cargo-agent.sh",
       "destination": "scripts/cargo-agent.sh",
       "source_sha256": "8f483b946f929253c1a5693af7880fe530cf72d52d203006366c88b11d2847c7",
-      "destination_sha256": "cc5d601e8ae11046329edc994cafc033029704201519d54981b49a6fa4292429",
-      "unchanged": false
+      "destination_sha256": "e7b112bf97620029375694c27ad83cc4b25c25dd1f86607d771e00c3fcf7315e",
+      "unchanged": false,
+      "task_2_adaptation": "Independent distribution wrapper wording or verified macOS zombie-only process-group cleanup fix; see docs/migration.md."
     },
     {
       "source": "scripts/dev/rust-cache.mjs",
@@ -1736,5 +1740,199 @@
   ],
   "omitted_test_files": [
     "src-tauri/src/structure_review/code_graph/tests/diff.rs"
-  ]
+  ],
+  "distribution_source_commit": "102f20ad9197e370126d51d1d2ab7a7aa718f9a3",
+  "distribution_files": [
+    {
+      "source": "scripts/language-packs/archive-validation.mjs",
+      "destination": "scripts/language-packs/archive-validation.mjs",
+      "source_sha256": "a2eea3c4959d75930268c34babf8b9f37023cf197d16d36b99cabbdfc0fc1bf9",
+      "destination_sha256": "a2eea3c4959d75930268c34babf8b9f37023cf197d16d36b99cabbdfc0fc1bf9",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/language-packs/build-language-support-packs.mjs",
+      "destination": "scripts/language-packs/build-language-support-packs.mjs",
+      "source_sha256": "27167d12aeed55ac103cfb5ac37d7a58dcd8ef3914a037597d680eba960d31a8",
+      "destination_sha256": "3ca589c9190462d22117afc86fa073d956be25e6edaeeb617ab43b5eaaca2a34",
+      "unchanged": false
+    },
+    {
+      "source": "scripts/language-packs/build-migrating-native-helper.mjs",
+      "destination": "scripts/language-packs/build-migrating-native-helper.mjs",
+      "source_sha256": "e4a3a68192ae8e0c5807ae9ac6731ac56ee413030d2eb7f086048b4f371ca52e",
+      "destination_sha256": "e4a3a68192ae8e0c5807ae9ac6731ac56ee413030d2eb7f086048b4f371ca52e",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/language-packs/native-language-support-packs.mjs",
+      "destination": "scripts/language-packs/native-language-support-packs.mjs",
+      "source_sha256": "ce81e96246ac9911fbcc7840117ae211ece8aa7d1324ae50ce3f46d28d27c4c6",
+      "destination_sha256": "b3dea4211e542a25e6d9fa99695115e793559bc6687fefe2909fc9cca49f7280",
+      "unchanged": false
+    },
+    {
+      "source": "scripts/language-packs/native-migration.mjs",
+      "destination": "scripts/language-packs/native-migration.mjs",
+      "source_sha256": "96e95cc924bf736d19a1b4b039b07898b8e432e1f52cb890ef26326f62892707",
+      "destination_sha256": "96e95cc924bf736d19a1b4b039b07898b8e432e1f52cb890ef26326f62892707",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/language-packs/native-xz-extraction.mjs",
+      "destination": "scripts/language-packs/native-xz-extraction.mjs",
+      "source_sha256": "1548d4b6f3758d1cc9dff186e9ba82ea397e5c2fe4f91db968281ed01f21bbda",
+      "destination_sha256": "1548d4b6f3758d1cc9dff186e9ba82ea397e5c2fe4f91db968281ed01f21bbda",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/language-packs/prepare-rust-native-tests.mjs",
+      "destination": "scripts/language-packs/prepare-rust-native-tests.mjs",
+      "source_sha256": "ec794a56c4ba447cb02cd744e493b67f593b8de90ad1a45adce4974d0ec5688c",
+      "destination_sha256": "ec794a56c4ba447cb02cd744e493b67f593b8de90ad1a45adce4974d0ec5688c",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/language-packs/provision-native-toolchains.mjs",
+      "destination": "scripts/language-packs/provision-native-toolchains.mjs",
+      "source_sha256": "92447c7003928679fcc7f18e040c99777211b9d827e90c97ad3d98108ab63903",
+      "destination_sha256": "92447c7003928679fcc7f18e040c99777211b9d827e90c97ad3d98108ab63903",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/language-packs/run-rust-helper-test.mjs",
+      "destination": "scripts/language-packs/run-rust-helper-test.mjs",
+      "source_sha256": "33f92597038666d111ed6c9871614dbb2343967dcba6742dd196dabb2971e8b7",
+      "destination_sha256": "33f92597038666d111ed6c9871614dbb2343967dcba6742dd196dabb2971e8b7",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/language-packs/run-windows-lifecycle-tests.mjs",
+      "destination": "scripts/language-packs/run-windows-lifecycle-tests.mjs",
+      "source_sha256": "9880644c242c078664988b36c0841727f732f762751e2e4ea362e0b9861acec6",
+      "destination_sha256": "9880644c242c078664988b36c0841727f732f762751e2e4ea362e0b9861acec6",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/language-packs/run-windows-process-probe.mjs",
+      "destination": "scripts/language-packs/run-windows-process-probe.mjs",
+      "source_sha256": "7909b225b238adc5f25311c1997869d32daa953d68e3c2f6d8d50253420f0d37",
+      "destination_sha256": "7909b225b238adc5f25311c1997869d32daa953d68e3c2f6d8d50253420f0d37",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/language-packs/select-msvc-redist.mjs",
+      "destination": "scripts/language-packs/select-msvc-redist.mjs",
+      "source_sha256": "bd1096fcab7367ad415233f355b3b3d99df4d1f0872a99cff6f5f7719fcd1db5",
+      "destination_sha256": "bd1096fcab7367ad415233f355b3b3d99df4d1f0872a99cff6f5f7719fcd1db5",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/language-packs/typescript-native-smoke.mjs",
+      "destination": "scripts/language-packs/typescript-native-smoke.mjs",
+      "source_sha256": "200e763be2540900ac4a97dcee8a01a1faa7787b88e9da7402a3b153a2d6da2c",
+      "destination_sha256": "200e763be2540900ac4a97dcee8a01a1faa7787b88e9da7402a3b153a2d6da2c",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/language-packs/verify-native-analyzers.mjs",
+      "destination": "scripts/language-packs/verify-native-analyzers.mjs",
+      "source_sha256": "94a3ae990f6e36f8a82f5e1ade8158aa13ea306bfb968f442f5f7a57d5e0e3f3",
+      "destination_sha256": "314c0b1e4cc4a1a6e36bc322b85bae1e86a29fb8f3a9e189c3693504e01ce37a",
+      "unchanged": false
+    },
+    {
+      "source": "scripts/tests/archive-validation.test.mjs",
+      "destination": "scripts/tests/archive-validation.test.mjs",
+      "source_sha256": "d7abd9a8b6841025b023e3385c85d580715451cc0226e04f223065aba01a5278",
+      "destination_sha256": "d7abd9a8b6841025b023e3385c85d580715451cc0226e04f223065aba01a5278",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/tests/language-support-packs.test.mjs",
+      "destination": "scripts/tests/language-support-packs.test.mjs",
+      "source_sha256": "242835269898729eb486e4a8c84e626ad5282dab677a47688b4f8a940ffc2163",
+      "destination_sha256": "f2c0a52a76d941ac9bc70b19ffc1c9f725ca3e0d0773d275d8ba8a79a92822e4",
+      "unchanged": false
+    },
+    {
+      "source": "scripts/tests/native-analyzer-ci.test.mjs",
+      "destination": "scripts/tests/native-analyzer-ci.test.mjs",
+      "source_sha256": "f95c416258aafb9bf765fc572c84123c0c5fe99f7b64df5949ef884f77970dc5",
+      "destination_sha256": "ec0f64928cd04270be1eeb2803848a981f34c6ab3539ac1f4c08794fc2430a3b",
+      "unchanged": false
+    },
+    {
+      "source": "scripts/tests/native-language-support-packs.test.mjs",
+      "destination": "scripts/tests/native-language-support-packs.test.mjs",
+      "source_sha256": "2196faac0872f05a3ea6a3ef314c2dde4312f65cb6fdad0d028f0b007180625f",
+      "destination_sha256": "2196faac0872f05a3ea6a3ef314c2dde4312f65cb6fdad0d028f0b007180625f",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/tests/native-xz-extraction.test.mjs",
+      "destination": "scripts/tests/native-xz-extraction.test.mjs",
+      "source_sha256": "5d9a8a4c0c72623b0a55be421ba3af5b60b9196f5fdb0f3701170bac0581f73d",
+      "destination_sha256": "5d9a8a4c0c72623b0a55be421ba3af5b60b9196f5fdb0f3701170bac0581f73d",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/tests/run-rust-helper-test.test.mjs",
+      "destination": "scripts/tests/run-rust-helper-test.test.mjs",
+      "source_sha256": "d2a8df4076b3b3b6da606e71362c5854d89d78ca3d28117deb2c06322fcee73a",
+      "destination_sha256": "d2a8df4076b3b3b6da606e71362c5854d89d78ca3d28117deb2c06322fcee73a",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/tests/run-windows-lifecycle-tests.test.mjs",
+      "destination": "scripts/tests/run-windows-lifecycle-tests.test.mjs",
+      "source_sha256": "86b2a1e639056aad660a21bbb69ba597e0a8da41cc626c6dd037e358b037a813",
+      "destination_sha256": "f146d8f7293903b351f2f7fa0638561e46a435cd038a7b27510e79356c4179f9",
+      "unchanged": false
+    },
+    {
+      "source": "scripts/tests/run-windows-process-probe.test.mjs",
+      "destination": "scripts/tests/run-windows-process-probe.test.mjs",
+      "source_sha256": "5b1a6f643dd95b5a5691053a640325f4bbaa191faa3ad3345b3ad5fcd536df98",
+      "destination_sha256": "5b1a6f643dd95b5a5691053a640325f4bbaa191faa3ad3345b3ad5fcd536df98",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/tests/rust-cache.test.mjs",
+      "destination": "scripts/tests/rust-cache.test.mjs",
+      "source_sha256": "d84ed3997ae2c4113f47696d31145546e63bac86ea66aa985ddf258b039b5d60",
+      "destination_sha256": "d84ed3997ae2c4113f47696d31145546e63bac86ea66aa985ddf258b039b5d60",
+      "unchanged": true
+    },
+    {
+      "source": "scripts/tests/select-msvc-redist.test.mjs",
+      "destination": "scripts/tests/select-msvc-redist.test.mjs",
+      "source_sha256": "2c9434da9a70db8b05309851c65c735153a6d92cd20f4821805cf7fc2c963b6e",
+      "destination_sha256": "2c9434da9a70db8b05309851c65c735153a6d92cd20f4821805cf7fc2c963b6e",
+      "unchanged": true
+    },
+    {
+      "source": "resources/language-support-packs.json",
+      "destination": "resources/language-support-packs.json",
+      "source_sha256": "63d777e61712a4fa22a0fe10d3c29ceb8b0b8607fe3ad887b345b2802ca2040f",
+      "destination_sha256": "ec37d995b29d9e0d16cd80ead26c80d0c830387b236c9b2cf67de48abefdf09f",
+      "unchanged": false
+    },
+    {
+      "source": "resources/native-toolchains.json",
+      "destination": "resources/native-toolchains.json",
+      "source_sha256": "eccc288132cc366f3778ad4a9655687db66bf835e2c6ae067da8f08ba9124425",
+      "destination_sha256": "eccc288132cc366f3778ad4a9655687db66bf835e2c6ae067da8f08ba9124425",
+      "unchanged": true
+    }
+  ],
+  "distribution_acceptance": {
+    "command_inventory": "scripts/language-packs/verify-native-analyzers.mjs",
+    "semantic_tests": "resources/semantic-acceptance.json",
+    "macos_real_semantic_tests": 69,
+    "windows_real_semantic_tests": 70,
+    "public_cli": "scripts/language-packs/verify-public-cli.mjs",
+    "mapping": "docs/migration.md#task-2-independent-distribution-and-acceptance",
+    "deferred": "Narrant retains all 38 diff-dependent tests and application installation/Review/DTO tests; no difference implementation migrated."
+  }
 }

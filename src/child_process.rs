@@ -105,12 +105,10 @@ impl ProcessTree {
     pub(crate) fn reap(&mut self) -> io::Result<()> {
         if !self.reaped {
             #[cfg(unix)]
-            {
+            let termination = {
                 self.group.snapshot();
-                if let Err(error) = self.group.terminate() {
-                    self.failure.get_or_insert(error);
-                }
-            }
+                self.group.terminate()
+            };
             #[cfg(windows)]
             let tree_result = self.job.terminate_and_wait();
             let _ = self.child.kill();
@@ -120,6 +118,13 @@ impl ProcessTree {
             #[cfg(not(any(unix, windows)))]
             let tree_result: io::Result<()> = Ok(());
             self.reaped = tree_result.is_ok() && child_result.is_ok();
+            #[cfg(unix)]
+            if let Err(error) = termination {
+                // macOS 的纯 zombie 组可能返回 EPERM；只有根和全部成员退出均已确认才消除信号竞态。
+                if error.raw_os_error() != Some(libc::EPERM) || !self.reaped {
+                    self.failure.get_or_insert(error);
+                }
+            }
             for result in [tree_result, child_result.map(|_| ())] {
                 if let Err(error) = result {
                     self.failure.get_or_insert(error);
