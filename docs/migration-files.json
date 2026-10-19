@@ -140,8 +140,9 @@
       "source": "native-helpers/csharp/Configuration.cs",
       "destination": "native-helpers/csharp/Configuration.cs",
       "source_sha256": "682a649c95d834eb833c0cb3cbf1639d7200e554f8f0d3680772d6cbf0e0855b",
-      "destination_sha256": "682a649c95d834eb833c0cb3cbf1639d7200e554f8f0d3680772d6cbf0e0855b",
-      "unchanged": true
+      "destination_sha256": "676ae0048f0eba98dce8fc1907ef67e5f2738e35bb6223119ef15f9fa3391172",
+      "unchanged": false,
+      "adaptation": "Load already-authorized project XML through a readonly file stream so canonical Windows paths are not reinterpreted as URIs; preserve all path and static-project validation."
     },
     {
       "source": "native-helpers/csharp/GraphAccumulator.cs",
@@ -189,8 +190,9 @@
       "source": "native-helpers/csharp/tests/test_helper.py",
       "destination": "native-helpers/csharp/tests/test_helper.py",
       "source_sha256": "15e98aec317453be41e4d091c71493b0c36ae77aac0ee4d515e305ff5f4a2d68",
-      "destination_sha256": "15e98aec317453be41e4d091c71493b0c36ae77aac0ee4d515e305ff5f4a2d68",
-      "unchanged": true
+      "destination_sha256": "7b49347645c0d1de31407e4b7dfc391ea2ea029df95c31c21e851fc4e3cf2c98",
+      "unchanged": false,
+      "adaptation": "Add real project-path coverage including the Windows canonical extended prefix, identical graph/source/local-call and readonly assertions, and malformed XML rejection."
     },
     {
       "source": "native-helpers/go/.gitignore",

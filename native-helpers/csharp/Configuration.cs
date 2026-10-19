@@ -146,7 +146,12 @@ internal static class Configuration
                 File.Exists(Path.Combine(directory, "Directory.Build.targets")))
                 throw new HelperException("unsupported_configuration", "Directory.Build imports require MSBuild evaluation", relative);
         XDocument document;
-        try { document = XDocument.Load(path, LoadOptions.None); }
+        try
+        {
+            // 已授权路径交给文件系统；string 重载会把 Windows 的 \\?\ 前缀误解析为 URI 主机名。
+            using var input = File.OpenRead(path);
+            document = XDocument.Load(input, LoadOptions.None);
+        }
         catch (Exception error) { throw new HelperException("unsupported_configuration", error.Message, relative); }
         var project = document.Root;
         if (project?.Name.LocalName != "Project" || project.Attribute("Sdk")?.Value != "Microsoft.NET.Sdk" ||

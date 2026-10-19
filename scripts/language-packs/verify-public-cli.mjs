@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { nativeTarget, releaseIdentity, sha256 } from './distribution.mjs';
 import { selectedNativePacks } from './native-migration.mjs';
 import { verifyAndExtract } from './verify-distribution.mjs';
+import { verifyNativePackPolicy } from './verify-native-pack-policy.mjs';
 
 /** 每种语言都包含真实本地调用；测试项目不借用应用状态或源仓库。 */
 export const fixtures = {
@@ -125,6 +126,7 @@ export async function verifyPublicCli(artifacts, language = 'all') {
     await runPublicPackAcceptances(selectedNativePacks(language), async id => {
       const pack = path.join(scratch, id);
       await verifyAndExtract(path.join(artifacts, id, identity.version, target), pack, { id, target, version: identity.version });
+      await verifyNativePackPolicy(id, pack);
       assert.equal(sha256(await fs.readFile(standalone)), sha256(await fs.readFile(path.join(pack, 'bin', executableName))), 'Pack CLI must equal standalone CLI');
       assert.deepEqual(JSON.parse(await fs.readFile(path.join(pack, 'control/codegraph.json'))), { schema_version: 1, pack_id: id, pack_version: identity.version, engine_version: identity.engineVersion, protocol: identity.protocol });
       const fixture = await preparePublicProject(id, path.join(scratch, `${id}-source`)), source = fixture.root;

@@ -130,6 +130,10 @@ engine test: 69 on macOS and 63 on Windows. The additional C# production-factory
 regression brings the named real-pack totals to 70 and 64 respectively. The original
 seven `cfg(unix)` tests remain macOS-only, while the original Windows junction boundary case remains
 Windows-only; no test or assertion is removed.
+The former consumer real-install checks for Go/Java/C# `target_sdk.kind`, empty
+`platforms` and absent `runtime/platform` now run against CodeGraph's verified
+extracted archives in its public CLI acceptance group. The consumer only uses the
+public CLI and descriptor; these private packaging guarantees remain producer-owned.
 The verifier requires each named test to report `ok`; zero-test Cargo success cannot
 pass. The internal ignored `child_process::test_support::fixture::process_fixture`
 is invoked only by its owning subprocess tests and never by a blanket ignored run.

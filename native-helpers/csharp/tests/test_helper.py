@@ -161,6 +161,45 @@ void B(){}
         self.assertEqual(rejected["error"]["code"], "unsupported_configuration")
         self.assertFalse(marker.exists())
 
+    def test_project_file_paths_are_not_uris(self):
+        """真实项目路径允许空格与 URI 字符，Windows 规范前缀不能被当成主机名。"""
+        renamed = self.root.with_name("repo space # percent% 项目")
+        self.root.rename(renamed)
+        self.root = renamed
+        self.write("Sample.csproj", '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>')
+        self.write("Sample.cs", "public static class Sample { public static int Target()=>1; public static int Caller()=>Target(); }")
+        before = {p.name: p.read_bytes() for p in self.root.iterdir()}
+        ordinary = str(self.root.resolve())
+        roots = [ordinary]
+        if os.name == "nt":
+            self.assertRegex(ordinary, r"^[A-Za-z]:\\")
+            roots.append("\\\\?\\" + ordinary)
+        graph = None
+        for root in roots:
+            with self.subTest(root=root):
+                request = self.request(["Sample.cs"])
+                request["input"]["repository_root"] = root
+                result = self.run_helper(request)
+                self.assertEqual(result["outcome"], "ok", result.get("error"))
+                nodes = {n["name"]: n for n in result["graph"]["nodes"] if "name" in n}
+                self.assertIn("Target()", nodes["Caller"]["source"])
+                self.assertTrue(any(r["semantic"] == "code.calls" and r["target"] == {"kind": "node", "id": nodes["Target"]["id"]}
+                                    for r in nodes["Caller"]["references"]))
+                if graph is not None:
+                    self.assertEqual(result["graph"], graph)
+                graph = result["graph"]
+        self.assertEqual({p.name: p.read_bytes() for p in self.root.iterdir()}, before)
+
+    def test_malformed_project_xml_remains_an_explicit_error(self):
+        """读取方式改变后，非法 XML 仍必须失败且不能生成空图。"""
+        self.write("Sample.csproj", '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>')
+        self.write("Sample.cs", "public class Sample {}")
+        result = self.run_helper(self.request(["Sample.cs"]))
+        self.assertEqual(result["outcome"], "error")
+        self.assertEqual(result["error"]["code"], "unsupported_configuration")
+        self.assertEqual(result["error"]["paths"], ["Sample.csproj"])
+        self.assertNotIn("graph", result)
+
     def test_extension_block_and_interface_relation(self):
         """C# 14 extension block 与接口实现保持独立对象和确认关系。"""
         self.write("A.cs", """interface I { int F(); }

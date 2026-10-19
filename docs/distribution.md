@@ -175,6 +175,11 @@ and standard SDK discovery; its internal assertion retains diagnostics without
 changing the public protocol's redacted errors. Public acceptance continues with
 later languages after a package failure, then reports all original failures and
 exits unsuccessfully. No partial run emits a successful receipt.
+CodeGraph also checks its private SDK packaging policy on the verified extracted
+Go, Java and C# archives: `target_sdk.kind` is respectively `go`, `java`, `dotnet`,
+`platforms` is empty, and `runtime/platform` is absent. This producer acceptance
+retains the former install-test guarantees without making private layout a
+consumer dependency.
 Public acceptance checks both executable choices, all seven languages, test switches,
 original source/local calls, empty selection and read-only input; Rust covers all
 three dependency scopes. Java uses `src/Sample.java` with a `java-static-v1`
