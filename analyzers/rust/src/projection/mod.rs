@@ -27,8 +27,9 @@ fn failure(message: impl std::fmt::Display) -> anyhow::Error {
 pub fn analyze(request: &Request) -> Result<Value> {
     request.validate()?;
     let repository = dunce::canonicalize(&request.input.repository_root)?;
+    ensure!(repository.is_dir(), "仓库根必须为目录");
     let mut selected: BTreeMap<PathBuf, Vec<String>> = BTreeMap::new();
-    for relative in &request.input.files {
+    for relative in request.input.files.iter().flatten() {
         let path = dunce::canonicalize(repository.join(relative))
             .with_context(|| format!("无法读取 {relative}"))?;
         ensure!(
@@ -39,7 +40,7 @@ pub fn analyze(request: &Request) -> Result<Value> {
         );
         selected.entry(path).or_default().push(relative.clone());
     }
-    if selected.is_empty() {
+    if request.input.files.as_ref().is_some_and(Vec::is_empty) {
         return Ok(
             json!({"graph":{"root_contains":[],"nodes":[],"external_symbols":[]},"evidence":{"configurations":[],"files":[],"origins":[]}}),
         );
@@ -62,6 +63,20 @@ pub fn analyze(request: &Request) -> Result<Value> {
         &policies,
         &selected.keys().cloned().collect::<Vec<_>>(),
     )?;
+    if request.input.files.is_none() {
+        for path in project.discover_sources(&repository)? {
+            let relative = path
+                .strip_prefix(&repository)?
+                .to_str()
+                .context("发现的源码路径不是 UTF-8")?;
+            #[cfg(windows)]
+            let relative = relative.replace('\\', "/");
+            #[cfg(not(windows))]
+            let relative = relative.to_owned();
+            crate::protocol::relative_path(&relative)?;
+            selected.entry(path).or_default().push(relative);
+        }
+    }
     let options = model::AnalysisOptions {
         include_tests: request.input.include_tests,
     };
@@ -69,7 +84,13 @@ pub fn analyze(request: &Request) -> Result<Value> {
         .keys()
         .map(|path| syntax::Document::parse(&repository, path.clone(), &project, options))
         .collect::<Result<Vec<_>>>()?;
-    let (graph, test_files) = references::analyze(&project, &repository, &documents, options)?;
+    let (graph, test_files) = references::analyze(
+        &project,
+        &repository,
+        &documents,
+        options,
+        request.input.files.is_none(),
+    )?;
     let mut origins = Vec::new();
     for node in &graph.nodes {
         let id = &node.data().id;

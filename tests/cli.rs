@@ -225,6 +225,7 @@ fn real_factory_host_graph_and_eof() {
 #[test]
 fn empty_selection_does_not_start_helper() {
     let fixture = Fixture::new("ok");
+    fs::remove_file(fixture.pack.join("control/native.json")).unwrap();
     let mut request = fixture.request();
     request["files"] = json!([]);
     let (status, messages) = fixture.run(&line(&request));
@@ -233,6 +234,27 @@ fn empty_selection_does_not_start_helper() {
         messages[1]["graph"],
         json!({"root_contains":[],"nodes":[],"external_symbols":[]})
     );
+    assert!(!fixture.marker("helper-pid").exists());
+}
+
+/// 省略选集必须进入语言引擎，worker 转发不能将其改写为 null 或空数组。
+#[test]
+fn omitted_selection_reaches_engine_and_null_is_invalid() {
+    let fixture = Fixture::new("ok");
+    let mut request = fixture.request();
+    request.as_object_mut().unwrap().remove("files");
+    let (status, messages) = fixture.run(&line(&request));
+    assert!(status.success(), "{messages:?}");
+    assert_eq!(messages[1]["graph"]["nodes"].as_array().unwrap().len(), 1);
+    let private: Value =
+        serde_json::from_slice(&fs::read(fixture.marker("request")).unwrap()).unwrap();
+    assert!(private["input"].get("files").is_none());
+    let fixture = Fixture::new("ok");
+    request["repository_root"] = json!(fixture.repository);
+    request["files"] = Value::Null;
+    let (status, messages) = fixture.run(&line(&request));
+    assert!(!status.success());
+    assert_eq!(messages[1]["error"]["code"], "invalid_request");
     assert!(!fixture.marker("helper-pid").exists());
 }
 

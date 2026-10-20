@@ -87,7 +87,7 @@ impl RustPackAnalyzer {
             return Err(AnalysisError::cancelled("Rust 结构分析已取消"));
         }
         // 空语言组选集不探测工具链或启动 helper，不能把加载错误映射到此分支。
-        if input.files.is_empty() {
+        if input.files.as_ref().is_some_and(Vec::is_empty) {
             return CodeGraph::new(Default::default(), Vec::new()).map_err(failure);
         }
         let mut environment = self.environment.clone();

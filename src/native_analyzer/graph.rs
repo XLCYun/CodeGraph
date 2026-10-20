@@ -19,7 +19,13 @@ pub(super) fn build(
     identity: &HelperIdentity,
 ) -> Result<CodeGraph> {
     let evidence = &completed.evidence;
+    if evidence.files.len() > crate::selection::MAX_FILES {
+        return Err(failure("文件覆盖超过数量上限"));
+    }
     let configurations = input::unique(evidence.configurations.iter().map(|c| &c.id), "配置 ID")?;
+    if input.files.is_none() && configurations.is_empty() {
+        return Err(failure("发现结果缺少实际项目配置"));
+    }
     let platforms = input
         .platforms
         .iter()
@@ -27,20 +33,31 @@ pub(super) fn build(
         .collect::<BTreeSet<_>>();
     for configuration in &evidence.configurations {
         for path in input::unique(&configuration.source_paths, "配置来源")? {
-            input::repository_file(&input.repository, path)?;
+            let resolved = input::repository_file(&input.repository, path)?;
+            std::fs::File::open(resolved).map_err(failure)?;
         }
         if !input::unique(&configuration.platform_ids, "配置平台")?.is_subset(&platforms) {
             return Err(failure("配置引用未批准的平台"));
         }
     }
     let mut files = BTreeMap::new();
+    let mut resolved_files = BTreeSet::new();
     for file in &evidence.files {
-        if !input.files.contains(&file.path)
+        if input
+            .files
+            .as_ref()
+            .is_some_and(|selected| !selected.contains(&file.path))
             || files
                 .insert(file.path.as_str(), &file.disposition)
                 .is_some()
         {
             return Err(failure("文件覆盖出现未请求或重复路径"));
+        }
+        // 发现路径来自引擎，不能绕过显式选集已有的真实文件边界；语言归属由 loader 证明。
+        let resolved = input::repository_file(&input.repository, &file.path)?;
+        std::fs::File::open(&resolved).map_err(failure)?;
+        if !resolved_files.insert(resolved) && !input::allows_aliases(&identity.profile) {
+            return Err(failure("文件覆盖包含同一文件的别名"));
         }
         let ids = input::unique(&file.configuration_ids, "文件配置")?;
         if ids.is_empty() || !ids.is_subset(&configurations) {
@@ -50,7 +67,11 @@ pub(super) fn build(
             return Err(failure("include_tests=true 时不能排除选中测试文件"));
         }
     }
-    if files.len() != input.files.len() {
+    if input
+        .files
+        .as_ref()
+        .is_some_and(|selected| files.len() != selected.len())
+    {
         return Err(failure("成功结果遗漏请求文件覆盖"));
     }
     let nodes = input::unique(completed.graph.nodes.iter().map(|node| &node.id), "节点 ID")?;

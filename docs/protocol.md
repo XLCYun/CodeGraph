@@ -37,7 +37,10 @@ request (the root below is illustrative; the executable example creates real pat
 {"protocol":"codegraph.analyzer/1","type":"analyze","id":"example-1","repository_root":"/absolute/source","files":[],"options":{"include_tests":false,"rust_dependency_scope":"repository-only"}}
 ```
 
-Every field is required. IDs are non-blank UTF-8 strings of at most 1,024 bytes,
+Every field except `files` is required. Omitted `files` discovers source files from
+the language's loaded project configuration. An explicit `[]` returns an empty
+graph without project or SDK discovery; a nonempty array is an exact selection.
+`null` and malformed selections are invalid. IDs are non-blank UTF-8 strings of at most 1,024 bytes,
 without NUL. `repository_root` is an existing absolute directory. `files` are unique,
 non-empty repository-relative POSIX paths; absolute paths, backslashes, colons,
 empty components, `.` and `..` are rejected. Canonical file provenance is checked
@@ -134,6 +137,7 @@ accepted analyze ID exists, error `id` is null. Cancellation has no error or gra
 | Request / result line (excluding final newline) | 128 MiB each |
 | Helper stderr | 256 KiB total |
 | Public package control file | 1 MiB |
+| Explicit or discovered selection | 100,000 files |
 | Wait for initial request / helper ready | 60 seconds each |
 | Complete analysis, including factory / SDK work | 30 minutes total |
 | Cooperative cancellation | 2 seconds |

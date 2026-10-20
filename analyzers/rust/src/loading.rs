@@ -8,15 +8,28 @@ use hir_def::{
 };
 use ide::RootDatabase;
 use project_model::{
-    CargoConfig, ProjectManifest, ProjectWorkspace, ProjectWorkspaceKind, RustLibSource,
+    CargoConfig, ProjectManifest, ProjectWorkspace, ProjectWorkspaceKind, RustLibSource, TargetKind,
 };
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, BTreeSet, HashSet},
     path::{Path, PathBuf},
     sync::Mutex,
 };
 use vfs::loader::{Handle, LoadingProgress};
 use vfs::{AbsPathBuf, Vfs};
+
+/// 数据库和工作区成员身份在同一次加载中冻结，VFS 上下文不自动成为发现选集。
+pub(super) struct LoadedProject {
+    pub database: RootDatabase,
+    pub vfs: Vfs,
+    pub member_roots: BTreeMap<PathBuf, MemberRoot>,
+}
+
+/// 记录目标的真实归属，既支持仓库子目录调用，也不能静默丢弃仓内清单声明的越界根。
+pub(super) struct MemberRoot {
+    pub test_only: bool,
+    owners: BTreeSet<PathBuf>,
+}
 
 /// 与现有 Rust 设置对应的三档语义依赖范围。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -124,7 +137,7 @@ impl LoadPolicy {
 }
 
 /// 一次加载事务隔离原生内部异常；失败即丢弃数据库，不探测输入、不重试或返回部分结果。
-pub(super) fn load(manifest: &Path, policy: &LoadPolicy) -> Result<(RootDatabase, Vfs)> {
+pub(super) fn load(manifest: &Path, policy: &LoadPolicy) -> Result<LoadedProject> {
     load_projects(&[manifest.to_owned()], std::slice::from_ref(policy), &[])
 }
 
@@ -133,8 +146,12 @@ pub(super) fn load_projects(
     manifests: &[PathBuf],
     policies: &[LoadPolicy],
     selected: &[PathBuf],
-) -> Result<(RootDatabase, Vfs)> {
+) -> Result<LoadedProject> {
     crate::native_transaction("Rust 多项目工作区未完整加载", || {
+        ensure!(
+            manifests.len() == policies.len(),
+            "项目清单与加载政策数量不一致"
+        );
         let mut workspaces = Vec::new();
         let mut locks = Vec::new();
         for (manifest, policy) in manifests.iter().zip(policies) {
@@ -197,7 +214,8 @@ fn assemble(
     workspaces: Vec<ProjectWorkspace>,
     config: &CargoConfig,
     selected: &[PathBuf],
-) -> Result<(RootDatabase, Vfs)> {
+) -> Result<LoadedProject> {
+    let member_roots = member_roots(&workspaces)?;
     let (sender, receiver) = crossbeam_channel::unbounded();
     let mut loader = vfs_notify::NotifyHandle::spawn(sender);
     let mut vfs = Vfs::default();
@@ -262,25 +280,153 @@ fn assemble(
     let mut database = RootDatabase::new(None);
     database.enable_proc_attr_macros();
     database.apply_change(change);
-    ensure!(vfs.iter().next().is_some(), "Rust 工作区未加载任何文件");
+    ensure!(
+        member_roots.is_empty() || vfs.iter().next().is_some(),
+        "Rust 工作区未加载任何成员源码"
+    );
     ensure_sources_complete(&database, &vfs)?;
-    Ok((database, vfs))
+    Ok(LoadedProject {
+        database,
+        vfs,
+        member_roots,
+    })
+}
+
+/// 只记录 Cargo workspace 成员或静态项目明确标记的成员，路径依赖仍只是上下文。
+fn member_roots(workspaces: &[ProjectWorkspace]) -> Result<BTreeMap<PathBuf, MemberRoot>> {
+    let mut roots = BTreeMap::new();
+    for workspace in workspaces {
+        match &workspace.kind {
+            ProjectWorkspaceKind::Cargo { cargo, .. } => {
+                for package in cargo.packages().filter(|&package| cargo[package].is_member) {
+                    let owner = dunce::canonicalize(cargo[package].manifest.parent().as_str())?;
+                    for &target in &cargo[package].targets {
+                        let target = &cargo[target];
+                        let path = dunce::canonicalize(target.root.as_str())?;
+                        let test_only = matches!(target.kind, TargetKind::Test | TargetKind::Bench);
+                        record_member(&mut roots, path, owner.clone(), test_only);
+                    }
+                }
+            }
+            ProjectWorkspaceKind::Json(project) => {
+                let owner = dunce::canonicalize(project.project_root().as_str())?;
+                for (_, krate) in project
+                    .crates()
+                    .filter(|(_, krate)| krate.is_workspace_member)
+                {
+                    record_member(
+                        &mut roots,
+                        dunce::canonicalize(krate.root_module.as_str())?,
+                        owner.clone(),
+                        false,
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(roots)
+}
+
+/// 多个配置或生产/测试目标复用物理根时合并归属，任一生产目标都使根继续可见。
+fn record_member(
+    roots: &mut BTreeMap<PathBuf, MemberRoot>,
+    path: PathBuf,
+    owner: PathBuf,
+    test_only: bool,
+) {
+    let member = roots.entry(path).or_insert_with(|| MemberRoot {
+        test_only,
+        owners: BTreeSet::new(),
+    });
+    member.test_only &= test_only;
+    member.owners.insert(owner);
+}
+
+/// 从本次数据库的成员 crate 与块模块图发现源码，不枚举 VFS 或按扩展名扫描目录。
+pub(super) fn discover_sources(
+    database: &RootDatabase,
+    vfs: &Vfs,
+    member_roots: &BTreeMap<PathBuf, MemberRoot>,
+    repository: &Path,
+) -> Result<BTreeSet<PathBuf>> {
+    let mut files = BTreeSet::new();
+    let mut crates = Vec::new();
+    let mut expected = BTreeSet::new();
+    for (path, member) in member_roots {
+        if path.starts_with(repository)
+            || member
+                .owners
+                .iter()
+                .any(|owner| owner.starts_with(repository))
+        {
+            ensure!(path.starts_with(repository), "仓内项目声明的目标根越出仓库");
+            expected.insert(path.clone());
+            ensure!(
+                expected.len() <= codegraph_engine_common::selection::MAX_FILES,
+                "发现文件超过数量上限"
+            );
+        }
+    }
+    let mut remaining = expected.clone();
+    for &krate in base_db::all_crates(database).iter() {
+        let root = vfs.file_path(krate.root_file_id(database).file_id(database));
+        let root = root.as_path().context("crate 根没有磁盘路径")?;
+        let root = dunce::canonicalize(root.as_str())?;
+        if expected.contains(&root) {
+            remaining.remove(&root);
+            crates.push(krate);
+        }
+    }
+    ensure!(remaining.is_empty(), "声明的工作区成员目标未完整加载");
+    visit_module_maps(database, crates.into_iter(), |map| {
+        for (_, module) in map.modules() {
+            let Some(file) = module.origin.file_id() else {
+                continue;
+            };
+            let path = vfs.file_path(file.file_id(database));
+            let path = path.as_path().context("模块源码没有磁盘路径")?;
+            let path = dunce::canonicalize(path.as_str())?;
+            ensure!(
+                path.starts_with(repository) && path.is_file(),
+                "发现的模块源码越出仓库或不是普通文件"
+            );
+            ensure!(path.to_str().is_some(), "发现的源码路径必须为 UTF-8");
+            files.insert(path);
+            ensure!(
+                files.len() <= codegraph_engine_common::selection::MAX_FILES,
+                "发现文件超过数量上限"
+            );
+        }
+        Ok(())
+    })?;
+    Ok(files)
 }
 
 /// 上游会丢弃读取错误；沿原生 crate 与 block 模块图检查活动声明的源码候选。
 fn ensure_sources_complete(database: &RootDatabase, vfs: &Vfs) -> Result<()> {
+    visit_module_maps(
+        database,
+        base_db::all_crates(database).iter().copied(),
+        |map| ensure_module_candidates_complete(database, vfs, map),
+    )
+}
+
+/// 共用原生模块遍历，涵盖函数、关联项、闭包、常量和签名中的块作用域。
+fn visit_module_maps(
+    database: &RootDatabase,
+    crates: impl Iterator<Item = base_db::Crate>,
+    mut visit: impl FnMut(&DefMap) -> Result<()>,
+) -> Result<()> {
     // 读取/遍历失败的文件不在 VFS 中，使用原生 cfg、#[path] 与嵌套目录解析结果定位。
-    let mut maps: Vec<_> = base_db::all_crates(database)
-        .iter()
-        .map(|&krate| crate_def_map(database, krate))
-        .collect();
+    let mut maps: Vec<_> = crates.map(|krate| crate_def_map(database, krate)).collect();
     let mut definitions = Vec::new();
     let mut stores = Vec::new();
     let mut checked_stores = HashSet::new();
     let mut checked_blocks = HashSet::new();
     loop {
         if let Some(map) = maps.pop() {
-            ensure_module_candidates_complete(database, vfs, map)?;
+            visit(map)?;
             for (_, module) in map.modules() {
                 definitions.extend(module.scope.declarations());
                 definitions.extend(module.scope.unnamed_consts().map(ModuleDefId::from));

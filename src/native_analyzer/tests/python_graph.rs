@@ -55,7 +55,7 @@ fn analyze(source: &str) -> CodeGraph {
     analyzer()
         .analyze(&AnalysisInput {
             repository_root: repository.path().into(),
-            files: vec!["main.py".into()],
+            files: Some(vec!["main.py".into()]),
             options: Default::default(),
         })
         .unwrap()
@@ -119,7 +119,7 @@ fn internal_links_preserve_selected_paths_and_distinct_identities() {
         analyzer()
             .analyze(&AnalysisInput {
                 repository_root: server.path().into(),
-                files: files.iter().map(PathBuf::from).collect(),
+                files: Some(files.iter().map(PathBuf::from).collect()),
                 options: Default::default(),
             })
             .unwrap()
@@ -160,7 +160,7 @@ fn project_requires_python_controls_native_syntax() {
     .unwrap();
     let result = analyzer().analyze(&AnalysisInput {
         repository_root: server.path().into(),
-        files: vec!["main.py".into()],
+        files: Some(vec!["main.py".into()]),
         options: Default::default(),
     });
     let error = result.unwrap_err().message;
@@ -183,7 +183,7 @@ fn escaping_context_links_fail_native_loading() {
     fs::write(server.path().join("main.py"), "def local(): pass\n").unwrap();
     let result = analyzer().analyze(&AnalysisInput {
         repository_root: server.path().into(),
-        files: vec!["main.py".into()],
+        files: Some(vec!["main.py".into()]),
         options: Default::default(),
     });
     assert!(result.unwrap_err().message.contains("逃逸"));
@@ -204,15 +204,15 @@ fn test_filter_and_input_failures_never_hide_invalid_source_paths() {
     let analyzer = analyzer();
     let mut input = AnalysisInput {
         repository_root: root.path().into(),
-        files: vec!["tests/test_api.py".into()],
+        files: Some(vec!["tests/test_api.py".into()]),
         options: Default::default(),
     };
     assert!(analyzer.analyze(&input).unwrap().root().contains.is_empty());
     for path in ["../escape.py", "notes.txt", "tests/../notes.txt"] {
-        input.files = vec![path.into()];
+        input.files = Some(vec![path.into()]);
         assert!(analyzer.analyze(&input).is_err(), "{path}");
     }
-    input.files = vec!["tests/test_api.py".into()];
+    input.files = Some(vec!["tests/test_api.py".into()]);
     input.options.include_tests = true;
     assert_eq!(analyzer.analyze(&input).unwrap().root().contains.len(), 1);
 }
@@ -234,7 +234,7 @@ fn invalid_versions_and_encodings_fail_native_analysis() {
         assert!(analyzer()
             .analyze(&AnalysisInput {
                 repository_root: server.path().into(),
-                files: vec!["main.py".into()],
+                files: Some(vec!["main.py".into()]),
                 options: Default::default()
             })
             .is_err());
@@ -288,7 +288,7 @@ fn python_helper_preserves_historical_complete_graphs() {
         }
         let input = AnalysisInput {
             repository_root: repository.path().into(),
-            files: selected.iter().map(PathBuf::from).collect(),
+            files: Some(selected.iter().map(PathBuf::from).collect()),
             options: AnalysisOptions::default(),
         };
         let native = analyzer().analyze(&input).unwrap();
@@ -349,7 +349,7 @@ fn python_helper_timeout_and_caller_panic_reap_actual_process() {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             native.analyze(&AnalysisInput {
                 repository_root: repository.path().into(),
-                files: vec!["main.py".into()],
+                files: Some(vec!["main.py".into()]),
                 options: Default::default(),
             })
         }));

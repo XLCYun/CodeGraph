@@ -35,6 +35,45 @@ pub(super) fn analyzer() -> NativeLanguageAnalyzer {
     )
 }
 
+/// 真实 Rust 引擎在同次加载中发现模块；公共 Host 验证 coverage，显式选集仍不扩大。
+#[test]
+#[ignore = "需要已构建 Rust helper 和项目工具链，单独串行运行"]
+fn rust_helper_discovers_modules_without_promoting_context_files() {
+    let root = repository(
+        "mod nested; #[path=\"extra.md\"] mod extra; pub fn run() { nested::nested_call(); }",
+    );
+    fs::write(root.path().join("src/nested.rs"), "pub fn nested_call() {}").unwrap();
+    fs::write(root.path().join("src/extra.md"), "pub fn extra_call() {}").unwrap();
+    fs::write(
+        root.path().join("src/unrelated.rs"),
+        "pub fn unrelated() {}",
+    )
+    .unwrap();
+    let mut input = AnalysisInput {
+        repository_root: root.path().into(),
+        files: None,
+        options: Default::default(),
+    };
+    let discovered = analyzer().analyze(&input).unwrap();
+    let names: Vec<_> = nodes(&discovered)
+        .values()
+        .filter_map(|node| node.data().name.as_deref())
+        .collect();
+    assert!(names.contains(&"run"));
+    assert!(names.contains(&"nested_call"));
+    assert!(names.contains(&"extra_call"));
+    assert!(!names.contains(&"unrelated"));
+    input.files = Some(vec!["src/lib.rs".into()]);
+    let explicit = analyzer().analyze(&input).unwrap();
+    assert!(!nodes(&explicit)
+        .values()
+        .any(|node| node.data().name.as_deref() == Some("nested_call")));
+    assert!(explicit
+        .external_symbols()
+        .values()
+        .any(|symbol| symbol.name.contains("nested_call")));
+}
+
 /// 复现 PR31 的真实测试文件：#[test] 按写法统一排除，未标注的辅助函数保留。
 #[test]
 #[ignore = "需要已构建 Rust helper 和项目工具链，单独串行运行"]
@@ -61,7 +100,10 @@ fn rust_helper_excludes_test_attributes_with_glob_imports() {
         analyzer()
             .analyze(&AnalysisInput {
                 repository_root: directory.path().to_owned(),
-                files: vec!["tests/github_discovery.rs".into(), "src/custom.rs".into()],
+                files: Some(vec![
+                    "tests/github_discovery.rs".into(),
+                    "src/custom.rs".into(),
+                ]),
                 options: crate::code_graph::AnalysisOptions { include_tests },
             })
             .unwrap()
@@ -149,7 +191,7 @@ fn rust_helper_describes_external_symbols() {
                 include_tests: true,
             },
             repository_root: repository.path().to_path_buf(),
-            files: vec![PathBuf::from("src/lib.rs")],
+            files: Some(vec![PathBuf::from("src/lib.rs")]),
         })
         .unwrap();
     let all = nodes(&graph);
@@ -215,7 +257,7 @@ fn rust_helper_recognizes_custom_and_empty_crate_roots() {
                 include_tests: true,
             },
             repository_root: directory.path().to_owned(),
-            files: vec!["library_entry.rs".into(), "test_entry.rs".into()],
+            files: Some(vec!["library_entry.rs".into(), "test_entry.rs".into()]),
         })
         .unwrap();
     let roots: Vec<_> = graph
@@ -270,12 +312,12 @@ fn rust_helper_deduplicates_aliases_with_stable_graph_content() {
     }
     let input = AnalysisInput {
         repository_root: root.path().into(),
-        files: vec![
+        files: Some(vec![
             "src/lib.rs".into(),
             "alias/lib.rs".into(),
             "src/store.rs".into(),
             "alias/store.rs".into(),
-        ],
+        ]),
         options: Default::default(),
     };
     let native = analyzer().analyze(&input).unwrap();
@@ -303,7 +345,7 @@ fn rust_helper_loads_project_shapes_and_preserves_standalone_failure() {
     let analyze = |files: &[&str]| {
         analyzer().analyze(&AnalysisInput {
             repository_root: root.path().into(),
-            files: files.iter().map(PathBuf::from).collect(),
+            files: Some(files.iter().map(PathBuf::from).collect()),
             options: Default::default(),
         })
     };
@@ -371,7 +413,7 @@ fn rust_helper_cancellation_uses_common_process_ownership() {
     let error = analyzer
         .analyze(&AnalysisInput {
             repository_root: root.path().into(),
-            files: vec!["src/lib.rs".into()],
+            files: Some(vec!["src/lib.rs".into()]),
             options: Default::default(),
         })
         .unwrap_err();
@@ -437,7 +479,7 @@ fn rust_helper_runtime_toolchain_selection_reaches_real_cargo_and_rustc() {
     };
     let input = AnalysisInput {
         repository_root: root.path().into(),
-        files: vec!["src/lib.rs".into()],
+        files: Some(vec!["src/lib.rs".into()]),
         options: Default::default(),
     };
     fs::write(
@@ -536,7 +578,7 @@ fn rust_helper_multiple_project_toolchains_keep_scope_boundary() {
     }
     let input = AnalysisInput {
         repository_root: root.path().into(),
-        files: vec!["a/lib.rs".into(), "b/lib.rs".into()],
+        files: Some(vec!["a/lib.rs".into(), "b/lib.rs".into()]),
         options: Default::default(),
     };
     let mut analyzer = analyzer();
@@ -583,7 +625,7 @@ fn rust_helper_escaping_context_link_is_not_promoted_to_repository_symbol() {
     let graph = analyzer()
         .analyze(&AnalysisInput {
             repository_root: root.path().into(),
-            files: vec!["src/lib.rs".into()],
+            files: Some(vec!["src/lib.rs".into()]),
             options: Default::default(),
         })
         .unwrap();
@@ -634,7 +676,7 @@ fn rust_helper_cancellation_reaps_active_toolchain_probe() {
         .with_cancellation(Arc::new(move || observed.is_file()))
         .analyze(&AnalysisInput {
             repository_root: root.path().into(),
-            files: vec!["src/lib.rs".into()],
+            files: Some(vec!["src/lib.rs".into()]),
             options: Default::default(),
         })
         .unwrap_err();
@@ -662,7 +704,7 @@ fn syntax_graph(source: &str, include_tests: bool) -> CodeGraph {
     analyzer()
         .analyze(&AnalysisInput {
             repository_root: root.path().into(),
-            files: vec!["src/lib.rs".into()],
+            files: Some(vec!["src/lib.rs".into()]),
             options: crate::code_graph::AnalysisOptions { include_tests },
         })
         .unwrap()
@@ -676,7 +718,7 @@ fn rust_helper_lifecycle_native_failure_remains_error() {
     let error = analyzer()
         .analyze(&AnalysisInput {
             repository_root: root.path().into(),
-            files: vec!["src/lib.rs".into()],
+            files: Some(vec!["src/lib.rs".into()]),
             options: Default::default(),
         })
         .unwrap_err();

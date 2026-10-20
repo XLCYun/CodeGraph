@@ -51,7 +51,7 @@ impl Fixture {
     fn input(&self) -> AnalysisInput {
         AnalysisInput {
             repository_root: self.repository.clone(),
-            files: vec!["中文.go".into(), "empty.go".into()],
+            files: Some(vec!["中文.go".into(), "empty.go".into()]),
             options: AnalysisOptions::default(),
         }
     }
@@ -295,14 +295,14 @@ fn input_rejects_unsafe_paths_platforms_and_tool_roots() {
         "中文.go\0",
     ] {
         let mut input = fixture.input();
-        input.files = vec![path.into()];
+        input.files = Some(vec![path.into()]);
         assert!(
             input::validate(&fixture.analyzer(), &input).is_err(),
             "{path:?}"
         );
     }
     let mut input = fixture.input();
-    input.files.push("中文.go".into());
+    input.files.as_mut().unwrap().push("中文.go".into());
     assert!(input::validate(&fixture.analyzer(), &input).is_err());
     let mut analyzer = fixture.analyzer();
     analyzer.platforms.push(analyzer.platforms[0].clone());
@@ -381,15 +381,15 @@ fn rejects_outbound_symlinks_and_duplicate_aliases() {
     )
     .unwrap();
     let mut input = fixture.input();
-    input.files.push("outside.go".into());
+    input.files.as_mut().unwrap().push("outside.go".into());
     assert!(input::validate(&fixture.analyzer(), &input).is_err());
     std::os::unix::fs::symlink(
         fixture.repository.join("中文.go"),
         fixture.repository.join("alias.go"),
     )
     .unwrap();
-    input.files.pop();
-    input.files.push("alias.go".into());
+    input.files.as_mut().unwrap().pop();
+    input.files.as_mut().unwrap().push("alias.go".into());
     assert!(input::validate(&fixture.analyzer(), &input).is_err());
 }
 
@@ -694,7 +694,7 @@ fn subprocess_bounds_blocked_stdin_writer() {
     for index in 0..800 {
         let name = format!("{:0140}-{index}.go", 0);
         fs::write(fixture.repository.join(&name), "").unwrap();
-        input.files.push(name.into());
+        input.files.as_mut().unwrap().push(name.into());
     }
     let started = Instant::now();
     let error = analyze(&analyzer, &input).unwrap_err();
@@ -704,6 +704,7 @@ fn subprocess_bounds_blocked_stdin_writer() {
     assert_process_gone(&fixture.tools.join("pid"));
 }
 
+mod discovery;
 #[path = "migration.rs"]
 mod migration;
 

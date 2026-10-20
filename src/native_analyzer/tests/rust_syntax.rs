@@ -16,7 +16,7 @@ fn try_graph(source: &str) -> Result<CodeGraph, crate::code_graph::AnalysisError
     .unwrap();
     super::rust_graph::analyzer().analyze(&AnalysisInput {
         repository_root: root.path().into(),
-        files: vec!["lib.rs".into()],
+        files: Some(vec!["lib.rs".into()]),
         options: Default::default(),
     })
 }

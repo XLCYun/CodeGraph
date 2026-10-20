@@ -25,7 +25,7 @@ fn analyze_with_options(
     analyzer()
         .analyze(&AnalysisInput {
             repository_root: root.path().into(),
-            files: selected.iter().map(PathBuf::from).collect(),
+            files: Some(selected.iter().map(PathBuf::from).collect()),
             options,
         })
         .unwrap()
@@ -150,7 +150,7 @@ fn native_internal_links_do_not_rewrite_definition_ownership() {
     let analyzer = analyzer();
     let input = |files: &[&str]| AnalysisInput {
         repository_root: root.path().into(),
-        files: files.iter().map(PathBuf::from).collect(),
+        files: Some(files.iter().map(PathBuf::from).collect()),
         options: Default::default(),
     };
     let single = analyzer.analyze(&input(&["alias/__init__.py"])).unwrap();
@@ -539,7 +539,7 @@ fn native_cancellation_finishes_promptly() {
         .with_cancellation(Arc::new(move || cancelled.load(Ordering::Acquire)))
         .analyze(&AnalysisInput {
             repository_root: root.path().into(),
-            files: vec!["main.py".into()],
+            files: Some(vec!["main.py".into()]),
             options: Default::default(),
         });
     timer.join().unwrap();
@@ -586,7 +586,7 @@ fn native_cross_project_configuration_conflicts_remain_unresolved() {
     ] {
         let input = AnalysisInput {
             repository_root: root.path().into(),
-            files: selected.iter().map(PathBuf::from).collect(),
+            files: Some(selected.iter().map(PathBuf::from).collect()),
             options: Default::default(),
         };
         let graph = analyzer().analyze(&input).unwrap();
@@ -656,7 +656,7 @@ fn native_cross_project_selected_target_still_validates_own_syntax() {
         let error = analyzer()
             .analyze(&AnalysisInput {
                 repository_root: root.path().into(),
-                files: vec!["alpha/main.py".into(), "beta/src/api.py".into()],
+                files: Some(vec!["alpha/main.py".into(), "beta/src/api.py".into()]),
                 options: Default::default(),
             })
             .unwrap_err();
@@ -713,7 +713,7 @@ fn native_cross_project_context_still_validates_own_syntax() {
         }
         let input = AnalysisInput {
             repository_root: root.path().into(),
-            files: vec!["alpha/main.py".into()],
+            files: Some(vec!["alpha/main.py".into()]),
             options: Default::default(),
         };
         match analyzer().analyze(&input) {
@@ -821,7 +821,7 @@ fn native_windows_junction_escape_is_rejected() {
     let error = analyzer()
         .analyze(&AnalysisInput {
             repository_root: root.path().into(),
-            files: vec!["main.py".into()],
+            files: Some(vec!["main.py".into()]),
             options: Default::default(),
         })
         .unwrap_err();

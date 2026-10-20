@@ -45,7 +45,7 @@ fn production_cancellation_reaps_toolchain_probe() {
         .analyze(
             &AnalysisInput {
                 repository_root: root.path().into(),
-                files: vec!["lib.rs".into()],
+                files: Some(vec!["lib.rs".into()]),
                 options: Default::default(),
             },
             Arc::new(move || observed.is_file()),
@@ -91,7 +91,7 @@ fn empty_selection_keeps_all_scopes_without_project_tools() {
     let repository = tempfile::tempdir().unwrap();
     let input = AnalysisInput {
         repository_root: repository.path().into(),
-        files: vec![],
+        files: Some(vec![]),
         options: Default::default(),
     };
     for scope in [

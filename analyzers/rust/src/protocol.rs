@@ -21,7 +21,11 @@ pub struct Request {
 #[serde(deny_unknown_fields)]
 pub struct Input {
     pub repository_root: PathBuf,
-    pub files: Vec<String>,
+    #[serde(
+        default,
+        deserialize_with = "codegraph_engine_common::selection::deserialize_files"
+    )]
+    pub files: Option<Vec<String>>,
     pub include_tests: bool,
     pub profile: String,
 }
@@ -85,6 +89,13 @@ impl Request {
                 && self.limits.max_diagnostic_bytes > 0,
             "无效协议限额"
         );
+        ensure!(
+            self.input
+                .files
+                .as_ref()
+                .is_none_or(|files| files.len() <= codegraph_engine_common::selection::MAX_FILES),
+            "文件选集超过数量上限"
+        );
         for platform in &self.environment.platforms {
             ensure!(
                 !platform.id.is_empty()
@@ -103,18 +114,24 @@ impl Request {
             );
         }
         let mut files = BTreeSet::new();
-        for path in &self.input.files {
-            ensure!(
-                !path.contains(['\\', ':', '\0'])
-                    && !path
-                        .split('/')
-                        .any(|part| part.is_empty() || part == "." || part == "..")
-                    && files.insert(path),
-                "选集含无效或重复相对路径"
-            );
+        for path in self.input.files.iter().flatten() {
+            relative_path(path)?;
+            ensure!(files.insert(path), "选集含重复相对路径");
         }
         Ok(())
     }
+}
+
+/// 显式与发现文件都遵循跨平台相对路径语法，不能让本机路径规则接受歧义。
+pub(crate) fn relative_path(path: &str) -> Result<()> {
+    ensure!(
+        !path.contains(['\\', ':', '\0'])
+            && !path
+                .split('/')
+                .any(|part| part.is_empty() || part == "." || part == ".."),
+        "选集含无效相对路径"
+    );
+    Ok(())
 }
 
 pub use codegraph_engine_common::one_shot::validate_cancel;

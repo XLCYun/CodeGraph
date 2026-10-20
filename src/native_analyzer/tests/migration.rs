@@ -27,7 +27,7 @@ fn migrating(fixture: &Fixture, profile: NativeProfile) -> NativeLanguageAnalyze
 fn rust_profiles_preserve_wire_contract_and_require_only_needed_declarations() {
     let fixture = Fixture::new();
     let mut input = fixture.input();
-    input.files.clear();
+    input.files.as_mut().unwrap().clear();
     input.options.include_tests = false;
     for profile in [
         NativeProfile::RustRepository,
@@ -88,11 +88,11 @@ fn python_lexical_aliases_keep_identity_without_weakening_escape_checks() {
         .unwrap()
         .success());
     let mut input = fixture.input();
-    input.files = vec!["alias/__init__.py".into(), "impl/__init__.py".into()];
+    input.files = Some(vec!["alias/__init__.py".into(), "impl/__init__.py".into()]);
     let analyzer = migrating(&fixture, NativeProfile::Python);
     let checked = input::validate(&analyzer, &input).unwrap();
     assert_eq!(
-        checked.files,
+        checked.files.unwrap(),
         [
             "alias/__init__.py".to_owned(),
             "impl/__init__.py".to_owned()
@@ -100,7 +100,11 @@ fn python_lexical_aliases_keep_identity_without_weakening_escape_checks() {
         .into()
     );
     assert!(input::validate(&fixture.analyzer(), &input).is_err());
-    input.files.push("alias/__init__.py".into());
+    input
+        .files
+        .as_mut()
+        .unwrap()
+        .push("alias/__init__.py".into());
     assert!(input::validate(&analyzer, &input).is_err());
     #[cfg(unix)]
     std::os::unix::fs::symlink(&fixture.tools, fixture.repository.join("outside")).unwrap();
@@ -112,7 +116,7 @@ fn python_lexical_aliases_keep_identity_without_weakening_escape_checks() {
         .status()
         .unwrap()
         .success());
-    input.files = vec!["outside/executable".into()];
+    input.files = Some(vec!["outside/executable".into()]);
     assert!(input::validate(&analyzer, &input).is_err());
 }
 
@@ -135,8 +139,8 @@ fn embedded_python_stdlib_is_strict_and_tied_to_the_helper() {
 fn typescript_requires_approved_standard_declaration_packages() {
     let fixture = Fixture::new();
     let mut input = fixture.input();
-    input.files = vec!["main.ts".into(), "main.js".into()];
-    for file in &input.files {
+    input.files = Some(vec!["main.ts".into(), "main.js".into()]);
+    for file in input.files.as_ref().unwrap() {
         fs::write(fixture.repository.join(file), "").unwrap();
     }
     let mut analyzer = migrating(&fixture, NativeProfile::TypeScriptJavascript);
@@ -342,7 +346,7 @@ fn rust_profiles_admit_physical_aliases_without_loosening_other_languages() {
         .unwrap()
         .success());
     let mut input = fixture.input();
-    input.files = vec!["src/lib.rs".into(), "alias/lib.rs".into()];
+    input.files = Some(vec!["src/lib.rs".into(), "alias/lib.rs".into()]);
     for profile in [
         NativeProfile::RustRepository,
         NativeProfile::RustStandardLibrary,
@@ -366,9 +370,16 @@ fn rust_profiles_admit_physical_aliases_without_loosening_other_languages() {
                 metadata: json!({"rust_src":"lib/rustlib/src/rust/library"}),
             });
         }
-        assert_eq!(input::validate(&analyzer, &input).unwrap().files.len(), 2);
+        assert_eq!(
+            input::validate(&analyzer, &input)
+                .unwrap()
+                .files
+                .unwrap()
+                .len(),
+            2
+        );
         let mut duplicate = input.clone();
-        duplicate.files.push("src/lib.rs".into());
+        duplicate.files.as_mut().unwrap().push("src/lib.rs".into());
         assert!(input::validate(&analyzer, &duplicate).is_err());
     }
     assert!(input::validate(&fixture.analyzer(), &input).is_err());

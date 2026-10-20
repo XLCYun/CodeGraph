@@ -11,7 +11,7 @@ use std::{
 /// 规范化后只在本次请求内使用的输入，不进入节点身份。
 pub(super) struct CheckedInput {
     pub repository: PathBuf,
-    pub files: BTreeSet<String>,
+    pub files: Option<BTreeSet<String>>,
     pub include_tests: bool,
     pub platforms: Vec<Platform>,
     pub executable: PathBuf,
@@ -20,7 +20,7 @@ pub(super) struct CheckedInput {
 impl CheckedInput {
     /// 序列化完整请求，绝对路径不能损坏无法通过 UTF-8 往返的文件名。
     pub fn request(&self, analyzer: &NativeLanguageAnalyzer, scratch: &Path) -> Result<Value> {
-        Ok(json!({
+        let mut request = json!({
             "protocol": protocol::PROTOCOL, "type": "analyze", "id": protocol::REQUEST_ID,
             "input": { "repository_root": utf8(&self.repository)?, "files": self.files,
                 "include_tests": self.include_tests, "profile": analyzer.identity.profile },
@@ -28,7 +28,11 @@ impl CheckedInput {
             "limits": { "analysis_timeout_ms": analyzer.limits.analysis_timeout.as_millis() as u64,
                 "max_result_bytes": analyzer.limits.max_result_bytes,
                 "max_diagnostic_bytes": analyzer.limits.max_diagnostic_bytes }
-        }))
+        });
+        if self.files.is_none() {
+            request["input"].as_object_mut().unwrap().remove("files");
+        }
+        Ok(request)
     }
 }
 
@@ -91,7 +95,14 @@ pub(super) fn validate(
     }
     let mut files = BTreeSet::new();
     let mut resolved_files = BTreeSet::new();
-    for file in &input.files {
+    if input
+        .files
+        .as_ref()
+        .is_some_and(|files| files.len() > crate::selection::MAX_FILES)
+    {
+        return Err(failure("文件选集超过数量上限"));
+    }
+    for file in input.files.iter().flatten() {
         let path = utf8(file)?;
         #[cfg(windows)]
         let normalized = path.replace('\\', "/");
@@ -101,17 +112,7 @@ pub(super) fn validate(
         // Python 保留词法身份；TS/Rust 在 helper 中按真实路径去重并聚合来源。原有四语言仍拒绝别名。
         let distinct_physical = resolved_files.insert(resolved);
         if !files.insert(normalized)
-            || (!distinct_physical
-                && !matches!(
-                    NativeProfile::parse(&analyzer.identity.profile),
-                    Some(
-                        NativeProfile::Python
-                            | NativeProfile::TypeScriptJavascript
-                            | NativeProfile::RustRepository
-                            | NativeProfile::RustStandardLibrary
-                            | NativeProfile::RustAllDependencies
-                    )
-                ))
+            || (!distinct_physical && !allows_aliases(&analyzer.identity.profile))
         {
             return Err(failure("选集包含重复路径或同一文件的别名"));
         }
@@ -185,11 +186,25 @@ pub(super) fn validate(
     validate_profile(analyzer, &platforms)?;
     Ok(CheckedInput {
         repository,
-        files,
+        files: input.files.as_ref().map(|_| files),
         include_tests: input.options.include_tests,
         platforms,
         executable,
     })
+}
+
+/// 物理别名政策同时约束显式和发现选集，防止发现模式绕过既有来源身份规则。
+pub(super) fn allows_aliases(profile: &str) -> bool {
+    matches!(
+        NativeProfile::parse(profile),
+        Some(
+            NativeProfile::Python
+                | NativeProfile::TypeScriptJavascript
+                | NativeProfile::RustRepository
+                | NativeProfile::RustStandardLibrary
+                | NativeProfile::RustAllDependencies
+        )
+    )
 }
 
 /// 工具与目标目录必须是仓库外的明确绝对目录，禁止以共同祖先扩大授权。

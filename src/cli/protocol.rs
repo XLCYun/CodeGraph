@@ -24,7 +24,12 @@ pub(crate) struct Analyze {
     pub kind: String,
     pub id: String,
     pub repository_root: PathBuf,
-    pub files: Vec<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::selection::deserialize_files",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub files: Option<Vec<String>>,
     pub options: Options,
 }
 
@@ -89,7 +94,7 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<Message, Failure> {
                 return Err(invalid());
             }
             let mut seen = std::collections::BTreeSet::new();
-            for file in &request.files {
+            for file in request.files.iter().flatten() {
                 if file.contains(['\0', '\\', ':'])
                     || file
                         .split('/')

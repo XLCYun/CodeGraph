@@ -37,7 +37,10 @@ pub(super) fn analyze<A: Adapter>(
     }
     let input = AnalysisInput {
         repository_root: repository,
-        files: request.files.iter().map(Into::into).collect(),
+        files: request
+            .files
+            .as_ref()
+            .map(|files| files.iter().map(Into::into).collect()),
         options: AnalysisOptions {
             include_tests: request.options.include_tests,
         },
@@ -46,7 +49,7 @@ pub(super) fn analyze<A: Adapter>(
         return Ok(
             serde_json::json!({"protocol":PROTOCOL,"type":"completed","id":request.id,"outcome":"cancelled"}),
         );
-    } else if input.files.is_empty() {
+    } else if input.files.as_ref().is_some_and(Vec::is_empty) {
         // 空语言组选集无需发现 SDK 或启动 helper；不是分析失败的降级路径。
         CodeGraph::new(Default::default(), vec![])
             .map_err(|_| Failure::new("internal_failure", "空图校验失败"))?

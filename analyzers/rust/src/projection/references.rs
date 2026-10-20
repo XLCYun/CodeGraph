@@ -29,6 +29,7 @@ struct Resolver<'a> {
     definitions: BTreeMap<(String, u32), Vec<Navigation>>,
     crate_roots: BTreeMap<NodeId, CodeNode>,
     options: AnalysisOptions,
+    discovered: bool,
     test_files: BTreeMap<String, bool>,
     visiting_files: BTreeSet<String>,
 }
@@ -39,6 +40,7 @@ pub(super) fn analyze(
     repository: &Path,
     documents: &[Document],
     options: AnalysisOptions,
+    discovered: bool,
 ) -> Result<(CodeGraph, BTreeMap<String, bool>)> {
     let mut resolver = Resolver {
         project,
@@ -50,6 +52,7 @@ pub(super) fn analyze(
         definitions: BTreeMap::new(),
         crate_roots: BTreeMap::new(),
         options,
+        discovered,
         test_files: BTreeMap::new(),
         visiting_files: BTreeSet::new(),
     };
@@ -304,8 +307,13 @@ impl Resolver<'_> {
 
     /// 保留 crate 根与每个词法模块声明，不猜测文件名归属。
     fn parents(&self, key: &str) -> Result<Vec<Option<Navigation>>> {
-        self.project
-            .parent_modules(self.project.file_id(Path::new(key))?)?
+        let file = self.project.file_id(Path::new(key))?;
+        let parents = if self.discovered {
+            self.project.discovery_parent_modules(file)?
+        } else {
+            self.project.parent_modules(file)?
+        };
+        parents
             .into_iter()
             .map(|parent| match parent {
                 ModuleParent::CrateRoot => Ok(None),
@@ -348,6 +356,10 @@ impl Resolver<'_> {
         }
         for parent in parents {
             let Some(location) = parent else {
+                // 发现时按 target 角色判断 crate 根，其他生产模块归属仍能阻止整份源码被排除。
+                if self.discovered && self.project.test_target_root(Path::new(key)) {
+                    continue;
+                }
                 return Ok(false);
             };
             if !self.load(&location.key)? {

@@ -18,7 +18,7 @@ fn analyze(directory: &std::path::Path, files: &[&str]) -> CodeGraph {
     analyzer()
         .analyze(&AnalysisInput {
             repository_root: directory.into(),
-            files: files.iter().map(PathBuf::from).collect(),
+            files: Some(files.iter().map(PathBuf::from).collect()),
             options: Default::default(),
         })
         .unwrap()
@@ -901,7 +901,7 @@ fn graph_repository_relative_test_classification_ignores_checkout_ancestors() {
         let enabled = analyzer()
             .analyze(&AnalysisInput {
                 repository_root: root,
-                files: files.iter().map(PathBuf::from).collect(),
+                files: Some(files.iter().map(PathBuf::from).collect()),
                 options: crate::code_graph::AnalysisOptions {
                     include_tests: true,
                 },
@@ -964,7 +964,7 @@ fn typescript_real_helper_cancellation_reaps_before_return() {
     let error = analyzer
         .analyze(&AnalysisInput {
             repository_root: directory.path().into(),
-            files: vec!["main.ts".into()],
+            files: Some(vec!["main.ts".into()]),
             options: Default::default(),
         })
         .unwrap_err();
@@ -1047,15 +1047,17 @@ fn typescript_aliases_merge_canonical_nodes_and_keep_boundary_and_test_policy() 
     }
     let mut input = AnalysisInput {
         repository_root: directory.path().into(),
-        files: [
-            "impl/main.ts",
-            "alias/main.ts",
-            "__tests__/main.ts",
-            "alias/hidden.test.ts",
-        ]
-        .into_iter()
-        .map(PathBuf::from)
-        .collect(),
+        files: Some(
+            [
+                "impl/main.ts",
+                "alias/main.ts",
+                "__tests__/main.ts",
+                "alias/hidden.test.ts",
+            ]
+            .into_iter()
+            .map(PathBuf::from)
+            .collect(),
+        ),
         options: Default::default(),
     };
     let analyzer = analyzer();
@@ -1075,7 +1077,7 @@ fn typescript_aliases_merge_canonical_nodes_and_keep_boundary_and_test_policy() 
     let graph = analyzer.analyze(&input).unwrap();
     assert_eq!(graph.root().contains.len(), 2);
     assert_eq!(nodes(&graph).len(), 4);
-    input.files.push("impl/main.ts".into());
+    input.files.as_mut().unwrap().push("impl/main.ts".into());
     assert!(analyzer
         .analyze(&input)
         .unwrap_err()
@@ -1083,18 +1085,18 @@ fn typescript_aliases_merge_canonical_nodes_and_keep_boundary_and_test_policy() 
         .contains("重复路径"));
     let outside = fixture(&[("escape.ts", "export function escape() {}")]);
     link_directory(outside.path(), &directory.path().join("outside"));
-    input.files = vec!["outside/escape.ts".into()];
+    input.files = Some(vec!["outside/escape.ts".into()]);
     assert!(analyzer.analyze(&input).is_err());
     fs::write(directory.path().join("tsconfig.json"), "{ invalid").unwrap();
-    input.files = vec!["__tests__/main.ts".into()];
+    input.files = Some(vec!["__tests__/main.ts".into()]);
     input.options.include_tests = false;
     assert!(analyzer.analyze(&input).unwrap().root().contains.is_empty());
     input.options.include_tests = true;
     assert!(analyzer.analyze(&input).is_err());
     input.options.include_tests = false;
-    input.files.push("impl/main.ts".into());
+    input.files.as_mut().unwrap().push("impl/main.ts".into());
     assert!(analyzer.analyze(&input).is_err());
-    input.files.clear();
+    input.files.as_mut().unwrap().clear();
     assert!(analyzer.analyze(&input).unwrap().root().contains.is_empty());
 }
 

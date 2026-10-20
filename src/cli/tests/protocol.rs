@@ -13,6 +13,26 @@ fn empty_selection_and_all_rust_scopes_decode() {
     }
 }
 
+/// 省略选集请求语言配置发现，null 和错误数组类型不能混成同一模式。
+#[test]
+fn omitted_selection_decodes_but_null_and_malformed_selections_fail() {
+    let mut value = json!({"protocol":PROTOCOL,"type":"analyze","id":"one","repository_root":std::env::temp_dir(),"options":{"include_tests":false,"rust_dependency_scope":"repository-only"}});
+    assert!(matches!(
+        decode(&serde_json::to_vec(&value).unwrap()).unwrap(),
+        Message::Analyze(_)
+    ));
+    for files in [
+        Value::Null,
+        json!("main.rs"),
+        json!({}),
+        json!([1]),
+        json!([null]),
+    ] {
+        value["files"] = files;
+        assert!(decode(&serde_json::to_vec(&value).unwrap()).is_err());
+    }
+}
+
 /// 递归拒绝额外字段和重复键，不能允许 options 隐藏环境注入。
 #[test]
 fn rejects_duplicate_unknown_and_wrongly_typed_fields() {

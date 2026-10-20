@@ -111,7 +111,7 @@ fn python_factory_keeps_embedded_stdlib_in_helper_trusted_root() {
     analyzer
         .validate_input(&crate::code_graph::AnalysisInput {
             repository_root: repository.path().into(),
-            files: vec!["main.py".into()],
+            files: Some(vec!["main.py".into()]),
             options: Default::default(),
         })
         .unwrap();

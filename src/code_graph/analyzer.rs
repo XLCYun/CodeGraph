@@ -27,8 +27,8 @@ pub struct AnalysisOptions {
 pub struct AnalysisInput {
     /// 对应确定代码状态的仓库根目录，分析期间保持内容一致。
     pub repository_root: PathBuf,
-    /// 仓库内的相对路径，仅列出当前侧存在、需要分析的文件。
-    pub files: Vec<PathBuf>,
+    /// None 在语言加载快照中发现源码；Some 只分析明确列出的相对路径，空数组为空图。
+    pub files: Option<Vec<PathBuf>>,
     /// 前后两侧必须使用相同选项，避免将分析范围变化误报为代码变化。
     pub options: AnalysisOptions,
 }

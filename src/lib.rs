@@ -8,4 +8,6 @@ mod code_graph;
 mod config_dir_fixture;
 mod native_analyzer;
 mod pack;
+#[path = "../analyzers/common/src/selection.rs"]
+mod selection;
 mod strict_json;

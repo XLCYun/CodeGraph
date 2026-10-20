@@ -12,6 +12,7 @@ use ide::{
     NavigationTarget, RaFixtureConfig,
 };
 use std::{
+    collections::{BTreeMap, BTreeSet},
     panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
 };
@@ -34,18 +35,20 @@ pub struct RustProject {
     analysis: Analysis,
     vfs: Vfs,
     cargo_parents: bool,
+    member_roots: BTreeMap<PathBuf, loading::MemberRoot>,
 }
 
 impl RustProject {
     /// 加载明确的 Cargo 清单；调用者须固定输入直到加载完成，禁止用户代码执行与隐式安装。
     pub fn load(manifest: &Path, policy: &LoadPolicy) -> Result<Self> {
-        let (database, vfs) = loading::load(manifest, policy)?;
-        let host = AnalysisHost::with_database(database);
+        let loaded = loading::load(manifest, policy)?;
+        let host = AnalysisHost::with_database(loaded.database);
         let analysis = host.analysis();
         Ok(Self {
             _host: host,
             analysis,
-            vfs,
+            vfs: loaded.vfs,
+            member_roots: loaded.member_roots,
             cargo_parents: manifest
                 .file_name()
                 .is_some_and(|name| name == "Cargo.toml"),
@@ -58,17 +61,37 @@ impl RustProject {
         policies: &[LoadPolicy],
         selected: &[PathBuf],
     ) -> Result<Self> {
-        let (database, vfs) = loading::load_projects(manifests, policies, selected)?;
-        let host = AnalysisHost::with_database(database);
+        let loaded = loading::load_projects(manifests, policies, selected)?;
+        let host = AnalysisHost::with_database(loaded.database);
         let analysis = host.analysis();
         Ok(Self {
             _host: host,
             analysis,
-            vfs,
+            vfs: loaded.vfs,
+            member_roots: loaded.member_roots,
             cargo_parents: manifests
                 .iter()
                 .any(|path| path.file_name().is_some_and(|name| name == "Cargo.toml")),
         })
+    }
+
+    /// 发现与后续投影读取同一不可变快照；失败时调用方必须丢弃整个项目。
+    pub(crate) fn discover_sources(&self, repository: &Path) -> Result<BTreeSet<PathBuf>> {
+        native_transaction("Rust 源码发现失败", || {
+            loading::discover_sources(
+                self._host.raw_database(),
+                &self.vfs,
+                &self.member_roots,
+                repository,
+            )
+        })
+    }
+
+    /// Cargo 声明的自定义测试和 benchmark 根也受测试开关控制，不依赖目录名猜测。
+    pub(crate) fn test_target_root(&self, path: &Path) -> bool {
+        self.member_roots
+            .get(path)
+            .is_some_and(|member| member.test_only)
     }
 
     /// 将已加载文件映射为数据库身份；不存在或被排除的文件必须报告错误。
@@ -195,6 +218,32 @@ impl RustProject {
         })
     }
 
+    /// 发现选集还需保留 crate 根被其他模块复用的归属；显式投影继续沿用既有父模块查询。
+    pub(crate) fn discovery_parent_modules(&self, file_id: FileId) -> Result<Vec<ModuleParent>> {
+        let mut parents = self.parent_modules(file_id)?;
+        if parents
+            .iter()
+            .any(|parent| matches!(parent, ModuleParent::CrateRoot))
+        {
+            let shared = native_transaction("Rust 共享根父模块查询失败", || {
+                self.analysis
+                    .parent_module(FilePosition {
+                        file_id,
+                        offset: 0.into(),
+                    })
+                    .context("Rust 父模块查询已取消")
+            })?;
+            // 原生 crate 导航指回本文件；其他文件的模块声明才是需要补齐的复用归属。
+            parents.extend(
+                shared
+                    .into_iter()
+                    .filter(|target| target.file_id != file_id)
+                    .map(ModuleParent::Declaration),
+            );
+        }
+        Ok(parents)
+    }
+
     /// 只供当前原生事务读取快照原文，避免位置校验另启可用性探测或嵌套异常边界。
     fn source_native(&self, file_id: FileId) -> Result<String> {
         self.ensure_file(file_id)?;
@@ -269,3 +318,7 @@ mod tests;
 #[cfg(test)]
 #[path = "tests/projection.rs"]
 mod projection_tests;
+
+#[cfg(test)]
+#[path = "tests/discovery.rs"]
+mod discovery_tests;

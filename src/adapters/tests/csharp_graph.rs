@@ -22,7 +22,7 @@ fn factory_preserves_source_and_local_calls() {
     let graph = analyzer
         .analyze(&AnalysisInput {
             repository_root: directory.path().canonicalize().unwrap(),
-            files: vec!["Sample.cs".into()],
+            files: Some(vec!["Sample.cs".into()]),
             options: Default::default(),
         })
         // 内部验收保留宿主诊断；公共 CLI 仍只输出脱敏的 analysis_failed。
