@@ -305,6 +305,83 @@ fn discovery_respects_static_project_membership_and_context() {
     support::assert_unchanged(root.path(), &before);
 }
 
+/// 静态项目的测试归属来自原生父模块，测试开关不能丢失 cfg(test) 文件角色。
+#[test]
+fn discovery_filters_static_project_test_modules_without_changing_explicit_selection() {
+    let root = tempfile::tempdir().unwrap();
+    write(
+        root.path(),
+        "lib.rs",
+        "#[cfg(test)] mod checks; mod production; pub fn run() {}",
+    );
+    write(root.path(), "checks.rs", "pub fn test_helper() {}");
+    write(
+        root.path(),
+        "production.rs",
+        "pub fn production_helper() {}",
+    );
+    write(
+        root.path(),
+        "rust-project.json",
+        &json!({"crates":[{
+            "root_module":"lib.rs","edition":"2021","is_workspace_member":true,
+            "deps":[],"cfg":["test"],"env":{}
+        }]})
+        .to_string(),
+    );
+    let before = support::snapshot(root.path());
+    for include_tests in [false, true] {
+        let result = projection::analyze(&request(root.path(), None, include_tests)).unwrap();
+        let files = coverage(&result);
+        assert_eq!(
+            files.keys().copied().collect::<Vec<_>>(),
+            ["checks.rs", "lib.rs", "production.rs"]
+        );
+        assert_eq!(files["lib.rs"], "analyzed");
+        assert_eq!(files["production.rs"], "analyzed");
+        assert_eq!(
+            files["checks.rs"],
+            if include_tests {
+                "analyzed"
+            } else {
+                "excluded_test"
+            }
+        );
+        let nodes = result["graph"]["nodes"].as_array().unwrap();
+        assert!(nodes.iter().any(|node| node["name"] == "production_helper"));
+        let helper = nodes.iter().find(|node| node["name"] == "test_helper");
+        assert_eq!(helper.is_some(), include_tests);
+        let origins = result["evidence"]["origins"].as_array().unwrap();
+        assert_eq!(
+            origins
+                .iter()
+                .any(|origin| origin["selected_paths"] == json!(["checks.rs"])),
+            include_tests,
+        );
+        if let Some(helper) = helper {
+            assert!(
+                origins
+                    .iter()
+                    .any(|origin| origin["node_id"] == helper["id"]
+                        && origin["selected_paths"] == json!(["checks.rs"]))
+            );
+        }
+    }
+    let explicit = projection::analyze(&request(root.path(), Some(&["checks.rs"]), false)).unwrap();
+    assert_eq!(
+        coverage(&explicit),
+        BTreeMap::from([("checks.rs", "analyzed")])
+    );
+    assert!(
+        explicit["graph"]["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|node| node["name"] == "test_helper")
+    );
+    support::assert_unchanged(root.path(), &before);
+}
+
 /// 缺少或损坏配置必须失败；明确空数组不读取配置，也不探测项目工具链。
 #[test]
 fn discovery_errors_do_not_become_empty_success() {

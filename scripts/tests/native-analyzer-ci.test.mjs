@@ -224,8 +224,8 @@ test('reference package verification checks SHA512 content', async () => {
 /** 每个平台编译出的原有语义断言都必须逐名接入。 */
 test('semantic acceptance inventory exactly covers all retained ignored tests', async () => {
   const inventory = JSON.parse(await fs.readFile(new URL('../../resources/semantic-acceptance.json', import.meta.url)));
-  assert.equal(inventory.filter(item => item.platforms.includes('darwin')).length, 70);
-  assert.equal(inventory.filter(item => item.platforms.includes('win32')).length, 64);
+  assert.equal(inventory.filter(item => item.platforms.includes('darwin')).length, 71);
+  assert.equal(inventory.filter(item => item.platforms.includes('win32')).length, 65);
   const environment = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`CODEGRAPH_${name}`, '/isolated/tools']));
   for (const platform of ['darwin', 'win32']) {
     const commands = verificationCommands(environment, platform);

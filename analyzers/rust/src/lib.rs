@@ -218,30 +218,41 @@ impl RustProject {
         })
     }
 
-    /// 发现选集还需保留 crate 根被其他模块复用的归属；显式投影继续沿用既有父模块查询。
+    /// 发现直接查询原生 crate/模块归属，静态项目和复用根都不受显式投影的 Cargo-only 政策影响。
     pub(crate) fn discovery_parent_modules(&self, file_id: FileId) -> Result<Vec<ModuleParent>> {
-        let mut parents = self.parent_modules(file_id)?;
-        if parents
-            .iter()
-            .any(|parent| matches!(parent, ModuleParent::CrateRoot))
-        {
-            let shared = native_transaction("Rust 共享根父模块查询失败", || {
+        native_transaction("Rust 发现父模块查询失败", || {
+            self.ensure_file(file_id)?;
+            let mut parents = Vec::new();
+            for krate in self
+                .analysis
+                .crates_for(file_id)
+                .context("Rust crate 查询已取消")?
+            {
+                if self
+                    .analysis
+                    .crate_root(krate)
+                    .context("Rust crate 根查询已取消")?
+                    == file_id
+                {
+                    parents.push(ModuleParent::CrateRoot);
+                    break;
+                }
+            }
+            let is_root = !parents.is_empty();
+            // 原生 crate 导航指回本文件；其他文件的模块声明才是需要补齐的复用归属。
+            parents.extend(
                 self.analysis
                     .parent_module(FilePosition {
                         file_id,
                         offset: 0.into(),
                     })
-                    .context("Rust 父模块查询已取消")
-            })?;
-            // 原生 crate 导航指回本文件；其他文件的模块声明才是需要补齐的复用归属。
-            parents.extend(
-                shared
+                    .context("Rust 父模块查询已取消")?
                     .into_iter()
-                    .filter(|target| target.file_id != file_id)
+                    .filter(|target| !is_root || target.file_id != file_id)
                     .map(ModuleParent::Declaration),
             );
-        }
-        Ok(parents)
+            Ok(parents)
+        })
     }
 
     /// 只供当前原生事务读取快照原文，避免位置校验另启可用性探测或嵌套异常边界。

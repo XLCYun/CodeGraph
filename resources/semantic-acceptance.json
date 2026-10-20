@@ -286,6 +286,15 @@
   {
     "language": "rust",
     "source": "src/native_analyzer/tests/rust_graph.rs",
+    "name": "native_analyzer::tests::rust_graph::rust_helper_discovers_modules_without_promoting_context_files",
+    "platforms": [
+      "darwin",
+      "win32"
+    ]
+  },
+  {
+    "language": "rust",
+    "source": "src/native_analyzer/tests/rust_graph.rs",
     "name": "native_analyzer::tests::rust_graph::rust_helper_excludes_test_attributes_with_glob_imports",
     "platforms": [
       "darwin",
