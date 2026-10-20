@@ -203,6 +203,76 @@ fn explicit_source_policy_can_admit_context_and_nested_projects_keep_ownership()
     );
 }
 
+/// 兄弟 own-root 不能绕过已接纳目的地的源策略、配置身份或 Python 版本。
+#[test]
+fn admitted_sibling_policy_owns_overlapping_roots_and_versions() {
+    for source_policy in ["include=[]", "exclude=['main.py']"] {
+        let configuration = format!("[src]\n{source_policy}\n");
+        let (_root, _scratch, mut request) = fixture(&[
+            ("ty.toml", "[environment]\nroot=['root_src']\n"),
+            ("root_src/main.py", "def root_member(): pass\n"),
+            ("alpha/ty.toml", "[environment]\nroot=['../shared']\n"),
+            ("shared/ty.toml", &configuration),
+            ("shared/main.py", "def should_stay_excluded(): pass\n"),
+        ]);
+        let result = analyze(&serde_json::from_value(request.clone()).unwrap()).unwrap();
+        assert_eq!(result["evidence"]["files"].as_array().unwrap().len(), 1);
+        assert_eq!(result["evidence"]["files"][0]["path"], "root_src/main.py");
+        request["input"]["files"] = json!(["shared/main.py"]);
+        let exact = analyze(&serde_json::from_value(request).unwrap()).unwrap();
+        assert_eq!(
+            exact["evidence"]["configurations"][0]["source_paths"],
+            json!(["shared/ty.toml"])
+        );
+    }
+    let (root, _scratch, request) = fixture(&[
+        ("ty.toml", "[environment]\nroot=['root_src']\n"),
+        ("root_src/main.py", "def root_member(): pass\n"),
+        (
+            "alpha/ty.toml",
+            "[environment]\nroot=['../shared']\npython-version='3.8'\n",
+        ),
+        ("shared/ty.toml", "[environment]\npython-version='3.12'\n"),
+        ("shared/main.py", "type OwnedAlias = int\n"),
+    ]);
+    let repository = root.path().canonicalize().unwrap();
+    let discovered =
+        discovery::load(&repository, Instant::now() + Duration::from_secs(30)).unwrap();
+    assert_eq!(
+        discovered.owners["shared/main.py"],
+        repository.join("shared")
+    );
+    assert_eq!(
+        discovered.policies[&discovered.owners["shared/main.py"]].minor,
+        12
+    );
+    let result = analyze(&serde_json::from_value(request.clone()).unwrap()).unwrap();
+    let file = result["evidence"]["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|file| file["path"] == "shared/main.py")
+        .unwrap();
+    let owner = result["evidence"]["configurations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|config| config["id"] == file["configuration_ids"][0])
+        .unwrap();
+    assert_eq!(owner["source_paths"], json!(["shared/ty.toml"]));
+    fs::write(
+        root.path().join("alpha/ty.toml"),
+        "[environment]\nroot=['../shared']\npython-version='3.12'\n",
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("shared/ty.toml"),
+        "[environment]\npython-version='3.8'\n",
+    )
+    .unwrap();
+    assert!(analyze(&serde_json::from_value(request).unwrap()).is_err());
+}
+
 /// 嵌套入口使用原生排除规则；include 不阻止独立项目，控制文件名排除也可阻止入口。
 #[test]
 fn nested_configuration_admission_respects_parent_excludes_and_native_negation() {

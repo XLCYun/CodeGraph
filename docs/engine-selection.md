@@ -200,6 +200,14 @@ an inferred discovery fallback around that config's exclusions. Explicit file
 selection retains its existing fallback, including selection of an excluded
 file. Declaration libraries and imported unselected files remain context.
 
+When `resolveJsonModule` is enabled, JSON files explicitly selected by native
+configured roots also receive selection and configuration evidence. Their
+projection is a source file container; JSON data is not an executable region.
+Imported-only JSON and arbitrary metadata do not become selected sources.
+If a selected JSON file is also a control file, its source AST uses the original
+snapshot bytes while configuration parsing retains its separate overlay.
+Explicit file requests keep the existing TS/JS-only source authorization.
+
 Malformed configurations, invalid native options, missing declared files or
 references, and missing `extends` fail discovery. In particular, missing base
 configuration cannot supply trustworthy membership. Explicit selection keeps
@@ -217,6 +225,12 @@ to `[tool.ty]` in `pyproject.toml`. `[project].requires-python`, the supported
 `environment.python-version`, and per-file PEP 723 policies are preserved.
 Missing configuration retains the supported implicit project. Recognized
 nested projects own their nearest source scope once admitted.
+That ownership applies across all admitted destination scopes, including a
+sibling reached through another project's `environment.root`. The destination's
+own selection and Python version policy win; another project cannot bypass its
+empty include or exclusion. The requested repository root is the fallback scope,
+so its mere containment does not veto a supported sibling own-root nomination
+when no independent admitted destination project exists.
 
 Nested project admission uses the containing project's native exclude/default
 exclude rules. It checks the actual controlling `ty.toml` or `pyproject.toml`

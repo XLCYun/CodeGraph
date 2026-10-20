@@ -41,6 +41,51 @@ test('discovery follows solution references and native JavaScript membership', t
   assert.equal(result.graph.root_contains.length, 2);
 });
 
+/** 原生配置可选中 JSON 模块；导入上下文和普通元数据不能随之进入选集。 */
+test('discovery admits only configured JSON roots with native source and origin evidence', t => {
+  const compilerOptions = { module: 'Preserve', moduleResolution: 'Bundler', resolveJsonModule: true, types: [] };
+  for (const selectedJson of [true, false]) {
+    const contents = {
+      'tsconfig.json': JSON.stringify({ compilerOptions, include: ['src/**/*.ts', ...(selectedJson ? ['src/data.json'] : [])] }),
+      'src/main.ts': "import value from './data.json'; import other from './imported.json'; export function read(){return value.answer + other.answer}",
+      'src/data.json': '{"answer":42}', 'src/imported.json': '{"answer":1}', 'arbitrary.json': '{"metadata":true}',
+    };
+    const root = fixture(t, contents);
+    const result = analyze(ts, request(root, undefined));
+    const selected = selectedJson ? ['src/data.json', 'src/main.ts'] : ['src/main.ts'];
+    assert.deepEqual(result.evidence.files.map(file => file.path), selected);
+    assert.ok(result.evidence.files.every(file => file.configuration_ids.length === 1 && file.configuration_ids[0] === path.join(root, 'tsconfig.json')));
+    const jsonFile = result.graph.nodes.find(node => node.name === 'src/data.json');
+    assert.equal(Boolean(jsonFile), selectedJson);
+    if (jsonFile) {
+      assert.equal(jsonFile.source, contents['src/data.json']);
+      assert.equal(jsonFile.native_kind, 'file');
+      assert.deepEqual(jsonFile.contains, []);
+      assert.deepEqual(result.evidence.origins.find(origin => origin.node_id === jsonFile.id).selected_paths, ['src/data.json']);
+    }
+    assert.ok(!result.graph.nodes.some(node => ['src/imported.json', 'arbitrary.json', 'tsconfig.json'].includes(node.name)));
+    assert.deepEqual(analyze(ts, request(root, ['src/main.ts'])).evidence.files.map(file => file.path), ['src/main.ts']);
+    assert.throws(() => analyze(ts, request(root, ['src/data.json'])), /选集不是受控源码/);
+    for (const [name, source] of Object.entries(contents)) assert.equal(fs.readFileSync(path.join(root, name), 'utf8'), source);
+  }
+});
+
+/** 配置文件被原生根明确选中时，JSON AST 仍用原文，不能投影解析专用 overlay。 */
+test('configured JSON roots retain original control-file bytes and reject invalid JSON', t => {
+  const config = '{"compilerOptions":{"module":"Preserve","moduleResolution":"Bundler","resolveJsonModule":true,"types":[]},"files":["tsconfig.json","src/main.ts"]}';
+  const root = fixture(t, { 'tsconfig.json': config, 'src/main.ts': 'export function source(){}' });
+  const result = analyze(ts, request(root, undefined));
+  assert.deepEqual(result.evidence.files.map(file => file.path), ['src/main.ts', 'tsconfig.json']);
+  assert.equal(result.graph.nodes.find(node => node.name === 'tsconfig.json').source, config);
+  // 同一路径在另一项目得到授权，不能替本项目补上缺失的 JSON 编译选项。
+  fs.writeFileSync(path.join(root, 'tsconfig.other.json'), '{"files":["tsconfig.json"]}');
+  assert.throws(() => analyze(ts, request(root, undefined)), /需要 resolveJsonModule/);
+  fs.unlinkSync(path.join(root, 'tsconfig.other.json'));
+  fs.writeFileSync(path.join(root, 'tsconfig.json'), '{"compilerOptions":{"resolveJsonModule":true},"files":["src/bad.json"]}');
+  fs.writeFileSync(path.join(root, 'src/bad.json'), '{"answer":}');
+  assert.throws(() => analyze(ts, request(root, undefined)), /无法解析/);
+});
+
 /** 合法默认项目和空配置都保留配置证据；无效配置不能伪装为空选集。 */
 test('discovery supports defaults and configured empty while rejecting bad configuration', t => {
   for (const contents of [{}, {'tsconfig.json':'{"files":[]}'}, {'jsconfig.json':'{"include":["missing"]}'}]) {

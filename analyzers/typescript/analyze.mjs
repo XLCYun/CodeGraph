@@ -48,7 +48,7 @@ export function analyze(ts, request) {
   }
   for (const file of selected) {
     checkpoint();
-    if (!context.sources.has(canonicalPath(file))) throw new Error(`选集不是受控源码：${file}`);
+    if (!context.sources.has(canonicalPath(file)) && !prepared.configuredJsonFiles.has(file)) throw new Error(`选集不是受控源码：${file}`);
     if (!candidates.get(file)?.length) {
       const converted = ts.convertCompilerOptionsFromJson(inferredOptions(context, file), context.root);
       if (converted.errors.length) throw new Error("默认项目配置转换失败");
@@ -67,7 +67,12 @@ export function analyze(ts, request) {
       ...host, getCompilationSettings: () => options,
       getScriptFileNames: () => config.roots,
       getScriptVersion: () => '0', getProjectVersion: () => '0',
-      getScriptSnapshot: file => { const text = host.readFile(file); return text === undefined ? undefined : ts.ScriptSnapshot.fromString(text); },
+      getScriptSnapshot: file => {
+        // 配置文件也可被原生 JSON 根选中；源码 AST 必须读取原文，配置解析仍使用 host overlay。
+        const actual = host.realpath(file);
+        const text = prepared.configuredJsonFiles.has(actual) ? context.read(actual).toString('utf8') : host.readFile(file);
+        return text === undefined ? undefined : ts.ScriptSnapshot.fromString(text);
+      },
       getDefaultLibFileName: opts => path.join(libraryRoot, ts.getDefaultLibFileName(opts)),
       getProjectReferences: () => config.references,
       useSourceOfProjectReferenceRedirect: () => true,

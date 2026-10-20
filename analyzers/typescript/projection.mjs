@@ -96,7 +96,8 @@ export function project(ts, sf, root, runtime = false) {
     const entersFunction = ts.isFunctionLike(node) && !ts.isMethodSignature(node) && !ts.isCallSignatureDeclaration(node) && !ts.isConstructSignatureDeclaration(node);
     ts.forEachChild(node, child => visit(child, owner, inFunction || entersFunction, bindings, ambient, shape || entersFunction ? null : top));
   }
-  visit(sf);
+  // JSON 模块只保留源码文件容器；数据表达式不是顶层可执行语句或声明。
+  if (sf.scriptKind !== ts.ScriptKind.JSON) visit(sf);
   for (const [owner, statements] of executions) {
     const first = [...statements][0];
     const item = add(first, owner, 'execution_region', 'top_level', '顶层执行', first, [], false, null);
@@ -139,7 +140,7 @@ export function project(ts, sf, root, runtime = false) {
     }).join('\n');
     item.node.code = item.parts.filter(p => p.body).map(p => normalize(ts, sf, p.body)).join('\n') || null;
   }
-  if (declarations.length) declarations.push({ parts: [], parent: null, node: { category: 'container', id: scope, language, native_kind: 'file', name: relative.split(path.sep).join('/'), signature: null, code: null, source: sf.text, contains: declarations.filter(d => !d.parent).map(d => d.node.id), references: [], extensions: {} } });
+  if (declarations.length || sf.scriptKind === ts.ScriptKind.JSON) declarations.push({ parts: [], parent: null, node: { category: 'container', id: scope, language, native_kind: 'file', name: relative.split(path.sep).join('/'), signature: null, code: null, source: sf.text, contains: declarations.filter(d => !d.parent).map(d => d.node.id), references: [], extensions: {} } });
   return { sf, declarations, byAst, runtime };
 }
 

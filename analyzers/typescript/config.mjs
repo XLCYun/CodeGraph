@@ -105,6 +105,7 @@ export function prepareConfigurations(context, ts, sources, discovery = false) {
   for (const original of configs) processConfig(original);
   const projects = [];
   const candidates = new Map(sources.map(source => [source, []]));
+  const configuredJsonFiles = new Set();
   for (const original of configs) {
     context.checkpoint();
     if (discovery && bases.has(original) && !referenced.has(original) && !/^(?:tsconfig|jsconfig)\.json$/.test(path.basename(original))) continue;
@@ -144,11 +145,17 @@ export function prepareConfigurations(context, ts, sources, discovery = false) {
       context.checkpoint();
       validateEffectivePath(file, configDirectory, '配置成员');
       const identity = fs.existsSync(file) ? canonicalPath(file) : path.resolve(file);
+      // JSON 仅在发现模式下由原生配置根授权；metadata 和导入可达性本身不提供选集资格。
+      if (discovery && /\.json$/i.test(identity) && context.metadata.has(identity)) {
+        if (!parsed.options.resolveJsonModule) throw new Error(`JSON 配置成员需要 resolveJsonModule：${file}`);
+        configuredJsonFiles.add(identity);
+        if (!candidates.has(identity)) candidates.set(identity, []);
+      }
       candidates.get(identity)?.push(config);
     }
     projects.push({ name: config, roots: parsed.fileNames, options: parsed.options, references: parsed.projectReferences });
   }
-  return { host, projects, candidates, configFiles: [...done].map(original => checkedWorkspacePath(context.root, original)) };
+  return { host, projects, candidates, configuredJsonFiles, configFiles: [...done].map(original => checkedWorkspacePath(context.root, original)) };
 }
 
 /** 自动选集只来自原生项目成员；默认项目不能把已有配置排除的文件重新纳入。 */
@@ -159,7 +166,7 @@ export function discoverFiles(context, ts, prepared) {
   function add(file) {
     context.checkpoint();
     file = canonicalPath(checkedWorkspacePath(context.root, file));
-    if (!fs.statSync(file).isFile() || !context.sources.has(file)) throw new Error(`配置成员不是受控源码：${file}`);
+    if (!fs.statSync(file).isFile() || !context.sources.has(file) && !prepared.configuredJsonFiles.has(file)) throw new Error(`配置成员不是受控源码：${file}`);
     selected.add(file);
     if (selected.size > 100000) throw new Error('文件选集超过数量上限');
   }

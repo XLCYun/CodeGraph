@@ -181,10 +181,12 @@ pub(super) fn load(repository: &Path, deadline: Instant) -> Result<Discovery> {
         for relative in native.discover(&roots[root], deadline)? {
             loading::checkpoint(Some(deadline))?;
             let path = repository.join(&relative);
-            // 已识别子项目按自己的根和 src 政策处理，父项目不能第二次投影它。
+            // 目的地的独立项目优先于任何外来 own-root 提名；仓库根只提供兜底归属。
             if scopes
                 .keys()
-                .any(|child| child != root && child.starts_with(root) && path.starts_with(child))
+                .filter(|owner| owner.as_path() != repository && path.starts_with(owner))
+                .max_by_key(|owner| owner.components().count())
+                .is_some_and(|owner| owner != root)
             {
                 continue;
             }
