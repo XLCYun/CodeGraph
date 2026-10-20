@@ -11,36 +11,32 @@ Repository: `XLCYun/CodeGraph`. Engine, package and Node build-project versions 
 all `0.1.0`; tag is `v0.1.0`; protocol is `codegraph.analyzer/1`.
 Supported targets are `aarch64-apple-darwin` and `x86_64-pc-windows-msvc`.
 Pack IDs are `rust`, `typescript-javascript`, `python`, `java`, `go`, `csharp`, `c-cpp`.
-Private `narrant-*` helper names and their pins remain unchanged.
+Private engines use CodeGraph identities; third-party versions and pins remain unchanged.
 
-For each target the release contains one standalone CLI archive and seven pairs:
+For each target the release contains seven analyzer archive/manifest pairs:
 
 ```text
-codegraph-<target>.tar.gz
 <id>-<target>-pack.tar.gz
 <id>-<target>-manifest.json
 SHA256SUMS
 ```
 
-One release therefore has 31 assets: 2 CLI archives, 14 language archives, 14
-language manifests and one checksum file covering the other 30 assets. Exact URL
+One release therefore has 29 assets: 14 analyzer archives, 14
+language manifests and one checksum file covering the other 28 assets. Exact URL
 rules for downstream configuration (templates, currently unavailable):
 
 ```text
 https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/<id>-<target>-pack.tar.gz
 https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/<id>-<target>-manifest.json
-https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/codegraph-<target>.tar.gz
 https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/SHA256SUMS
 ```
 
-Every language archive includes the exact same `bin/codegraph` (Windows
-`bin/codegraph.exe`) as that target's standalone archive, the public
-`control/codegraph.json`, private helper/runtime files and dependency license texts.
-Standalone CLI archives contain the CLI, `control/engine.json` and its licenses;
-they require a separately verified language pack root for non-empty analysis.
-The standalone control file records `version`, `engineVersion`, `protocol`,
-`sourceCommit`, `sourceDirty`. These are distribution metadata; the analysis request
-and ready/completed schemas are unchanged.
+Every language archive includes its separately built `bin/codegraph-<id>[.exe]`,
+the five-field public `control/codegraph.json`, private engine/runtime files and
+dependency license texts. There is no standalone umbrella CLI archive. Each binary
+binds its language adapter at compile time and derives the package root from its
+actual executable location. Shared lifecycle, protocol and graph logic live in the
+unpublished `codegraph-runtime` library.
 
 Language manifests retain `schemaVersion: 1`, `id`, `version`, `target`,
 `archiveSize`, `archiveSha256` and `files` (`path`, `size`, `sha256`, `executable`).
@@ -69,15 +65,13 @@ complete verified directory to a trusted installation. Never merge with an old
 Narrant `1.1.0` pack or another engine version. Keep the installation alive for the
 whole CLI process and its descendants; an active pack cannot be removed mid-analysis.
 
-Invoke `<verified-root>/bin/codegraph[.exe] analyze --pack <id> --pack-root
-<absolute-verified-root>` and use [protocol.md](protocol.md). A separate CLI archive
-uses the same arguments with the language root. Verify ready `engine_version`,
-`pack_id` and `protocol`, then require a valid completed graph and successful exit.
+Invoke `<verified-root>/bin/codegraph-<id>[.exe] analyze` and use
+[protocol.md](protocol.md). Verify ready `engine_version`, `pack_id` and `protocol`,
+then require a valid completed graph and successful exit.
 Do not inspect or invoke private helper argv/environment/SDK configuration.
 
 Local builds are under `<output>/<id>/0.1.0/<target>/{manifest.json,pack.tar.gz}`;
-CLI build artifacts use ID `codegraph` in the same layout. Build-time helper
-acceptance extracts language packs to
+Build-time engine acceptance extracts language packs to
 `<output>/smoke-installed/<id>/0.1.0/<target>`. This is a public pack root because it
 contains the descriptor and packaged CLI. A consumer fixture can record only:
 
@@ -86,7 +80,7 @@ contains the descriptor and packaged CLI. A consumer fixture can record only:
 ```
 
 The absolute `root` is local fixture configuration, not a release-manifest field.
-`native-helpers-config.json` is CodeGraph's private semantic-test fixture and is
+`analyzers-config.json` is CodeGraph's private semantic-test fixture and is
 not uploaded or consumed by Narrant. Builds before a commit carry
 `sourceDirty: true`; they are useful development fixtures and cannot satisfy the
 release evidence gate. Rebuild after the final clean commit for production evidence.
@@ -95,8 +89,8 @@ release evidence gate. Rebuild after the final clean commit for production evide
 
 Use Node 24.18.0 and pnpm 11.13.1 (`pnpm install --frozen-lockfile`). The only Node
 build dependency is pinned `tar@7.5.22`. All Cargo commands use
-`scripts/cargo-agent.sh`; root is binary-only, so use `--bin codegraph`, not `--lib`.
-Helper manifests retain separate targets, `+1.98.0`, upstream revisions and locks.
+`scripts/cargo-agent.sh`; use `--lib` for the private runtime and `--bin codegraph-<id>` for a fixed entry.
+Language engine manifests retain separate targets, `+1.98.0`, upstream revisions and locks.
 Keep incremental and each worktree's own targets. The wrapper uses `lockf` or
 `flock` when available; if neither exists, it prints a warning and runs without a
 repository lock. When `sccache` is absent and no custom `RUSTC_WRAPPER` is set, it
@@ -132,7 +126,7 @@ packs; C/C++ uses approved macOS SDK or Windows SDK/MSVC headers. TS/JS and Pyth
 carry their required runtime/declarations. SDK discovery does not install tools.
 
 Consumers can expose already-installed target SDKs through these standard entry
-points before starting the public CLI; no private `NARRANT_*` variables or helper
+points before starting the public CLI; no private `CODEGRAPH_*` variables or helper
 configuration file is needed:
 
 - Java reads `JAVA_HOME`, `JDK_HOME`, every `java` executable on `PATH`, and
@@ -157,7 +151,7 @@ one installation. Equal versions retain the first discovered candidate. Analysis
 reads installed declarations and project metadata without installing SDKs or
 running project builds.
 
-Full Rust acceptance additionally requires `NARRANT_PROJECT_RUST_TOOLCHAIN=stable`,
+Full Rust acceptance additionally requires `CODEGRAPH_PROJECT_RUST_TOOLCHAIN=stable`,
 an isolated absolute `CARGO_HOME`, stable `rust-src` and historical 1.81.0, 1.94.0,
 1.96.0 toolchains; run `prepare-rust-native-tests.mjs --prepare` to prepare only
 locked test metadata and verify its offline availability. These fixture versions

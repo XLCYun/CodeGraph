@@ -25,7 +25,7 @@ jobs:
       run:
         shell: bash
     env:
-      NARRANT_PROJECT_RUST_TOOLCHAIN: stable
+      CODEGRAPH_PROJECT_RUST_TOOLCHAIN: stable
       CARGO_INCREMENTAL: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -46,9 +46,9 @@ jobs:
         with:
           workspaces: |
             . -> target
-            native-helpers/rust -> target
-            native-helpers/python -> target
-            native-helpers/windows-process-probe -> target
+            analyzers/rust -> target
+            analyzers/python -> target
+            analyzers/windows-process-probe -> target
       - name: Probe Windows process cleanup before toolchain provisioning
         if: runner.os == 'Windows'
         shell: pwsh
@@ -63,7 +63,7 @@ jobs:
           pnpm test
           pnpm check:scripts
           bash scripts/cargo-agent.sh fmt --all --check
-          bash scripts/cargo-agent.sh check --locked --bin codegraph
+          bash scripts/cargo-agent.sh check --locked --lib --bins
       - name: Enable Windows Git checkout long paths
         if: runner.os == 'Windows'
         run: git config --global core.longpaths true
@@ -72,7 +72,7 @@ jobs:
         run: |
           sudo xcode-select --switch /Applications/Xcode_16.4.app
           test "$(xcrun --sdk macosx --show-sdk-version)" = 15.5
-          echo "NARRANT_MACOS_SDK=$(xcrun --sdk macosx --show-sdk-path)" >> "$GITHUB_ENV"
+          echo "CODEGRAPH_MACOS_SDK=$(xcrun --sdk macosx --show-sdk-path)" >> "$GITHUB_ENV"
       - name: Select isolated Windows SDK and MSVC declaration roots
         if: runner.os == 'Windows'
         shell: pwsh
@@ -97,18 +97,18 @@ jobs:
           }
           node scripts/language-packs/select-msvc-redist.mjs "$vs" "$($fixed.msvc_runtime_version)"
           if ($LASTEXITCODE -ne 0) { throw 'Fixed MSVC runtime selection failed; see metadata and DLL version evidence above' }
-          "NARRANT_MSVC_ROOT=$msvc" >> $env:GITHUB_ENV
-          "NARRANT_MSVC_VERSION=$version" >> $env:GITHUB_ENV
-          "NARRANT_WINDOWS_SDK=$sdk" >> $env:GITHUB_ENV
-          "NARRANT_WINDOWS_SDK_VERSION=$($fixed.windows_sdk)" >> $env:GITHUB_ENV
-          "NARRANT_VISUAL_STUDIO=$vs" >> $env:GITHUB_ENV
+          "CODEGRAPH_MSVC_ROOT=$msvc" >> $env:GITHUB_ENV
+          "CODEGRAPH_MSVC_VERSION=$version" >> $env:GITHUB_ENV
+          "CODEGRAPH_WINDOWS_SDK=$sdk" >> $env:GITHUB_ENV
+          "CODEGRAPH_WINDOWS_SDK_VERSION=$($fixed.windows_sdk)" >> $env:GITHUB_ENV
+          "CODEGRAPH_VISUAL_STUDIO=$vs" >> $env:GITHUB_ENV
       - name: Provision checksum-verified analyzer toolchains
         run: node scripts/language-packs/provision-native-toolchains.mjs "${{ runner.temp }}/codegraph-native-toolchains" --language all
       - name: Select isolated Rust project test Cargo home
         env:
-          NARRANT_RUST_TEST_CARGO_HOME: ${{ runner.temp }}/codegraph-native-cargo
-        run: node -e "require('node:fs').appendFileSync(process.env.GITHUB_ENV, 'CARGO_HOME=' + process.env.NARRANT_RUST_TEST_CARGO_HOME + '\n')"
-      - name: Prepare pinned Rust helper build toolchain
+          CODEGRAPH_RUST_TEST_CARGO_HOME: ${{ runner.temp }}/codegraph-native-cargo
+        run: node -e "require('node:fs').appendFileSync(process.env.GITHUB_ENV, 'CARGO_HOME=' + process.env.CODEGRAPH_RUST_TEST_CARGO_HOME + '\n')"
+      - name: Prepare pinned Rust engine build toolchain
         run: rustup toolchain install 1.98.0 --profile minimal
       - name: Prepare Rust project sources and historical Cargo test inputs
         run: |

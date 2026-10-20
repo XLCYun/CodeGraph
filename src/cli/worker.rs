@@ -5,7 +5,7 @@ use super::{
     transport::{self, Event, Source, Transport, POLL},
     Arguments, CANCEL, EXIT,
 };
-use crate::child_process::CurrentProcessDomain;
+use crate::{adapters::Adapter, child_process::CurrentProcessDomain};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -15,7 +15,7 @@ use std::{
 };
 
 /// 父退出触发管道 EOF；不能把消费者请求之后的普通 EOF直接传到本层。
-pub(super) fn run(arguments: Arguments) -> std::io::Result<i32> {
+pub(super) fn run<A: Adapter>(arguments: Arguments<A>) -> std::io::Result<i32> {
     let mut domain = CurrentProcessDomain::establish()?;
     let input = std::io::stdin();
     let output = std::io::stdout();
@@ -45,7 +45,7 @@ pub(super) fn run(arguments: Arguments) -> std::io::Result<i32> {
                             .name("codegraph-engine".into())
                             .spawn(move || {
                                 let result = engine::analyze(
-                                    arguments.pack,
+                                    arguments.adapter,
                                     &arguments.root,
                                     &request,
                                     Arc::new(move || observed.load(Ordering::Acquire)),

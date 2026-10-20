@@ -1,16 +1,17 @@
 # CodeGraph analyzer protocol 1
 
-The only public analysis entry is:
+Each language package provides its own fixed public analysis entry:
 
 ```text
-codegraph analyze --pack <id> --pack-root <absolute-path>
+<package-root>/bin/codegraph-<id>[.exe] analyze
 ```
 
 IDs: `rust`, `typescript-javascript`, `python`, `java`, `go`, `csharp`, `c-cpp`.
 `--help`, `analyze --help`, and `--version` print text and exit without starting a
-protocol session. Unknown/repeated CLI options and relative pack roots exit 2.
-The caller chooses and verifies a trusted immutable package. The engine verifies
-its [descriptor and private runtime layout](pack-layout.md). A request cannot select
+protocol session. Unknown/repeated CLI options, including the old `--pack` and `--pack-root` selectors, exit 2.
+The caller chooses and verifies a trusted immutable package. The entry locates its
+package from the canonical executable location, independent of cwd or its file name,
+and verifies its compiled identity against the [descriptor and private runtime layout](pack-layout.md). A request cannot select
 commands, execution environment, compiler flags, or SDK roots.
 
 ## Transport and lifecycle
@@ -19,7 +20,7 @@ Stdin and stdout carry UTF-8 NDJSON: exactly one JSON object per newline-termina
 line. Strings escape embedded newlines. Stdout contains protocol only; stderr is
 reserved for bounded diagnostics. One process handles one analyze request. The
 protocol is `codegraph.analyzer/1`; engine and initial package versions are `0.1.0`.
-The private `narrant.native-analyzer/1` protocol is an implementation detail.
+The private `codegraph.engine/1` protocol is an implementation detail.
 
 The CLI first writes:
 
@@ -27,7 +28,8 @@ The CLI first writes:
 {"protocol":"codegraph.analyzer/1","type":"ready","engine_version":"0.1.0","pack_id":"rust"}
 ```
 
-`ready` identifies the CLI and selected pack ID, not successful pack loading.
+`ready` identifies the compiled analyzer and its fixed pack ID; package loading
+and descriptor validation complete inside the supervised worker.
 Consumers verify all three identities before trusting a result. They then send one
 request (the root below is illustrative; the executable example creates real paths):
 
@@ -156,7 +158,7 @@ owner and must forcibly reclaim it if the deadline or transport fails.
 Run the checked example with:
 
 ```sh
-python3 scripts/examples/empty-selection.py target/debug/codegraph
+python3 scripts/examples/empty-selection.py target/debug/codegraph-rust
 ```
 
 The distribution pipeline now includes real seven-pack public CLI acceptance on

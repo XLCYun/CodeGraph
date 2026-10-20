@@ -44,10 +44,10 @@ export async function smokeTypeScript(root) {
   try {
     await fs.writeFile(path.join(scratch, 'main.ts'), "import {target} from './target.js'; export function caller() { target(); Promise.resolve(1); }");
     await fs.writeFile(path.join(scratch, 'target.js'), 'export function target() { return 1; }');
-    const request = { protocol: 'narrant.native-analyzer/1', type: 'analyze', id: 'analysis-1', input: { repository_root: scratch, files: ['main.ts', 'target.js'], include_tests: false, profile: 'typescript-static-v1' }, environment: { scratch_root: scratch, platforms: config.platforms }, limits: { analysis_timeout_ms: 30000, max_result_bytes: 16777216, max_diagnostic_bytes: 262144 } };
+    const request = { protocol: 'codegraph.engine/1', type: 'analyze', id: 'analysis-1', input: { repository_root: scratch, files: ['main.ts', 'target.js'], include_tests: false, profile: 'typescript-static-v1' }, environment: { scratch_root: scratch, platforms: config.platforms }, limits: { analysis_timeout_ms: 30000, max_result_bytes: 16777216, max_diagnostic_bytes: 262144 } };
     const { messages: lines } = await exchangeTypeScript(config, request);
     const [ready, result] = lines;
-    if (ready.helper_id !== 'narrant-typescript' || result.outcome !== 'ok' || result.evidence.files.length !== 2 || result.graph.nodes.length !== result.evidence.origins.length) throw new Error(`TypeScript native graph smoke failed: ${JSON.stringify(result)}`);
+    if (ready.helper_id !== 'codegraph-typescript-engine' || result.outcome !== 'ok' || result.evidence.files.length !== 2 || result.graph.nodes.length !== result.evidence.origins.length) throw new Error(`TypeScript native graph smoke failed: ${JSON.stringify(result)}`);
     const caller = result.graph.nodes.find(n => n.name === 'caller'), target = result.graph.nodes.find(n => n.name === 'target');
     if (!caller?.references.some(r => r.semantic === 'code.calls' && r.target.id === target?.id) || !caller.references.some(r => r.target.kind === 'external') || target.language !== 'javascript') throw new Error('TypeScript native graph smoke lacks concrete cross-language/standard calls');
   } finally { await fs.rm(scratch, { recursive: true, force: true }); }

@@ -1,4 +1,4 @@
-//! 公共二进制的真实 stdio、包选择与进程生命周期验收。
+//! 固定语言入口的真实 stdio、包定位与进程生命周期验收。
 use serde_json::{json, Value};
 use std::{
     fs,
@@ -92,18 +92,32 @@ impl Fixture {
         )
         .unwrap();
         fs::write(pack.join("control/codegraph.json"),serde_json::to_vec(&json!({"schema_version":1,"pack_id":"typescript-javascript","pack_version":"0.1.0","engine_version":"0.1.0","protocol":"codegraph.analyzer/1"})).unwrap()).unwrap();
-        Self {
+        let fixture = Self {
             _directory: directory,
             pack,
             repository,
-        }
+        };
+        fixture.stage(env!("CARGO_BIN_EXE_codegraph-typescript-javascript"));
+        fixture
     }
-    /// 通过唯一公共 CLI 启动，测试不向引擎直接传 helper 命令。
+    /// 测试入口是编译产物的真实副本，部署到包内固定 bin 位置。
+    fn stage(&self, source: &str) {
+        fs::copy(source, self.entry()).unwrap();
+    }
+    /// 文件名与语言身份无关；所有场景使用相同位置来检验编译时绑定。
+    fn entry(&self) -> PathBuf {
+        self.pack.join(if cfg!(windows) {
+            "bin/codegraph-typescript-javascript.exe"
+        } else {
+            "bin/codegraph-typescript-javascript"
+        })
+    }
+    /// 从源码目录启动包内固定入口，验证定位不依赖 cwd 或消费者提供包目录。
     fn spawn(&self) -> Child {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_codegraph"));
+        let mut command = Command::new(self.entry());
         command
-            .args(["analyze", "--pack", "typescript-javascript", "--pack-root"])
-            .arg(&self.pack)
+            .arg("analyze")
+            .current_dir(&self.repository)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -522,4 +536,114 @@ fn windows_parent_kill_reaps_nested_jobs() {
             WAIT_OBJECT_0
         );
     }
+}
+
+/// 七个实际 Cargo target 都绑定独立身份；换文件名也不能改变 ready 身份。
+#[test]
+fn compiled_entries_have_fixed_identities_and_empty_graphs() {
+    for (id, binary) in [
+        ("rust", env!("CARGO_BIN_EXE_codegraph-rust")),
+        (
+            "typescript-javascript",
+            env!("CARGO_BIN_EXE_codegraph-typescript-javascript"),
+        ),
+        ("python", env!("CARGO_BIN_EXE_codegraph-python")),
+        ("java", env!("CARGO_BIN_EXE_codegraph-java")),
+        ("go", env!("CARGO_BIN_EXE_codegraph-go")),
+        ("csharp", env!("CARGO_BIN_EXE_codegraph-csharp")),
+        ("c-cpp", env!("CARGO_BIN_EXE_codegraph-c-cpp")),
+    ] {
+        let fixture = Fixture::new("ok");
+        fixture.stage(binary);
+        let version = Command::new(fixture.entry())
+            .arg("--version")
+            .output()
+            .unwrap();
+        assert!(version.status.success());
+        assert_eq!(
+            String::from_utf8(version.stdout).unwrap(),
+            format!("codegraph-{id} 0.1.0\n")
+        );
+        let help = Command::new(fixture.entry())
+            .arg("--help")
+            .output()
+            .unwrap();
+        assert!(help.status.success());
+        let help = String::from_utf8(help.stdout).unwrap();
+        assert!(help.contains(&format!("codegraph-{id} analyze")));
+        assert!(!help.contains("--pack"));
+        fs::write(fixture.pack.join("control/codegraph.json"), serde_json::to_vec(&json!({
+            "schema_version":1,"pack_id":id,"pack_version":"0.1.0","engine_version":"0.1.0","protocol":"codegraph.analyzer/1"
+        })).unwrap()).unwrap();
+        let mut request = fixture.request();
+        request["files"] = json!([]);
+        let (status, messages) = fixture.run(&line(&request));
+        assert!(status.success(), "{id}: {messages:?}");
+        assert_eq!(messages[0]["pack_id"], id);
+        assert_eq!(
+            messages[1]["graph"],
+            json!({"root_contains":[],"nodes":[],"external_symbols":[]})
+        );
+        assert!(!fixture.marker("helper-pid").exists());
+    }
+}
+
+/// 旧选择器、相对包根和未知参数在启动工作进程前被拒绝。
+#[test]
+fn public_entry_rejects_language_and_package_selectors() {
+    let fixture = Fixture::new("ok");
+    for args in [
+        vec!["analyze", "--pack", "go"],
+        vec!["analyze", "--pack-root", "."],
+        vec![
+            "analyze",
+            "--pack",
+            "typescript-javascript",
+            "--pack-root",
+            ".",
+        ],
+        vec!["analyze", "--language", "go"],
+        vec!["__worker", "--pack", "go"],
+        vec![],
+    ] {
+        let output = Command::new(fixture.entry()).args(args).output().unwrap();
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        assert!(!fixture.marker("helper-pid").exists());
+    }
+}
+
+/// 公共包描述的身份和控制文件边界都在工作进程内验证，包括显式空集。
+#[test]
+fn wrong_package_is_rejected_before_empty_selection() {
+    let fixture = Fixture::new("ok");
+    fixture.stage(env!("CARGO_BIN_EXE_codegraph-go"));
+    let mut request = fixture.request();
+    request["files"] = json!([]);
+    let (status, messages) = fixture.run(&line(&request));
+    assert!(!status.success());
+    assert_eq!(messages[0]["pack_id"], "go");
+    assert_eq!(messages[1]["error"]["code"], "invalid_pack");
+    assert!(!fixture.marker("helper-pid").exists());
+}
+
+/// 私有 worker 仍绑定同一语言；用户不能用包描述改写已编译入口。
+#[test]
+fn private_worker_keeps_compiled_identity() {
+    let fixture = Fixture::new("ok");
+    fixture.stage(env!("CARGO_BIN_EXE_codegraph-go"));
+    let mut child = Command::new(fixture.entry())
+        .arg("__worker")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut input = child.stdin.take().unwrap();
+    input.write_all(&line(&fixture.request())).unwrap();
+    wait(&mut child, Duration::from_secs(8));
+    let output = child.wait_with_output().unwrap();
+    let result: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(result["error"]["code"], "invalid_pack");
+    assert!(!fixture.marker("helper-pid").exists());
 }

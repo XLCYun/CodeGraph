@@ -82,7 +82,7 @@ test('unconfirmed cleanup is bounded and preserves scratch ownership', async () 
 
 /** Windows runner 必须用已有 7-Zip 真正解开 XZ/TAR；本机无该工具时明确报告未覆盖。 */
 test('installed 7-Zip extracts a real small tar.xz with space paths', async t => {
-  const sevenZip = process.platform === 'win32' ? path.win32.join(process.env.ProgramFiles ?? 'C:\\Program Files', '7-Zip/7z.exe') : process.env.NARRANT_TEST_SEVENZIP;
+  const sevenZip = process.platform === 'win32' ? path.win32.join(process.env.ProgramFiles ?? 'C:\\Program Files', '7-Zip/7z.exe') : process.env.CODEGRAPH_TEST_SEVENZIP;
   if (!sevenZip) return t.skip('Local 7-Zip unavailable; Windows CI must execute the real fixture');
   await fs.access(sevenZip);
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'real xz 测试-'));

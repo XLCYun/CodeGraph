@@ -26,12 +26,12 @@ export function validateToolchainManifest(manifest) {
       if (url.protocol !== 'https:' || !['go.dev', 'builds.dotnet.microsoft.com', 'github.com', 'api.nuget.org'].includes(url.hostname) || /latest/i.test(item.url)) throw new Error('Unpinned download source');
       // 这些是 CI 的标准库夹具版本，不是产品允许分析的 TFM 列表。
       const referenceVersion = { 'dotnet-ref8': '8.0.0', 'dotnet-ref9': '9.0.20' }[item.name];
-      if (referenceVersion && (item.version !== referenceVersion || item.url !== `https://api.nuget.org/v3-flatcontainer/microsoft.netcore.app.ref/${referenceVersion}/microsoft.netcore.app.ref.${referenceVersion}.nupkg` || item.algorithm !== 'sha512' || item.environment !== `NARRANT_DOTNET_REF${referenceVersion.split('.')[0]}_ROOT` || item.home !== '.')) throw new Error('Unpinned .NET reference fixture');
+      if (referenceVersion && (item.version !== referenceVersion || item.url !== `https://api.nuget.org/v3-flatcontainer/microsoft.netcore.app.ref/${referenceVersion}/microsoft.netcore.app.ref.${referenceVersion}.nupkg` || item.algorithm !== 'sha512' || item.environment !== `CODEGRAPH_DOTNET_REF${referenceVersion.split('.')[0]}_ROOT` || item.home !== '.')) throw new Error('Unpinned .NET reference fixture');
       if (url.hostname === 'api.nuget.org' && !referenceVersion) throw new Error('Unapproved NuGet toolchain');
       const size = { sha256: 64, sha512: 128 }[item.algorithm];
       if (!size || !new RegExp(`^[0-9a-f]{${size}}$`).test(item.digest)) throw new Error('Missing fixed digest');
       if (typeof item.home !== 'string' || item.home.startsWith('/') || item.home.includes('\\') || item.home.split('/').includes('..') || item.home.includes(':')) throw new Error('Tool home escapes isolated directory');
-      if (!/^NARRANT_[A-Z0-9_]+$/.test(item.environment)) throw new Error('Invalid environment variable');
+      if (!/^CODEGRAPH_[A-Z0-9_]+$/.test(item.environment)) throw new Error('Invalid environment variable');
     }
   }
   return manifest;
@@ -57,14 +57,14 @@ async function download(entry, archive) {
 
 /** 在私有测试 SDK 中构造真实安装布局，只复制标准引用，不导入 NuGet 构建逻辑。 */
 export async function prepareDotnetFixtureReferences(environment) {
-  for (const name of ['NARRANT_DOTNET_REF8_ROOT', 'NARRANT_DOTNET_REF9_ROOT']) {
+  for (const name of ['CODEGRAPH_DOTNET_REF8_ROOT', 'CODEGRAPH_DOTNET_REF9_ROOT']) {
     const source = environment[name];
     if (!source) continue;
     const identity = await fs.readFile(path.join(source, 'Microsoft.NETCore.App.Ref.nuspec'), 'utf8');
     const version = identity.match(/<version>(\d+\.\d+\.\d+)<\/version>/)?.[1];
     if (!version) throw new Error('Reference fixture has no stable version');
     const tfm = `net${version.split('.')[0]}.0`;
-    const destination = path.join(environment.NARRANT_DOTNET_SDK, 'packs/Microsoft.NETCore.App.Ref', version, 'ref', tfm);
+    const destination = path.join(environment.CODEGRAPH_DOTNET_SDK, 'packs/Microsoft.NETCore.App.Ref', version, 'ref', tfm);
     await fs.mkdir(destination, { recursive: true });
     await fs.cp(path.join(source, 'ref', tfm), destination, { recursive: true });
   }
@@ -118,10 +118,10 @@ export async function provisionToolchains(output, target = nativeTargets[`${proc
   }
   await prepareDotnetFixtureReferences(environment);
   // CMake 属于构建/测试工具，不随支持包分发；两平台共用私有安装，避免依赖 runner 镜像。
-  if (environment.NARRANT_CMAKE_ROOT) environment.NARRANT_CMAKE = path.join(environment.NARRANT_CMAKE_ROOT, `bin/cmake${process.platform === 'win32' ? '.exe' : ''}`);
+  if (environment.CODEGRAPH_CMAKE_ROOT) environment.CODEGRAPH_CMAKE = path.join(environment.CODEGRAPH_CMAKE_ROOT, `bin/cmake${process.platform === 'win32' ? '.exe' : ''}`);
   // 旧 JDK 只作为声明样本；Host 的通用 JAVA_HOME 发现路径必须在真实安装中被验证。
-  if (environment.NARRANT_JAVA_TARGET_8) environment.JAVA_HOME = environment.NARRANT_JAVA_TARGET_8;
-  if (environment.NARRANT_DOTNET_SDK) environment.DOTNET_ROOT = environment.NARRANT_DOTNET_SDK;
+  if (environment.CODEGRAPH_JAVA_TARGET_8) environment.JAVA_HOME = environment.CODEGRAPH_JAVA_TARGET_8;
+  if (environment.CODEGRAPH_DOTNET_SDK) environment.DOTNET_ROOT = environment.CODEGRAPH_DOTNET_SDK;
   environment.DOTNET_CLI_HOME = path.join(output, 'dotnet-home');
   environment.DOTNET_CLI_TELEMETRY_OPTOUT = '1';
   environment.DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1';
@@ -137,5 +137,5 @@ export async function provisionToolchains(output, target = nativeTargets[`${proc
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const language = process.argv.includes('--language') ? process.argv[process.argv.indexOf('--language') + 1] : 'all';
   if (!language) throw new Error('--language requires a completed language or all');
-  await provisionToolchains(process.argv[2] ?? path.join(os.tmpdir(), 'narrant-native-toolchains'), undefined, language);
+  await provisionToolchains(process.argv[2] ?? path.join(os.tmpdir(), 'codegraph-engine-toolchains'), undefined, language);
 }

@@ -7,10 +7,11 @@ use std::{collections::BTreeMap, fs, path::PathBuf};
 
 /// 显式开发 executable 与内嵌标准声明来源，不注册生产工厂。
 pub(super) fn analyzer() -> NativeLanguageAnalyzer {
-    let executable =
-        PathBuf::from(std::env::var_os("NARRANT_PYTHON_HELPER").expect("需指定实际 Python helper"))
-            .canonicalize()
-            .unwrap();
+    let executable = PathBuf::from(
+        std::env::var_os("CODEGRAPH_PYTHON_HELPER").expect("需指定实际 Python helper"),
+    )
+    .canonicalize()
+    .unwrap();
     let root = executable.parent().unwrap().to_owned();
     let environment = BTreeMap::new();
     #[cfg(windows)]
@@ -31,7 +32,7 @@ pub(super) fn analyzer() -> NativeLanguageAnalyzer {
             trusted_roots: vec![root.clone()],
         },
         HelperIdentity {
-            helper_id: "narrant-python".into(),
+            helper_id: "codegraph-python-engine".into(),
             helper_version: "0.1.0".into(),
             projection_revision: "python-source-v1".into(),
             languages: vec!["python".into()],
@@ -317,7 +318,7 @@ fn python_helper_timeout_and_caller_panic_reap_actual_process() {
         fs::write(repository.path().join("main.py"), source).unwrap();
         let marker = tools.path().join("pid");
         let launcher = tools.path().join("start-helper");
-        let executable = PathBuf::from(std::env::var_os("NARRANT_PYTHON_HELPER").unwrap());
+        let executable = PathBuf::from(std::env::var_os("CODEGRAPH_PYTHON_HELPER").unwrap());
         // 测试只记录即将 exec 的真实 PID，不加入假分析器或任何控制/所有权实现。
         let quote = |value: &std::path::Path| {
             format!("'{}'", value.to_str().unwrap().replace('\'', "'\\''"))

@@ -7,9 +7,9 @@ import { assetNames, packIds, releaseRepository, sha256, targets } from '../lang
 import { verificationCommands } from '../language-packs/verify-native-analyzers.mjs';
 import { verificationCommandIdentities, recordVerifiedCommands } from '../language-packs/verification-commands.mjs';
 
-/** 完整双平台三十一资产和内存 GitHub，覆盖实际发布顺序与不可变规则。 */
+/** 完整双平台二十九资产和内存 GitHub，覆盖实际发布顺序与不可变规则。 */
 function fixture() {
-  const assets = [...targets.flatMap(target => ['codegraph', ...packIds].flatMap(id => assetNames(id, target))), 'SHA256SUMS'].map(name => ({ name, bytes: Buffer.from(name), size: Buffer.byteLength(name), sha256: sha256(Buffer.from(name)) }));
+  const assets = [...targets.flatMap(target => packIds.flatMap(id => assetNames(id, target))), 'SHA256SUMS'].map(name => ({ name, bytes: Buffer.from(name), size: Buffer.byteLength(name), sha256: sha256(Buffer.from(name)) }));
   const bundle = { version: '0.1.0', tag: 'v0.1.0', sourceCommit: 'a'.repeat(40), sourceDirty: false, assets };
   let release, tag;
   const objects = new Map(), events = [];
@@ -19,12 +19,12 @@ function fixture() {
     createRelease: async body => { events.push('create'); release = { ...body, id: 1, assets: [] }; return release; },
     uploadAsset: async (_release, local) => { events.push('upload'); const asset = { id: objects.size + 1, name: local.name }; objects.set(local.name, local.bytes); release.assets.push(asset); return asset; },
     readAsset: async asset => objects.get(asset.name),
-    publishRelease: async (id, body) => { events.push('publish'); assert.equal(id, release.id); assert.equal(objects.size, 31); Object.assign(release, body); tag ??= release.target_commitish; release.draft = false; return release; },
+    publishRelease: async (id, body) => { events.push('publish'); assert.equal(id, release.id); assert.equal(objects.size, 29); Object.assign(release, body); tag ??= release.target_commitish; release.draft = false; return release; },
   };
   return { bundle, github, events, objects, release: () => release, setTag: value => { tag = value; } };
 }
 
-test('all seven packages and both CLIs are required before remote mutation', async () => {
+test('all seven analyzer packages on both platforms are required before remote mutation', async () => {
   const f = fixture();
   f.bundle.assets.splice(3, 1);
   await assert.rejects(publishBundle(f.bundle, f.github), /Incomplete/);
@@ -37,7 +37,7 @@ test('successful immutable prerelease verifies uploaded bytes and reuses exact v
   assert.equal(f.release().draft, false);
   assert.equal(f.release().prerelease, true);
   assert.equal(f.release().make_latest, 'false');
-  assert.equal(f.events.filter(event => event === 'upload').length, 31);
+  assert.equal(f.events.filter(event => event === 'upload').length, 29);
   const original = [...f.events];
   await publishBundle(f.bundle, f.github);
   assert.deepEqual(f.events, original);
@@ -167,7 +167,7 @@ test('partial or stale local evidence is rejected before preparing release asset
 test('complete receipt rejects omitted or duplicate command identities', async () => {
   const { validateVerificationEvidence } = await import('../release/release-artifacts.mjs');
   const inventory = JSON.parse(await fs.readFile(new URL('../../resources/semantic-acceptance.json', import.meta.url)));
-  const environment = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`NARRANT_${name}`, '/fixture/tools']));
+  const environment = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`CODEGRAPH_${name}`, '/fixture/tools']));
   const identity = { version: '0.1.0', engineVersion: '0.1.0', protocol: 'codegraph.analyzer/1', sourceCommit: 'a'.repeat(40) };
   for (const [platform, target] of [['darwin', targets[0]], ['win32', targets[1]]]) {
     const actual = verificationCommands(environment, platform);
@@ -187,7 +187,7 @@ test('complete receipt rejects omitted or duplicate command identities', async (
     const parameterChanges = [
       commands => { commands[0].cwd = '.'; },
       commands => { commands[0].executable = 'other-go'; },
-      commands => { commands[2].environment.NARRANT_TEST_REFS9_VERSION = '9.0.0'; },
+      commands => { commands[2].environment.CODEGRAPH_TEST_REFS9_VERSION = '9.0.0'; },
       commands => { commands.find(command => command.requiredTests).requiredTests.pop(); },
       commands => { commands.at(-1).args[2] = 'typescript-javascript'; },
     ];

@@ -7,8 +7,8 @@ const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.
 
 /** 固定迁移入口，不能用调用参数注入任意 crate、命令或输出程序名。 */
 export function migratingHelperEntry(id, windows = process.platform === 'win32') {
-  if (id === 'typescript-javascript') return { source: 'native-helpers/typescript', entry: 'runtime/helper/main.mjs', program: windows ? 'bin/node.exe' : 'bin/node' };
-  if (id === 'rust' || id === 'python') return { source: `native-helpers/${id}`, entry: `bin/narrant-${id}${windows ? '.exe' : ''}`, binary: `narrant-${id}` };
+  if (id === 'typescript-javascript') return { source: 'analyzers/typescript', entry: 'runtime/helper/main.mjs', program: windows ? 'bin/node.exe' : 'bin/node' };
+  if (id === 'rust' || id === 'python') return { source: `analyzers/${id}`, entry: `bin/codegraph-${id}-engine${windows ? '.exe' : ''}`, binary: `codegraph-${id}-engine` };
   throw new Error(`Unknown migrating native helper: ${id}`);
 }
 

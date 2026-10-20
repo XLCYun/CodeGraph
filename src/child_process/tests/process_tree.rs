@@ -29,7 +29,7 @@ fn exercise(cleanup: Cleanup, parent_exits: bool, inherited_pipes: bool) {
     let mut command = fixture_command(role, directory.path());
     if inherited_pipes {
         command
-            .env("NARRANT_PROCESS_INHERIT_PIPES", "1")
+            .env("CODEGRAPH_PROCESS_INHERIT_PIPES", "1")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
     }

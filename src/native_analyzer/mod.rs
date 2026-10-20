@@ -172,7 +172,7 @@ impl LanguageAnalyzer for NativeLanguageAnalyzer {
             return Err(failure("helper scratch 根不能位于分析仓库中"));
         }
         let scratch = tempfile::Builder::new()
-            .prefix("narrant-native-")
+            .prefix("codegraph-engine-")
             .tempdir_in(temporary_root)
             .map_err(failure)?;
         if scratch.path().starts_with(&checked.repository) {

@@ -4,7 +4,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { nativeTarget, releaseIdentity, sha256 } from './distribution.mjs';
+import { nativeTarget, releaseIdentity } from './distribution.mjs';
 import { selectedNativePacks } from './native-migration.mjs';
 import { verifyAndExtract } from './verify-distribution.mjs';
 import { verifyNativePackPolicy } from './verify-native-pack-policy.mjs';
@@ -39,8 +39,8 @@ export async function assertPublicProjectUnchanged(project) {
 }
 
 /** 完整校验公共 NDJSON、完成身份和退出；绝不把进程启动或 EOF 视为成功。 */
-export async function exchangeCli(executable, pack, root, request, identity, expectedFailure) {
-  const child = spawn(executable, ['analyze', '--pack', pack, '--pack-root', root], { env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
+export async function exchangeCli(executable, pack, request, identity, expectedFailure) {
+  const child = spawn(executable, ['analyze'], { env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
   const chunks = [];
   let length = 0, stderr = '', failure;
   const timer = setTimeout(() => { failure = new Error('Public CLI acceptance timed out'); child.kill('SIGKILL'); }, 120_000);
@@ -119,26 +119,22 @@ export async function verifyPublicCli(artifacts, language = 'all') {
   const target = nativeTarget(), identity = await releaseIdentity();
   const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'codegraph-public-cli-'));
   try {
-    const cliRoot = path.join(scratch, 'cli');
-    await verifyAndExtract(path.join(artifacts, 'codegraph', identity.version, target), cliRoot, { id: 'codegraph', target, version: identity.version });
-    const executableName = `codegraph${process.platform === 'win32' ? '.exe' : ''}`;
-    const standalone = path.join(cliRoot, 'bin', executableName);
     await runPublicPackAcceptances(selectedNativePacks(language), async id => {
       const pack = path.join(scratch, id);
       await verifyAndExtract(path.join(artifacts, id, identity.version, target), pack, { id, target, version: identity.version });
       await verifyNativePackPolicy(id, pack);
-      assert.equal(sha256(await fs.readFile(standalone)), sha256(await fs.readFile(path.join(pack, 'bin', executableName))), 'Pack CLI must equal standalone CLI');
+      const executable = path.join(pack, 'bin', `codegraph-${id}${process.platform === 'win32' ? '.exe' : ''}`);
       assert.deepEqual(JSON.parse(await fs.readFile(path.join(pack, 'control/codegraph.json'))), { schema_version: 1, pack_id: id, pack_version: identity.version, engine_version: identity.engineVersion, protocol: identity.protocol });
       const fixture = await preparePublicProject(id, path.join(scratch, `${id}-source`)), source = fixture.root;
       const scopes = id === 'rust' ? ['repository-only', 'standard-library', 'all-dependencies'] : ['repository-only'];
       for (const scope of scopes) for (const includeTests of [false, true]) {
         const request = { protocol: identity.protocol, type: 'analyze', id: `${id}-${scope}-${includeTests}`, repository_root: await fs.realpath(source), files: fixture.files, options: { include_tests: includeTests, rust_dependency_scope: scope } };
-        // 交替使用独立 CLI 与包内 CLI，两种手工消费路径都必须真正运行。
-        const graph = await exchangeCli(includeTests ? standalone : path.join(pack, 'bin', executableName), id, pack, request, identity);
+        // 消费者只启动该语言包的固定公开入口。
+        const graph = await exchangeCli(executable, id, request, identity);
         assertGraph(graph);
         if (id === 'rust') assert.equal(graph.nodes.some(node => node.name === 'test_only'), includeTests);
       }
-      const empty = await exchangeCli(standalone, id, pack, { protocol: identity.protocol, type: 'analyze', id: `${id}-empty`, repository_root: await fs.realpath(source), files: [], options: { include_tests: false, rust_dependency_scope: 'repository-only' } }, identity);
+      const empty = await exchangeCli(executable, id, { protocol: identity.protocol, type: 'analyze', id: `${id}-empty`, repository_root: await fs.realpath(source), files: [], options: { include_tests: false, rust_dependency_scope: 'repository-only' } }, identity);
       assert.deepEqual(empty, { root_contains: [], nodes: [], external_symbols: [] });
       await assertPublicProjectUnchanged(fixture);
       if (fixture.prerequisite) {
@@ -146,7 +142,7 @@ export async function verifyPublicCli(artifacts, language = 'all') {
         const metadata = path.join(source, fixture.prerequisite);
         await fs.rm(metadata);
         try {
-          await exchangeCli(standalone, id, pack, { protocol: identity.protocol, type: 'analyze', id: `${id}-missing-metadata`, repository_root: source, files: fixture.files, options: { include_tests: false, rust_dependency_scope: 'repository-only' } }, identity, 'analysis_failed');
+          await exchangeCli(executable, id, { protocol: identity.protocol, type: 'analyze', id: `${id}-missing-metadata`, repository_root: source, files: fixture.files, options: { include_tests: false, rust_dependency_scope: 'repository-only' } }, identity, 'analysis_failed');
           const content = { ...fixture.content }; delete content[fixture.prerequisite];
           await assertPublicProjectUnchanged({ ...fixture, content });
         } finally { await fs.writeFile(metadata, fixture.content[fixture.prerequisite]); }

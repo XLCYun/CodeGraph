@@ -11,11 +11,11 @@ use crate::{
 /// 直接调用公共 Host 与已构建 helper；工具链在测试边界隔离，不注册生产工厂。
 pub(super) fn analyzer() -> NativeLanguageAnalyzer {
     let executable =
-        PathBuf::from(std::env::var_os("NARRANT_RUST_HELPER").expect("需指定实际 Rust helper"));
+        PathBuf::from(std::env::var_os("CODEGRAPH_RUST_HELPER").expect("需指定实际 Rust helper"));
     let mut environment = BTreeMap::new();
     environment.insert(
         "RUSTUP_TOOLCHAIN".into(),
-        std::env::var_os("NARRANT_PROJECT_RUST_TOOLCHAIN").unwrap_or_else(|| "stable".into()),
+        std::env::var_os("CODEGRAPH_PROJECT_RUST_TOOLCHAIN").unwrap_or_else(|| "stable".into()),
     );
     NativeLanguageAnalyzer::new(
         HelperCommand {
@@ -25,7 +25,7 @@ pub(super) fn analyzer() -> NativeLanguageAnalyzer {
             environment,
         },
         HelperIdentity {
-            helper_id: "narrant-rust".into(),
+            helper_id: "codegraph-rust-engine".into(),
             helper_version: "0.1.0".into(),
             projection_revision: "rust-source-v1".into(),
             languages: vec!["rust".into()],
@@ -42,7 +42,7 @@ fn rust_helper_excludes_test_attributes_with_glob_imports() {
     let source = "pub mod github_discovery { pub fn discover_pull_requests() {} }\nmod custom;\n";
     let directory = repository(source);
     let manifest = directory.path().join("Cargo.toml");
-    fs::write(&manifest, format!("{}\n[lib]\nname=\"narrant_lib\"\n[dependencies]\nmacros = {{ path = \"macros\" }}\n[dev-dependencies]\nhttpmock=\"0.7\"\nsecrecy=\"0.10\"\ntempfile=\"3\"\n", fs::read_to_string(&manifest).unwrap())).unwrap();
+    fs::write(&manifest, format!("{}\n[lib]\nname=\"codegraph_lib\"\n[dependencies]\nmacros = {{ path = \"macros\" }}\n[dev-dependencies]\nhttpmock=\"0.7\"\nsecrecy=\"0.10\"\ntempfile=\"3\"\n", fs::read_to_string(&manifest).unwrap())).unwrap();
     fs::create_dir(directory.path().join("macros")).unwrap();
     fs::write(directory.path().join("macros/Cargo.toml"), "[package]\nname=\"macros\"\nversion=\"0.1.0\"\nedition=\"2021\"\n[lib]\nproc-macro=true\npath=\"lib.rs\"\n").unwrap();
     fs::write(directory.path().join("macros/lib.rs"), "use proc_macro::TokenStream; #[proc_macro_attribute] pub fn test(_: TokenStream, item: TokenStream) -> TokenStream { item }").unwrap();
@@ -239,7 +239,7 @@ fn rust_helper_recognizes_custom_and_empty_crate_roots() {
 /// 当前仓库回归覆盖较大的真实类型、模块与关联，不依赖穿刺时固定的 crate 名。
 /// 可选地保存本次真实验收的完整图证据；输出目录由测试调用者指定。
 fn save(name: &str, graph: &CodeGraph) {
-    if let Some(directory) = std::env::var_os("NARRANT_CODE_GRAPH_OUTPUT") {
+    if let Some(directory) = std::env::var_os("CODEGRAPH_CODE_GRAPH_OUTPUT") {
         let directory = PathBuf::from(directory);
         fs::create_dir_all(&directory).unwrap();
         fs::write(

@@ -8,10 +8,10 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const mode = fs.readFileSync(path.join(root,'mode'),'utf8');
 fs.writeFileSync(path.join(root,'helper-pid'), String(process.pid));
 fs.writeFileSync(path.join(root,'worker-pid'), String(process.ppid));
-const protocol = 'narrant.native-analyzer/1';
+const protocol = 'codegraph.engine/1';
 /** 原子发出完整的 NDJSON 消息。 */
 function output(value) { fs.writeSync(1, JSON.stringify(value)+'\n'); }
-output({protocol, type:'ready', helper_id:'narrant-typescript', helper_version:mode==='mismatch'?'9.0.0':'0.1.0', projection_revision:'typescript-source-v1', languages:['typescript','javascript'],profiles:['typescript-static-v1']});
+output({protocol, type:'ready', helper_id:'codegraph-typescript-engine', helper_version:mode==='mismatch'?'9.0.0':'0.1.0', projection_revision:'typescript-source-v1', languages:['typescript','javascript'],profiles:['typescript-static-v1']});
 const keepAlive=setInterval(()=>{},1000);
 readline.createInterface({input:process.stdin}).on('line', line => {
  const request=JSON.parse(line);

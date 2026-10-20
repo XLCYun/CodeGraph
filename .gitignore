@@ -6,8 +6,10 @@
 **/node_modules/
 **/__pycache__/
 **/bin/
+!/src/bin/
+!/src/bin/*.rs
 **/obj/
-/native-helpers/java/build/
-/native-helpers/clang/build/
+/analyzers/java/build/
+/analyzers/clang/build/
 /.tools/
 .DS_Store

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { create as createTar } from 'tar';
 import { validateArchive } from './archive-validation.mjs';
 import { packIds, limits, releaseIdentity } from './distribution.mjs';
-import { stageEngine, buildCli } from './build-codegraph.mjs';
+import { stageAnalyzer } from './build-analyzer.mjs';
 import { verifyAndExtract, safeFilePath } from './verify-distribution.mjs';
 import { systemTar } from './system-tar.mjs';
 
@@ -16,7 +16,7 @@ const targets = ['aarch64-apple-darwin', 'x86_64-pc-windows-msvc'];
 
 /** 产物键只由受支持的包、版本和平台组成。 */
 function validateIdentity({ id, version, target }) {
-  if (![...packIds, 'codegraph'].includes(id) || !/^\d+\.\d+\.\d+$/.test(version) || !targets.includes(target)) throw new Error('Invalid language support pack identity');
+  if (!packIds.includes(id) || !/^\d+\.\d+\.\d+$/.test(version) || !targets.includes(target)) throw new Error('Invalid language support pack identity');
 }
 
 /** 将准备完成的普通文件目录打包，清单只记录实际产物的完整身份和摘要。 */
@@ -127,7 +127,7 @@ export async function buildPack({ id, target, output, cache = path.join(reposito
       await fs.writeFile(path.join(payload, 'control/native.json'), JSON.stringify({ schema_version: 1, helper_version: definition.helperVersion, platforms }));
     }
     for (const name of await fs.readdir(path.join(payload, 'bin'))) await fs.chmod(path.join(payload, 'bin', name), 0o755);
-    await stageEngine(payload, id, target);
+    await stageAnalyzer(payload, id, target);
     const destination = await packageDirectory(identity, payload, output);
     // 在目标宿主上执行实际工具入口；跨平台产物必须由对应 CI runner 再验证。
     if ((windows && process.platform === 'win32' && process.arch === 'x64') || (!windows && process.platform === 'darwin' && process.arch === 'arm64')) {
@@ -143,7 +143,7 @@ export async function buildPack({ id, target, output, cache = path.join(reposito
         await fs.mkdir(path.dirname(extracted), { recursive: true });
         await verifyAndExtract(destination, extracted);
         await smokeTypeScript(extracted);
-        const configPath = path.join(output, 'native-helpers-config.json');
+        const configPath = path.join(output, 'analyzers-config.json');
         let config = {};
         try { config = JSON.parse(await fs.readFile(configPath, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
         config.typescript = await typescriptConfiguration(extracted);
@@ -164,7 +164,6 @@ async function main() {
   if (args.includes('--native') && selectedTargets.some(target => target !== ({ 'darwin-arm64': targets[0], 'win32-x64': targets[1] })[`${process.platform}-${process.arch}`])) throw new Error('Native verification requires a matching OS and CPU');
   const ids = option('--id') ? [option('--id')] : packIds;
   for (const target of selectedTargets) {
-    await buildCli(path.resolve(output), target);
     for (const id of ids) await buildPack({ id, target, output });
   }
 }

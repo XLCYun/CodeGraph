@@ -73,7 +73,7 @@ if (mode === 'startup_stderr_first') {
       // 仅输出固定测试条件的布尔结果，不采集、转储任何宿主环境值。
       fs.writeFileSync(path.join(control, 'runtime-environment-status'), JSON.stringify({
         crypto_ready: randomBytes(32).length === 32,
-        explicit_marker_received: process.env.NARRANT_NATIVE_ENV_SENTINEL === 'explicit-fixture-value',
+        explicit_marker_received: process.env.CODEGRAPH_NATIVE_ENV_SENTINEL === 'explicit-fixture-value',
         system_root_present: Boolean(process.env.SystemRoot || process.env.SYSTEMROOT),
         runtime_injection_absent: ['PATH', 'NODE_OPTIONS', 'NODE_PATH', 'OPENSSL_CONF', 'OPENSSL_MODULES', 'JAVA_TOOL_OPTIONS', 'CLASSPATH', 'PYTHONPATH'].every(key => process.env[key] === undefined),
         scratch_matches_request: ['TMPDIR', 'TMP', 'TEMP'].every(key => process.env[key] === request.environment.scratch_root),

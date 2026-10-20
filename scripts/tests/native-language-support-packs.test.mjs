@@ -58,7 +58,7 @@ test('runtime executable metadata follows target platform', async () => {
 
 /** SDK 内部链接转换为普通文件，包外链接必须在复制时失败。 */
 test('SDK tree copy materializes internal files and rejects escape', { skip: process.platform === 'win32' }, async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'narrant-native-tree-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codegraph-engine-tree-'));
   try {
     const input = path.join(root, 'input');
     await fs.mkdir(input);
@@ -74,7 +74,7 @@ test('SDK tree copy materializes internal files and rejects escape', { skip: pro
 
 /** ready 中的语言身份是包启动校验的一部分，不能只要求子进程能退出。 */
 test('helper smoke rejects a mismatched implementation identity', async () => {
-  await assert.rejects(smokeNativeHelper({ executable: process.execPath, args: ['-e', `console.log(JSON.stringify({protocol:'narrant.native-analyzer/1',type:'ready',helper_id:'other'})); process.stdin.resume()`], id: 'narrant-go', projection: 'go-source-v1', languages: ['go'], profile: 'go-static-v1' }), /identity mismatch/);
+  await assert.rejects(smokeNativeHelper({ executable: process.execPath, args: ['-e', `console.log(JSON.stringify({protocol:'codegraph.engine/1',type:'ready',helper_id:'other'})); process.stdin.resume()`], id: 'codegraph-go-engine', projection: 'go-source-v1', languages: ['go'], profile: 'go-static-v1' }), /identity mismatch/);
 });
 
 /** smoke 失败后必须等进程 close，才能删除它仍在使用的 scratch。 */
@@ -93,8 +93,8 @@ test('smoke waits for killed child close before rejecting and removing cwd', asy
     return true;
   });
   await assert.rejects(smokeNativeHelper({ executable: process.execPath,
-    args: ['-e', `require('node:fs').writeFileSync(${JSON.stringify(marker)}, process.cwd()); console.log(JSON.stringify({protocol:'narrant.native-analyzer/1',type:'ready',helper_id:'other'})); process.stdin.resume()`],
-    id: 'narrant-go', projection: 'go-source-v1', languages: ['go'], profile: 'go-static-v1' }), /identity mismatch/);
+    args: ['-e', `require('node:fs').writeFileSync(${JSON.stringify(marker)}, process.cwd()); console.log(JSON.stringify({protocol:'codegraph.engine/1',type:'ready',helper_id:'other'})); process.stdin.resume()`],
+    id: 'codegraph-go-engine', projection: 'go-source-v1', languages: ['go'], profile: 'go-static-v1' }), /identity mismatch/);
   try { assert.equal(closed, true, 'smoke rejected before child close'); }
   finally { if (!closed && child) await new Promise(resolve => child.once('close', resolve)); }
   await assert.rejects(fs.stat(await fs.readFile(marker, 'utf8')), { code: 'ENOENT' });
@@ -109,12 +109,12 @@ test('smoke preserves primary failure and reports cleanup-only failure', async t
     await remove(root, options);
     throw cleanupError;
   });
-  const identity = { id: 'narrant-go', projection: 'go-source-v1', languages: ['go'], profile: 'go-static-v1' };
+  const identity = { id: 'codegraph-go-engine', projection: 'go-source-v1', languages: ['go'], profile: 'go-static-v1' };
   await assert.rejects(smokeNativeHelper({ ...identity, executable: process.execPath,
-    args: ['-e', `console.log(JSON.stringify({protocol:'narrant.native-analyzer/1',type:'ready',helper_id:'other'})); process.stdin.resume()`] }),
+    args: ['-e', `console.log(JSON.stringify({protocol:'codegraph.engine/1',type:'ready',helper_id:'other'})); process.stdin.resume()`] }),
   error => /identity mismatch; scratch cleanup failed: fixture cleanup failure/.test(error.message) && error !== cleanupError);
   await assert.rejects(smokeNativeHelper({ ...identity, executable: process.execPath,
-    args: ['-e', `console.log(JSON.stringify({protocol:'narrant.native-analyzer/1',type:'ready',helper_id:'narrant-go',helper_version:'0.1.0',projection_revision:'go-source-v1',languages:['go'],profiles:['go-static-v1']})); process.stdin.resume()`] }),
+    args: ['-e', `console.log(JSON.stringify({protocol:'codegraph.engine/1',type:'ready',helper_id:'codegraph-go-engine',helper_version:'0.1.0',projection_revision:'go-source-v1',languages:['go'],profiles:['go-static-v1']})); process.stdin.resume()`] }),
   error => error === cleanupError);
 });
 
@@ -134,7 +134,7 @@ test('C# fixture discovery uses installed SDK layout without bundling target ref
     await fs.writeFile(path.join(source, 'Microsoft.NETCore.App.Ref.nuspec'), '<id>Microsoft.NETCore.App.Ref</id><version>9.0.20</version>');
     await fs.mkdir(path.join(source, 'build'));
     await fs.writeFile(path.join(source, 'build/untrusted.targets'), 'must not copy');
-    await prepareDotnetFixtureReferences({ NARRANT_DOTNET_SDK: sdk, NARRANT_DOTNET_REF9_ROOT: source });
+    await prepareDotnetFixtureReferences({ CODEGRAPH_DOTNET_SDK: sdk, CODEGRAPH_DOTNET_REF9_ROOT: source });
     const platforms = await csharpFixturePlatforms(sdk);
     assert.equal(platforms.length, 1);
     assert.equal(platforms[0].version, '9.0.20');
@@ -150,7 +150,7 @@ test('C# fixture discovery uses installed SDK layout without bundling target ref
 
 /** Java 与 Go 的目标版本来自准备好的 SDK 元数据，产品支持包只保留发现策略。 */
 test('Java and Go fixtures describe actual SDKs without a bundled target list', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'narrant-java-go-targets-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codegraph-java-engine-go-targets-'));
   try {
     const java = path.join(root, 'jdk'), go = path.join(root, 'go');
     await fs.mkdir(java); await fs.mkdir(go);
@@ -169,19 +169,19 @@ test('Java and Go fixtures describe actual SDKs without a bundled target list', 
 /** 已完成 helper 的入口身份固定；TS 暂存与未知身份拒绝不触发无关语言编译。 */
 test('migration build entry preserves completed helpers, rejects missing binaries and stages TypeScript', async t => {
   const { migratingHelperEntry, buildMigratingNativeHelper } = await import('../language-packs/build-migrating-native-helper.mjs');
-  assert.equal(migratingHelperEntry('rust', true).entry, 'bin/narrant-rust.exe');
-  assert.equal(migratingHelperEntry('python', false).binary, 'narrant-python');
+  assert.equal(migratingHelperEntry('rust', true).entry, 'bin/codegraph-rust-engine.exe');
+  assert.equal(migratingHelperEntry('python', false).binary, 'codegraph-python-engine');
   assert.equal(migratingHelperEntry('typescript-javascript', false).entry, 'runtime/helper/main.mjs');
   assert.throws(() => migratingHelperEntry('../project'), /Unknown/);
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'native-migration-build-'));
   try {
     for (const id of ['rust', 'python']) {
-      const manifest = await fs.readFile(new URL(`../../native-helpers/${id}/Cargo.toml`, import.meta.url), 'utf8');
-      assert.ok(manifest.includes(`name = "narrant-${id}"`), `${id} protocol binary`);
+      const manifest = await fs.readFile(new URL(`../../analyzers/${id}/Cargo.toml`, import.meta.url), 'utf8');
+      assert.ok(manifest.includes(`name = "codegraph-${id}-engine"`), `${id} protocol binary`);
     }
     // 仅替换读取到的临时清单内容，保留“缺协议 binary 在编译/产物创建前失败”的真实入口契约。
     const readFile = fs.readFile;
-    const manifests = ['rust', 'python'].map(id => fileURLToPath(new URL(`../../native-helpers/${id}/Cargo.toml`, import.meta.url)));
+    const manifests = ['rust', 'python'].map(id => fileURLToPath(new URL(`../../analyzers/${id}/Cargo.toml`, import.meta.url)));
     const incomplete = t.mock.method(fs, 'readFile', async (file, ...args) => manifests.includes(file)
       ? '[package]\nname = "core-only"\n'
       : readFile(file, ...args));
@@ -192,7 +192,7 @@ test('migration build entry preserves completed helpers, rejects missing binarie
     assert.deepEqual(await fs.readdir(root), []);
     await buildMigratingNativeHelper('typescript-javascript', root);
     for (const name of ['main.mjs', 'analyze.mjs', 'projection.mjs', 'workspace.mjs', 'config.mjs', 'syntax.mjs']) {
-      assert.deepEqual(await fs.readFile(path.join(root, 'runtime/helper', name)), await fs.readFile(new URL(`../../native-helpers/typescript/${name}`, import.meta.url)));
+      assert.deepEqual(await fs.readFile(path.join(root, 'runtime/helper', name)), await fs.readFile(new URL(`../../analyzers/typescript/${name}`, import.meta.url)));
     }
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });

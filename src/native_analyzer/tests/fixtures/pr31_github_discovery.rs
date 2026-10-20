@@ -1,5 +1,5 @@
 use httpmock::prelude::*;
-use narrant_lib::github_discovery::discover_pull_requests;
+use codegraph_lib::github_discovery::discover_pull_requests;
 use secrecy::SecretString;
 use std::process::Command;
 use tempfile::TempDir;

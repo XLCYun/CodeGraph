@@ -4,21 +4,21 @@ use super::{
     protocol::{Analyze, Failure, PROTOCOL},
 };
 use crate::{
-    code_graph::{AnalysisInput, AnalysisOptions, CodeGraph, LanguageAnalyzer},
+    adapters::Adapter,
+    code_graph::{AnalysisInput, AnalysisOptions, CodeGraph},
     native_analyzer::CancellationCheck,
-    native_languages::{from_pack, RustPackAnalyzer},
-    pack::{self, PackId},
+    pack,
 };
 use std::path::Path;
 
 /// 执行一次经过公共契约验证的请求，成功数据只含完整已验证图。
-pub(super) fn analyze(
-    pack: PackId,
+pub(super) fn analyze<A: Adapter>(
+    adapter: A,
     root: &Path,
     request: &Analyze,
     cancelled: CancellationCheck,
 ) -> Result<serde_json::Value, Failure> {
-    pack::validate(pack, root).map_err(|message| Failure::new("invalid_pack", message))?;
+    pack::validate(A::ID, root).map_err(|message| Failure::new("invalid_pack", message))?;
     let repository = request
         .repository_root
         .canonicalize()
@@ -51,21 +51,12 @@ pub(super) fn analyze(
         CodeGraph::new(Default::default(), vec![])
             .map_err(|_| Failure::new("internal_failure", "空图校验失败"))?
     } else {
-        let result = if pack == PackId::Rust {
-            RustPackAnalyzer::from_pack(root).and_then(|analyzer| {
-                analyzer.analyze(
-                    &input,
-                    cancelled.clone(),
-                    request.options.rust_dependency_scope,
-                )
-            })
-        } else {
-            from_pack(pack, root).and_then(|analyzer| {
-                analyzer
-                    .with_cancellation(cancelled.clone())
-                    .analyze(&input)
-            })
-        };
+        let result = adapter.analyze(
+            root,
+            &input,
+            cancelled.clone(),
+            request.options.rust_dependency_scope,
+        );
         match result {
             Ok(graph) => graph,
             Err(error) if error.is_cancelled() => {

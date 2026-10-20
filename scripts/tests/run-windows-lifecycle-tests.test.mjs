@@ -20,9 +20,9 @@ test('lifecycle validation runs only the production owner and preserves its fail
     await fs.writeFile(path.join(directory, 'scripts/fixture.cjs'), `
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-assert.equal(process.env.NARRANT_TEST_NODE, process.execPath);
+assert.equal(process.env.CODEGRAPH_TEST_NODE, process.execPath);
 const args = process.argv.slice(2);
-const common = ['test', '--manifest-path', 'native-helpers/windows-process-probe/Cargo.toml', '--locked', '--lib'];
+const common = ['test', '--manifest-path', 'analyzers/windows-process-probe/Cargo.toml', '--locked', '--lib'];
 const filter = args[5];
 assert.equal(filter, 'child_process::');
 assert.deepEqual(args, [...common, filter, '--', '--nocapture', '--test-threads=1']);

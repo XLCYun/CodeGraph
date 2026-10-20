@@ -15,8 +15,8 @@ pub(crate) fn fixture_command(role: &str, directory: &Path) -> Command {
     let mut command = Command::new(std::env::current_exe().unwrap());
     command
         .args(["--exact", fixture, "--ignored", "--nocapture"])
-        .env("NARRANT_PROCESS_ROLE", role)
-        .env("NARRANT_PROCESS_DIR", directory)
+        .env("CODEGRAPH_PROCESS_ROLE", role)
+        .env("CODEGRAPH_PROCESS_DIR", directory)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -30,10 +30,10 @@ pub(crate) fn fixture_command(role: &str, directory: &Path) -> Command {
 #[ignore = "仅由进程所有权测试作为子进程执行"]
 #[allow(clippy::zombie_processes)] // 故意不由夹具父进程等待；真实 ProcessTree 必须回收父退出后的后代。
 fn process_fixture() {
-    let Ok(role) = std::env::var("NARRANT_PROCESS_ROLE") else {
+    let Ok(role) = std::env::var("CODEGRAPH_PROCESS_ROLE") else {
         return;
     };
-    let directory = PathBuf::from(std::env::var_os("NARRANT_PROCESS_DIR").unwrap());
+    let directory = PathBuf::from(std::env::var_os("CODEGRAPH_PROCESS_DIR").unwrap());
     if role == "short" {
         return;
     }
@@ -47,7 +47,7 @@ fn process_fixture() {
                 .success());
         }
         let mut command = fixture_command("leaf", &directory);
-        if std::env::var_os("NARRANT_PROCESS_INHERIT_PIPES").is_some() {
+        if std::env::var_os("CODEGRAPH_PROCESS_INHERIT_PIPES").is_some() {
             command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
         }
         let child = command.spawn().unwrap();

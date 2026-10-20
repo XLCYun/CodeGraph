@@ -51,13 +51,13 @@ pub(crate) fn publish(path: &Path, value: &str) -> io::Result<()> {
 pub(crate) fn node_executable() -> PathBuf {
     static NODE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
     NODE.get_or_init(|| {
-        let path = match std::env::var_os("NARRANT_TEST_NODE") {
+        let path = match std::env::var_os("CODEGRAPH_TEST_NODE") {
             Some(path) => PathBuf::from(path),
             None => {
                 let output = std::process::Command::new("node")
                     .args(["--print", "process.execPath"])
                     .output()
-                    .expect("生命周期测试需要 Node 或 NARRANT_TEST_NODE 绝对路径");
+                    .expect("生命周期测试需要 Node 或 CODEGRAPH_TEST_NODE 绝对路径");
                 assert!(output.status.success(), "无法从 PATH 解析 Node 可执行文件");
                 PathBuf::from(String::from_utf8(output.stdout).unwrap().trim())
             }

@@ -8,7 +8,7 @@ import { githubJson, verifyEvidenceRun } from './verify-evidence-run.mjs';
 
 /** 完整资产集合在任何远端写入之前固定；现有不同内容版本绝不删除或覆盖。 */
 export async function publishBundle(bundle, github) {
-  const expected = [...targets.flatMap(target => ['codegraph', ...packIds].flatMap(id => assetNames(id, target))), 'SHA256SUMS'].sort();
+  const expected = [...targets.flatMap(target => packIds.flatMap(id => assetNames(id, target))), 'SHA256SUMS'].sort();
   if (!/^\d+\.\d+\.\d+$/.test(bundle.version) || bundle.tag !== `v${bundle.version}` || !/^[0-9a-f]{40}$/.test(bundle.sourceCommit) || bundle.sourceDirty !== false || JSON.stringify(bundle.assets.map(asset => asset.name).sort()) !== JSON.stringify(expected)) throw new Error('Incomplete immutable release bundle');
   const tagCommit = await github.tagCommit(bundle.tag);
   if (tagCommit && tagCommit !== bundle.sourceCommit) throw new Error('Existing tag points at a different source commit');

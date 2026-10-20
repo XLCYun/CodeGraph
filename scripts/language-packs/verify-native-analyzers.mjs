@@ -1,6 +1,5 @@
 import { migratedNativePacks, selectedNativePacks } from './native-migration.mjs';
 import fs from 'node:fs/promises';
-import { buildCli } from './build-codegraph.mjs';
 import { buildPack } from './build-language-support-packs.mjs';
 import { writeVerificationEvidence } from '../release/release-artifacts.mjs';
 import path from 'node:path';
@@ -42,9 +41,9 @@ export async function validateNativeFixtures(config, environment, language = 'al
     for (const root of [...item.trusted_roots, ...item.platforms.map(platform => platform.root)]) if (!(await fs.stat(root)).isDirectory()) throw new Error(`Missing SDK fixture: ${root}`);
   }
   const required = [];
-  if (ids.includes('java')) required.push(path.join(environment.NARRANT_JAVA_TARGET_8, 'jre/lib/rt.jar'));
-  if (ids.includes('csharp')) for (const [root, tfm] of [[environment.NARRANT_DOTNET_REF8_ROOT, 'net8.0'], [environment.NARRANT_DOTNET_REF9_ROOT, 'net9.0']]) required.push(path.join(root, 'ref', tfm, 'System.Runtime.dll'));
-  if (ids.includes('c-cpp') && process.platform === 'win32') for (const key of ['NARRANT_WINDOWS_SDK', 'NARRANT_MSVC_ROOT']) { if (!environment[key] || !(await fs.stat(environment[key])).isDirectory()) throw new Error(`Missing Windows SDK fixture: ${key}`); }
+  if (ids.includes('java')) required.push(path.join(environment.CODEGRAPH_JAVA_TARGET_8, 'jre/lib/rt.jar'));
+  if (ids.includes('csharp')) for (const [root, tfm] of [[environment.CODEGRAPH_DOTNET_REF8_ROOT, 'net8.0'], [environment.CODEGRAPH_DOTNET_REF9_ROOT, 'net9.0']]) required.push(path.join(root, 'ref', tfm, 'System.Runtime.dll'));
+  if (ids.includes('c-cpp') && process.platform === 'win32') for (const key of ['CODEGRAPH_WINDOWS_SDK', 'CODEGRAPH_MSVC_ROOT']) { if (!environment[key] || !(await fs.stat(environment[key])).isDirectory()) throw new Error(`Missing Windows SDK fixture: ${key}`); }
   for (const file of required) if (!(await fs.stat(file)).isFile()) throw new Error(`Missing requested fixture: ${file}`);
 }
 
@@ -83,38 +82,37 @@ export async function verifyNativeAnalyzers(artifacts, build = false, language =
   const target = nativeTargets[`${process.platform}-${process.arch}`];
   if (!target) throw new Error('Native validation requires macOS ARM64 or Windows x64');
   artifacts = path.resolve(artifacts);
-  const environment = { ...process.env, NARRANT_TEST_NODE: process.execPath, NARRANT_NATIVE_LANGUAGE: language, NARRANT_NATIVE_PACKS: artifacts, NARRANT_NATIVE_HELPERS_CONFIG: path.join(artifacts, 'native-helpers-config.json') };
+  const environment = { ...process.env, CODEGRAPH_TEST_NODE: process.execPath, CODEGRAPH_NATIVE_LANGUAGE: language, CODEGRAPH_NATIVE_PACKS: artifacts, CODEGRAPH_NATIVE_HELPERS_CONFIG: path.join(artifacts, 'analyzers-config.json') };
   if (ids.includes('python')) {
     const catalog = JSON.parse(await fs.readFile(path.join(repository, 'resources/language-support-packs.json'), 'utf8'));
-    environment.NARRANT_PYTHON_PACK = path.join(artifacts, 'smoke-installed/python', catalog.packs.python.version, target);
-    environment.NARRANT_PYTHON_HELPER = path.join(environment.NARRANT_PYTHON_PACK, `bin/narrant-python${process.platform === 'win32' ? '.exe' : ''}`);
-    environment.NARRANT_LANGUAGE_PACK_FIXTURE = artifacts;
+    environment.CODEGRAPH_PYTHON_PACK = path.join(artifacts, 'smoke-installed/python', catalog.packs.python.version, target);
+    environment.CODEGRAPH_PYTHON_HELPER = path.join(environment.CODEGRAPH_PYTHON_PACK, `bin/codegraph-python-engine${process.platform === 'win32' ? '.exe' : ''}`);
+    environment.CODEGRAPH_LANGUAGE_PACK_FIXTURE = artifacts;
   }
   if (ids.includes('rust')) {
     const catalog = JSON.parse(await fs.readFile(path.join(repository, 'resources/language-support-packs.json'), 'utf8'));
-    environment.NARRANT_RUST_PACK = path.join(artifacts, 'smoke-installed/rust', catalog.packs.rust.version, target);
-    environment.NARRANT_RUST_HELPER = path.join(environment.NARRANT_RUST_PACK, `bin/narrant-rust${process.platform === 'win32' ? '.exe' : ''}`);
-    environment.NARRANT_LANGUAGE_PACK_FIXTURE = artifacts;
+    environment.CODEGRAPH_RUST_PACK = path.join(artifacts, 'smoke-installed/rust', catalog.packs.rust.version, target);
+    environment.CODEGRAPH_RUST_HELPER = path.join(environment.CODEGRAPH_RUST_PACK, `bin/codegraph-rust-engine${process.platform === 'win32' ? '.exe' : ''}`);
+    environment.CODEGRAPH_LANGUAGE_PACK_FIXTURE = artifacts;
   }
   if (ids.includes('typescript-javascript')) {
     const catalog = JSON.parse(await fs.readFile(path.join(repository, 'resources/language-support-packs.json'), 'utf8'));
-    environment.NARRANT_TYPESCRIPT_PACK = path.join(artifacts, 'smoke-installed/typescript-javascript', catalog.packs['typescript-javascript'].version, target);
-    environment.NARRANT_LANGUAGE_PACK_FIXTURE = artifacts;
+    environment.CODEGRAPH_TYPESCRIPT_PACK = path.join(artifacts, 'smoke-installed/typescript-javascript', catalog.packs['typescript-javascript'].version, target);
+    environment.CODEGRAPH_LANGUAGE_PACK_FIXTURE = artifacts;
   }
   if (ids.includes('csharp')) {
     const catalog = JSON.parse(await fs.readFile(path.join(repository, 'resources/language-support-packs.json'), 'utf8'));
-    environment.NARRANT_CSHARP_PACK = path.join(artifacts, 'smoke-installed/csharp', catalog.packs.csharp.version, target);
+    environment.CODEGRAPH_CSHARP_PACK = path.join(artifacts, 'smoke-installed/csharp', catalog.packs.csharp.version, target);
   }
   if (ids.includes('rust')) Object.assign(environment, await prepareRustNativeTests(environment));
   const commands = verificationCommands(environment, process.platform, language);
   await fs.mkdir(artifacts, { recursive: true });
   await fs.rm(path.join(artifacts, `verification-${target}.json`), { force: true });
   if (build) {
-    await buildCli(artifacts, target);
-    if (ids.includes('java')) await execute({ executable: environment.NARRANT_PYTHON ?? (process.platform === 'win32' ? 'python' : 'python3'), args: ['native-helpers/java/tools/fetch-deps.py'] }, environment);
+    if (ids.includes('java')) await execute({ executable: environment.CODEGRAPH_PYTHON ?? (process.platform === 'win32' ? 'python' : 'python3'), args: ['analyzers/java/tools/fetch-deps.py'] }, environment);
     for (const id of ids) await buildPack({ id, target, output: artifacts });
   }
-  const config = validateNativeConfiguration(JSON.parse(await fs.readFile(environment.NARRANT_NATIVE_HELPERS_CONFIG, 'utf8')), process.platform, language);
+  const config = validateNativeConfiguration(JSON.parse(await fs.readFile(environment.CODEGRAPH_NATIVE_HELPERS_CONFIG, 'utf8')), process.platform, language);
   await validateNativeFixtures(config, environment, language);
   await runVerificationCommands(commands, environment);
   if (language === 'all') await writeVerificationEvidence(artifacts, commands, environment);

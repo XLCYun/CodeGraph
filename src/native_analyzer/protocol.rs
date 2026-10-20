@@ -6,7 +6,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-pub(super) const PROTOCOL: &str = "narrant.native-analyzer/1";
+pub(super) const PROTOCOL: &str = "codegraph.engine/1";
 pub(super) const REQUEST_ID: &str = "analysis-1";
 
 /// ready 的版本、语言及政策声明，不接受任何未定义字段。

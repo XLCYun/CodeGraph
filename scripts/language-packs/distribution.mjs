@@ -34,6 +34,6 @@ export function sha256(bytes) { return createHash('sha256').update(bytes).digest
 
 /** 固定资产名；一个 engine tag 同时包含双平台和七种语言。 */
 export function assetNames(id, target) {
-  if (![...packIds, 'codegraph'].includes(id) || !targets.includes(target)) throw new Error('Invalid distribution identity');
-  return id === 'codegraph' ? [`codegraph-${target}.tar.gz`] : [`${id}-${target}-pack.tar.gz`, `${id}-${target}-manifest.json`];
+  if (!packIds.includes(id) || !targets.includes(target)) throw new Error('Invalid distribution identity');
+  return [`${id}-${target}-pack.tar.gz`, `${id}-${target}-manifest.json`];
 }

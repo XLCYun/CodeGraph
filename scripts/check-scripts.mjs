@@ -12,6 +12,6 @@ async function check(directory) {
   }
 }
 await check('scripts');
-await check('native-helpers/typescript');
+await check('analyzers/typescript');
 await releaseIdentity();
 console.log('JavaScript syntax and release version contracts verified');

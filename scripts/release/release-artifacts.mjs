@@ -6,17 +6,14 @@ import { assetNames, nativeTarget, packIds, releaseIdentity, sha256, targets } f
 import { verifyDistribution } from '../language-packs/verify-distribution.mjs';
 import { recordVerifiedCommands, verificationCommandIdentities } from '../language-packs/verification-commands.mjs';
 
-/** 对一平台全部八种产物做完整字节验证，并保证语言包使用同一 CLI。 */
+/** 对一平台七个分析器包做完整字节验证，并核对每个固定入口。 */
 async function readTarget(artifacts, identity, target, requireClean) {
   const entries = [], receipts = [];
-  let cliHash;
-  for (const id of ['codegraph', ...packIds]) {
+  for (const id of packIds) {
     const directory = path.join(artifacts, id, identity.version, target);
     const { manifest, body, archive } = await verifyDistribution(directory, { id, target, version: identity.version, engineVersion: identity.version, protocol: identity.protocol, sourceCommit: identity.sourceCommit, ...(requireClean ? { sourceDirty: false } : {}) });
-    const cli = manifest.files.find(file => file.path === `bin/codegraph${target.includes('windows') ? '.exe' : ''}`);
+    const cli = manifest.files.find(file => file.path === `bin/codegraph-${id}${target.includes('windows') ? '.exe' : ''}`);
     if (!cli?.executable) throw new Error('Package missing executable CLI');
-    if (id === 'codegraph') cliHash = cli.sha256;
-    if (cli.sha256 !== cliHash) throw new Error('Language package CLI differs from standalone CLI');
     const [archiveName, manifestName] = assetNames(id, target);
     entries.push({ name: archiveName, file: archive, size: manifest.archiveSize, sha256: manifest.archiveSha256 });
     if (manifestName) entries.push({ name: manifestName, file: path.join(directory, 'manifest.json'), size: body.length, sha256: sha256(body) });
@@ -62,7 +59,7 @@ export async function readCompleteArtifacts(artifacts, sourceCommit) {
   return { ...identity, tag: `v${identity.version}`, assets: assets.sort((a, b) => a.name.localeCompare(b.name, 'en')) };
 }
 
-/** 把已验证字节复制为最终公开资产名，并生成覆盖全部三十个资产的 SHA256SUMS。 */
+/** 把已验证字节复制为最终公开资产名，并生成覆盖全部二十八个资产的 SHA256SUMS。 */
 export async function prepareRelease(artifacts, sourceCommit, output) {
   const bundle = await readCompleteArtifacts(artifacts, sourceCommit);
   await fs.mkdir(output, { recursive: true });

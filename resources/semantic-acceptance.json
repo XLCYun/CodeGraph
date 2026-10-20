@@ -417,16 +417,16 @@
   },
   {
     "language": "rust",
-    "source": "src/native_languages/rust/tests/production.rs",
-    "name": "native_languages::rust::tests::production_cancellation_reaps_toolchain_probe",
+    "source": "src/adapters/rust/tests/production.rs",
+    "name": "adapters::rust::tests::production_cancellation_reaps_toolchain_probe",
     "platforms": [
       "darwin"
     ]
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_parameter_properties_keep_field_types_and_default_calls",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_parameter_properties_keep_field_types_and_default_calls",
     "platforms": [
       "darwin",
       "win32"
@@ -434,8 +434,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_unverified_relative_imports_do_not_abort_analysis",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_unverified_relative_imports_do_not_abort_analysis",
     "platforms": [
       "darwin",
       "win32"
@@ -443,8 +443,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_cross_language_alias_barrel_and_callbacks",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_cross_language_alias_barrel_and_callbacks",
     "platforms": [
       "darwin",
       "win32"
@@ -452,8 +452,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_file_modules_keep_merged_execution_calls",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_file_modules_keep_merged_execution_calls",
     "platforms": [
       "darwin",
       "win32"
@@ -461,8 +461,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_named_function_values_and_omitted_initializers_keep_calls",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_named_function_values_and_omitted_initializers_keep_calls",
     "platforms": [
       "darwin",
       "win32"
@@ -470,8 +470,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_runtime_wrappers_node_modules_and_jsdoc",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_runtime_wrappers_node_modules_and_jsdoc",
     "platforms": [
       "darwin",
       "win32"
@@ -479,8 +479,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_jsx_properties_heritage_and_function_values",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_jsx_properties_heritage_and_function_values",
     "platforms": [
       "darwin",
       "win32"
@@ -488,8 +488,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_assignments_omit_writes_and_keep_calls_and_function_values",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_assignments_omit_writes_and_keep_calls_and_function_values",
     "platforms": [
       "darwin",
       "win32"
@@ -497,8 +497,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_missing_dynamic_ambiguous_and_type_only_are_unresolved",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_missing_dynamic_ambiguous_and_type_only_are_unresolved",
     "platforms": [
       "darwin",
       "win32"
@@ -506,8 +506,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_overloads_and_merged_fragments",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_overloads_and_merged_fragments",
     "platforms": [
       "darwin",
       "win32"
@@ -515,8 +515,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_type_only_alias_chains_do_not_become_runtime_calls",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_type_only_alias_chains_do_not_become_runtime_calls",
     "platforms": [
       "darwin",
       "win32"
@@ -524,8 +524,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_project_conflicts_keep_unknown_calls_and_local_targets",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_project_conflicts_keep_unknown_calls_and_local_targets",
     "platforms": [
       "darwin",
       "win32"
@@ -533,8 +533,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_workspace_references_without_built_dist",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_workspace_references_without_built_dist",
     "platforms": [
       "darwin",
       "win32"
@@ -542,8 +542,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_unicode_default_namespace_alias_and_union_evidence",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_unicode_default_namespace_alias_and_union_evidence",
     "platforms": [
       "darwin",
       "win32"
@@ -551,8 +551,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_repository_ambient_functions_and_nonambient_signature_boundary",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_repository_ambient_functions_and_nonambient_signature_boundary",
     "platforms": [
       "darwin",
       "win32"
@@ -560,8 +560,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_async_member_calls_keep_concrete_targets",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_async_member_calls_keep_concrete_targets",
     "platforms": [
       "darwin",
       "win32"
@@ -569,8 +569,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_heterogeneous_union_members_follow_definition_navigation",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_heterogeneous_union_members_follow_definition_navigation",
     "platforms": [
       "darwin",
       "win32"
@@ -578,8 +578,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_repository_relative_test_classification_ignores_checkout_ancestors",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_repository_relative_test_classification_ignores_checkout_ancestors",
     "platforms": [
       "darwin",
       "win32"
@@ -587,8 +587,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::graph_config_dir_templates_retain_local_call",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::graph_config_dir_templates_retain_local_call",
     "platforms": [
       "darwin",
       "win32"
@@ -596,8 +596,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::typescript_real_helper_cancellation_reaps_before_return",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::typescript_real_helper_cancellation_reaps_before_return",
     "platforms": [
       "darwin",
       "win32"
@@ -605,8 +605,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::typescript_historical_identity_and_source_contract",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::typescript_historical_identity_and_source_contract",
     "platforms": [
       "darwin",
       "win32"
@@ -614,8 +614,8 @@
   },
   {
     "language": "typescript-javascript",
-    "source": "src/native_languages/tests/typescript_graph.rs",
-    "name": "native_languages::typescript_graph::typescript_aliases_merge_canonical_nodes_and_keep_boundary_and_test_policy",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::typescript_aliases_merge_canonical_nodes_and_keep_boundary_and_test_policy",
     "platforms": [
       "darwin",
       "win32"
@@ -623,8 +623,8 @@
   },
   {
     "language": "csharp",
-    "source": "src/native_languages/tests/csharp_graph.rs",
-    "name": "native_languages::csharp_graph::factory_preserves_source_and_local_calls",
+    "source": "src/adapters/tests/csharp_graph.rs",
+    "name": "adapters::csharp_graph::factory_preserves_source_and_local_calls",
     "platforms": [
       "darwin",
       "win32"

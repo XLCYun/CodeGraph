@@ -48,9 +48,9 @@ impl PackId {
                 "control/native.json",
                 "licenses/Rust-dependencies.json",
                 if windows {
-                    "bin/narrant-rust.exe"
+                    "bin/codegraph-rust-engine.exe"
                 } else {
-                    "bin/narrant-rust"
+                    "bin/codegraph-rust-engine"
                 },
             ],
             Self::Java => vec![
@@ -60,14 +60,14 @@ impl PackId {
                 } else {
                     "runtime/jdk/bin/java"
                 },
-                "runtime/helper/classes/dev/narrant/java/Main.class",
+                "runtime/helper/classes/dev/codegraph/java/Main.class",
             ],
             Self::Go => vec![
                 "control/native.json",
                 if windows {
-                    "bin/narrant-go.exe"
+                    "bin/codegraph-go-engine.exe"
                 } else {
-                    "bin/narrant-go"
+                    "bin/codegraph-go-engine"
                 },
             ],
             Self::Csharp => vec![
@@ -77,25 +77,25 @@ impl PackId {
                 } else {
                     "bin/dotnet"
                 },
-                "runtime/helper/Narrant.CSharp.Helper.dll",
-                "runtime/helper/Narrant.CSharp.Helper.deps.json",
-                "runtime/helper/Narrant.CSharp.Helper.runtimeconfig.json",
+                "runtime/helper/CodeGraph.CSharp.Engine.dll",
+                "runtime/helper/CodeGraph.CSharp.Engine.deps.json",
+                "runtime/helper/CodeGraph.CSharp.Engine.runtimeconfig.json",
                 "runtime/helper/Microsoft.CodeAnalysis.dll",
                 "runtime/helper/Microsoft.CodeAnalysis.CSharp.dll",
             ],
             Self::CCpp => vec![
                 "control/native.json",
                 if windows {
-                    "bin/narrant-clang.exe"
+                    "bin/codegraph-clang-engine.exe"
                 } else {
-                    "bin/narrant-clang"
+                    "bin/codegraph-clang-engine"
                 },
             ],
             Self::Python => vec![
                 if windows {
-                    "bin/narrant-python.exe"
+                    "bin/codegraph-python-engine.exe"
                 } else {
-                    "bin/narrant-python"
+                    "bin/codegraph-python-engine"
                 },
                 "control/native.json",
                 "licenses/Python-dependencies.json",
@@ -144,7 +144,7 @@ pub(crate) fn read_control(path: &std::path::Path) -> std::io::Result<Vec<u8>> {
     Ok(data)
 }
 
-/// 固定包身份必须与命令行和当前引擎完全一致，不接受候选包冒充发布版本。
+/// 固定包身份必须与编译时语言和当前引擎完全一致，不接受候选包冒充发布版本。
 pub(crate) fn validate(id: PackId, root: &std::path::Path) -> Result<(), String> {
     let root = root.canonicalize().map_err(|_| "支持包目录不可读取")?;
     let path = root
@@ -168,3 +168,31 @@ pub(crate) fn validate(id: PackId, root: &std::path::Path) -> Result<(), String>
     }
     Ok(())
 }
+
+/// 从实际可执行文件定位包根，不使用 cwd、argv[0] 或消费者提供的目录。
+pub(crate) fn executable_root() -> std::io::Result<std::path::PathBuf> {
+    root_from_executable(&std::env::current_exe()?)
+}
+
+/// 规范化后的入口必须直接位于包内 bin 目录；目录别名不能改变包身份。
+fn root_from_executable(executable: &std::path::Path) -> std::io::Result<std::path::PathBuf> {
+    let executable = executable.canonicalize()?;
+    let bin = executable
+        .parent()
+        .ok_or_else(|| std::io::Error::other("分析器缺少 bin 目录"))?;
+    if !executable.is_file() || bin.file_name() != Some(std::ffi::OsStr::new("bin")) {
+        return Err(std::io::Error::other("分析器必须位于包的 bin 目录"));
+    }
+    let root = bin
+        .parent()
+        .ok_or_else(|| std::io::Error::other("分析器缺少包根目录"))?
+        .canonicalize()?;
+    if !root.is_dir() || !root.is_absolute() || root.to_str().is_none() {
+        return Err(std::io::Error::other("分析器包根必须是绝对 UTF-8 目录"));
+    }
+    Ok(root)
+}
+
+#[cfg(test)]
+#[path = "pack/tests/location.rs"]
+mod tests;

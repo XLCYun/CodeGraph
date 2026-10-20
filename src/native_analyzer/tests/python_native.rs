@@ -458,7 +458,7 @@ fn native_descriptor_writes_and_exception_receivers_do_not_create_fields() {
 #[test]
 #[ignore = "需要已构建 Python helper，单独串行运行"]
 fn native_user_environment_and_repository_configuration_cannot_add_dependencies() {
-    const MARKER: &str = "NARRANT_PYTHON_BOUNDARY_CHILD";
+    const MARKER: &str = "CODEGRAPH_PYTHON_BOUNDARY_CHILD";
     if let Some(outside) = std::env::var_os(MARKER) {
         let outside = PathBuf::from(outside).to_string_lossy().replace('\\', "/");
         let config = format!("[environment]\nextra-paths=['{outside}']\npython='{outside}/venv'\ntypeshed='{outside}/typeshed'\n");

@@ -5,7 +5,7 @@ pub(crate) mod protocol;
 mod transport;
 mod worker;
 
-use crate::{child_process::ProcessTree, pack::PackId};
+use crate::{adapters::Adapter, child_process::ProcessTree};
 use protocol::{Failure, Message, PROTOCOL};
 use std::{
     path::PathBuf,
@@ -20,83 +20,50 @@ const ANALYSIS: Duration = Duration::from_secs(30 * 60);
 const CANCEL: Duration = Duration::from_secs(2);
 const EXIT: Duration = Duration::from_secs(5);
 
-/// 命令行只选择受信安装包，不允许注入任意命令或运行环境。
+/// 已绑定语言的运行上下文；包目录只来自当前可执行文件。
 #[derive(Clone)]
-pub(super) struct Arguments {
-    pub pack: PackId,
+pub(super) struct Arguments<A> {
+    pub adapter: A,
     pub root: PathBuf,
 }
 
-/// 解析明确的命令行形式，重复和未知参数都失败。
-pub(crate) fn main() -> i32 {
-    let mut args: Vec<_> = std::env::args_os().skip(1).collect();
+/// 公共命令只有分析、帮助和版本；旧语言选择器及包根参数全部拒绝。
+pub(crate) fn main<A: Adapter>(adapter: A) -> i32 {
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    let name = format!("codegraph-{}", A::ID.slug());
     if args == ["--version"] {
-        println!("codegraph {}", env!("CARGO_PKG_VERSION"));
+        println!("{name} {}", env!("CARGO_PKG_VERSION"));
         return 0;
     }
     if args == ["--help"] || args == ["-h"] || args == ["analyze", "--help"] {
-        println!("CodeGraph {}\n\nUsage: codegraph analyze --pack <id> --pack-root <absolute-path>\n       codegraph --help | --version\n\nPacks: rust, typescript-javascript, python, java, go, csharp, c-cpp\nProtocol: codegraph.analyzer/1 (UTF-8 NDJSON on stdin/stdout)\nRead docs/protocol.md for requests, cancellation, and limits.", env!("CARGO_PKG_VERSION"));
+        println!("CodeGraph {} analyzer {}\n\nUsage: {name} analyze\n       {name} --help | --version\n\nProtocol: codegraph.analyzer/1 (UTF-8 NDJSON on stdin/stdout)\nRead docs/protocol.md for requests, cancellation, and limits.", A::ID.slug(), env!("CARGO_PKG_VERSION"));
         return 0;
     }
-    let private = args.first().is_some_and(|arg| arg == "__worker");
-    if args
-        .first()
-        .is_none_or(|arg| arg != "analyze" && arg != "__worker")
-    {
-        eprintln!("Use codegraph --help for usage.");
+    let private = args == ["__worker"];
+    if args != ["analyze"] && !private {
+        eprintln!("Use {name} --help for usage; analyze accepts no selectors or path arguments.");
         return 2;
     }
-    args.remove(0);
-    let mut pack = None;
-    let mut root = None;
-    if args.len() != 4 {
-        eprintln!("Expected --pack and --pack-root exactly once.");
-        return 2;
-    }
-    for pair in args.chunks_exact(2) {
-        if pair[0] == "--pack" && pack.is_none() {
-            pack = pair[1].to_str().and_then(|text| {
-                PackId::NATIVE_MIGRATED
-                    .iter()
-                    .copied()
-                    .find(|id| id.slug() == text)
-            });
-            if pack.is_none() {
-                eprintln!("Unknown pack ID.");
-                return 2;
-            }
-        } else if pair[0] == "--pack-root" && root.is_none() {
-            let path = PathBuf::from(&pair[1]);
-            if !path.is_absolute() || path.to_str().is_none() {
-                eprintln!("Pack root must be an absolute UTF-8 path.");
-                return 2;
-            }
-            root = Some(path);
+    let result = (|| {
+        let root = crate::pack::executable_root()?;
+        let arguments = Arguments { adapter, root };
+        if private {
+            worker::run(arguments)
         } else {
-            eprintln!("Unknown or repeated option.");
-            return 2;
+            supervise(arguments)
         }
-    }
-    let (Some(pack), Some(root)) = (pack, root) else {
-        return 2;
-    };
-    let arguments = Arguments { pack, root };
-    let result = if private {
-        worker::run(arguments)
-    } else {
-        supervise(arguments)
-    };
+    })();
     match result {
         Ok(code) => code,
         Err(error) => {
-            eprintln!("CodeGraph transport or process cleanup failed: {error}");
+            eprintln!("CodeGraph transport, package location or process cleanup failed: {error}");
             1
         }
     }
 }
 
 /// 公共监督进程始终保有工作进程管道；消费者的正常 EOF 不会传为父死亡。
-fn supervise(arguments: Arguments) -> std::io::Result<i32> {
+fn supervise<A: Adapter>(arguments: Arguments<A>) -> std::io::Result<i32> {
     let input = std::io::stdin();
     let output = std::io::stdout();
     transport::nonblocking(&input)?;
@@ -108,7 +75,7 @@ fn supervise(arguments: Arguments) -> std::io::Result<i32> {
     let mut output_deadline = None;
     send(
         &output,
-        &serde_json::json!({"protocol":PROTOCOL,"type":"ready","engine_version":env!("CARGO_PKG_VERSION"),"pack_id":arguments.pack.slug()}),
+        &serde_json::json!({"protocol":PROTOCOL,"type":"ready","engine_version":env!("CARGO_PKG_VERSION"),"pack_id":A::ID.slug()}),
     )?;
     pending += 1;
     output_deadline.get_or_insert(Instant::now() + EXIT);
@@ -289,18 +256,14 @@ fn supervise(arguments: Arguments) -> std::io::Result<i32> {
     Ok(exit_code)
 }
 
-/// 私有子进程沿用同一二进制；消费者不能提供不同的 helper 命令。
-fn spawn_worker(
-    arguments: &Arguments,
+/// 私有子进程沿用同一固定入口，重新定位包根且保留编译时语言身份。
+fn spawn_worker<A: Adapter>(
+    _arguments: &Arguments<A>,
     io: &mut Transport,
 ) -> std::io::Result<(ProcessTree, SyncSender<Vec<u8>>)> {
     let mut command = Command::new(std::env::current_exe()?);
     command
         .arg("__worker")
-        .arg("--pack")
-        .arg(arguments.pack.slug())
-        .arg("--pack-root")
-        .arg(&arguments.root)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());

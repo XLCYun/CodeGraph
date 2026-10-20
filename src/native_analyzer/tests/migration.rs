@@ -55,7 +55,7 @@ fn rust_profiles_preserve_wire_contract_and_require_only_needed_declarations() {
         }
         let checked = input::validate(&analyzer, &input).unwrap();
         let request = checked.request(&analyzer, &fixture.tools).unwrap();
-        assert_eq!(request["protocol"], "narrant.native-analyzer/1");
+        assert_eq!(request["protocol"], "codegraph.engine/1");
         assert_eq!(
             request["input"],
             json!({"repository_root":fixture.repository.canonicalize().unwrap(), "files":[], "include_tests":false, "profile":profile.as_str()})

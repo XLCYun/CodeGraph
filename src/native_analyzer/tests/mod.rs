@@ -66,7 +66,7 @@ impl Fixture {
                 trusted_roots: vec![self.tools.clone()],
             },
             HelperIdentity {
-                helper_id: "narrant-go".into(),
+                helper_id: "codegraph-go-engine".into(),
                 helper_version: "0.1.0".into(),
                 projection_revision: "go-source-v1".into(),
                 languages: vec!["go".into()],
@@ -135,7 +135,7 @@ impl Fixture {
 
 /// 固定 ready 与支持包身份完全一致。
 fn ready() -> Value {
-    json!({"protocol":protocol::PROTOCOL,"type":"ready","helper_id":"narrant-go","helper_version":"0.1.0","projection_revision":"go-source-v1","languages":["go"],"profiles":["go-static-v1"]})
+    json!({"protocol":protocol::PROTOCOL,"type":"ready","helper_id":"codegraph-go-engine","helper_version":"0.1.0","projection_revision":"go-source-v1","languages":["go"],"profiles":["go-static-v1"]})
 }
 
 /// 创建完整的规范节点，含转义换行、中文及外部/未知关系。
@@ -257,7 +257,10 @@ fn rejects_invalid_graphs_and_cross_evidence() {
 /// 所有嵌套对象拒绝重复键，nullable 字段仍必须出现。
 #[test]
 fn protocol_rejects_duplicates_unknown_fields_types_and_missing_nullable() {
-    assert!(protocol::decode(br#"{"protocol":"narrant.native-analyzer/1","protocol":"narrant.native-analyzer/1","type":"ready"}"#).is_err());
+    assert!(protocol::decode(
+        br#"{"protocol":"codegraph.engine/1","protocol":"codegraph.engine/1","type":"ready"}"#
+    )
+    .is_err());
     let mut value = result();
     value["graph"]["nodes"][0]
         .as_object_mut()
@@ -419,7 +422,7 @@ fn subprocess_initializes_crypto_with_explicit_minimal_runtime_environment() {
         usize::from(cfg!(windows))
     );
     analyzer.command.environment.insert(
-        "NARRANT_NATIVE_ENV_SENTINEL".into(),
+        "CODEGRAPH_NATIVE_ENV_SENTINEL".into(),
         "explicit-fixture-value".into(),
     );
     let graph = analyze(&analyzer, &fixture.input()).unwrap();
@@ -488,7 +491,7 @@ fn subprocess_rejects_invalid_protocol_lifecycle() {
         let mut value = result();
         match mutation {
             0 => value["id"] = json!("wrong"),
-            1 => value["protocol"] = json!("narrant.native-analyzer/2"),
+            1 => value["protocol"] = json!("codegraph.engine/2"),
             2 => value["type"] = json!("log"),
             3 => {
                 value = json!({"protocol":protocol::PROTOCOL,"type":"completed","id":protocol::REQUEST_ID,"outcome":"cancelled"})
