@@ -18,7 +18,7 @@ pub(super) fn excluded_ranges(tree: &SyntaxNode) -> Vec<TextRange> {
 }
 
 /// 直接命中 #[test] 即排除；其他声明通过条件编译判断是否仅在测试配置下存在。
-pub(super) fn is_test_only(node: &SyntaxNode) -> bool {
+pub(crate) fn is_test_only(node: &SyntaxNode) -> bool {
     let Some(owner) = ast::AnyHasAttrs::cast(node.clone()) else {
         return false;
     };

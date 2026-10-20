@@ -165,6 +165,10 @@ parent role: only entirely test-owned files are excluded. A production module
 parent keeps the file, while a `cfg(test)` parent does not override test-only
 target ownership. Actual include call locations join those roles; production
 includes retain a shared file, while test-only nested includes remain excluded.
+Test conditions on native module/expression ancestors and enclosing macro
+expansions remain attached to each include role before mapping its original
+source position. Production and test roles at the same original call site remain
+distinct.
 Pure static projects use the same native role queries. Explicit selection
 preserves the existing declaration-level test filtering and parent query.
 Production graph nodes remain limited to the resolved selection; unselected

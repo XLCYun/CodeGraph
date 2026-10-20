@@ -34,6 +34,12 @@ struct Resolver<'a> {
     visiting_files: BTreeSet<String>,
 }
 
+/// 父归属单独保留展开中的测试条件；没有导航位置表示 crate 根身份。
+struct SourceParent {
+    navigation: Option<Navigation>,
+    test_only: bool,
+}
+
 /// 组装词法包含和非包含关联，最后通过公共构造函数校验全部图约束。
 pub(super) fn analyze(
     project: &RustProject,
@@ -306,7 +312,7 @@ impl Resolver<'_> {
     }
 
     /// 发现时合并实际模块与 include 调用；include-only 源码不使用调用文件的模块代理。
-    fn parents(&self, key: &str) -> Result<Vec<Option<Navigation>>> {
+    fn parents(&self, key: &str) -> Result<Vec<SourceParent>> {
         let file = self.project.file_id(Path::new(key))?;
         let source = self
             .discovered
@@ -320,17 +326,23 @@ impl Resolver<'_> {
         };
         let mut parents = parents
             .into_iter()
-            .map(|parent| match parent {
-                ModuleParent::CrateRoot => Ok(None),
-                ModuleParent::Declaration(target) => self.navigation(target).map(Some),
+            .map(|parent| {
+                Ok(SourceParent {
+                    navigation: match parent {
+                        ModuleParent::CrateRoot => None,
+                        ModuleParent::Declaration(target) => Some(self.navigation(target)?),
+                    },
+                    test_only: false,
+                })
             })
             .collect::<Result<Vec<_>>>()?;
         if let Some(source) = source {
-            parents.extend(source.includes.iter().map(|origin| {
-                Some(Navigation {
+            parents.extend(source.includes.iter().map(|origin| SourceParent {
+                navigation: Some(Navigation {
                     key: origin.path.to_string_lossy().into_owned(),
                     offset: origin.offset,
-                })
+                }),
+                test_only: origin.test_only,
             }));
         }
         Ok(parents)
@@ -369,7 +381,10 @@ impl Resolver<'_> {
             return Ok(false);
         }
         for parent in parents {
-            let Some(location) = parent else {
+            if parent.test_only {
+                continue;
+            }
+            let Some(location) = parent.navigation else {
                 // 发现时按 target 角色判断 crate 根，其他生产模块归属仍能阻止整份源码被排除。
                 if self.discovered.is_some() && self.project.test_target_root(Path::new(key)) {
                     continue;
@@ -458,7 +473,10 @@ impl Resolver<'_> {
             return Ok(targets);
         }
         for parent in self.parents(key)? {
-            let location = match parent {
+            if !self.options.include_tests && parent.test_only {
+                continue;
+            }
+            let location = match parent.navigation {
                 None => {
                     if let Some(target) = self.crate_root(key)? {
                         targets.push(target);

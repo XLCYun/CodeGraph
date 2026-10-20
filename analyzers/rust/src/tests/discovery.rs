@@ -683,6 +683,148 @@ macro_rules! generate_tests { () => { include!("macro_checks.rs"); }; }
     support::assert_unchanged(root.path(), &before);
 }
 
+/// 展开内部的模块、表达式及中间调用属性参与归属，同一宏调用点的生产角色不能被折叠掉。
+#[test]
+fn discovery_preserves_test_roles_inside_native_expansions() {
+    let cases = [
+        (
+            "generated module",
+            r#"macro_rules! generate_tests {
+                () => { #[cfg(test)] mod generated_tests { include!("checks.rs"); } };
+            }
+            generate_tests!();"#,
+            false,
+        ),
+        (
+            "intermediate expansion",
+            r#"macro_rules! inner_tests { () => { include!("checks.rs"); }; }
+            macro_rules! generate_tests { () => { #[cfg(test)] inner_tests!(); }; }
+            generate_tests!();"#,
+            false,
+        ),
+        (
+            "generated test function",
+            r#"macro_rules! generate_tests {
+                () => { #[test] fn generated_test() { include!("checks.rs"); } };
+            }
+            generate_tests!();"#,
+            false,
+        ),
+        (
+            "generated test block",
+            r#"macro_rules! generate_tests {
+                () => { fn generated() { #[cfg(test)] { include!("checks.rs"); } } };
+            }
+            generate_tests!();"#,
+            false,
+        ),
+        (
+            "shared expansion call site",
+            r#"macro_rules! generate_tests {
+                () => {
+                    #[cfg(test)] mod generated_tests { include!("checks.rs"); }
+                    mod generated_production { include!("checks.rs"); }
+                };
+            }
+            generate_tests!();"#,
+            true,
+        ),
+        (
+            "production expansion",
+            r#"macro_rules! generate_tests {
+                () => { mod generated_production { include!("checks.rs"); } };
+            }
+            generate_tests!();"#,
+            true,
+        ),
+    ];
+    for (case, source, production_owner) in cases {
+        let root = tempfile::tempdir().unwrap();
+        write(
+            root.path(),
+            "lib.rs",
+            &format!(
+                r#"
+#[rustc_builtin_macro] macro_rules! include {{ ($file:expr) => {{}} }}
+{source}
+pub fn production() {{}}
+"#
+            ),
+        );
+        write(
+            root.path(),
+            "checks.rs",
+            "pub fn generated_test_helper() {}",
+        );
+        write(
+            root.path(),
+            "rust-project.json",
+            &json!({"crates":[{
+                "root_module":"lib.rs","edition":"2021","is_workspace_member":true,
+                "deps":[],"cfg":["test"],"env":{}
+            }]})
+            .to_string(),
+        );
+        let before = support::snapshot(root.path());
+        for include_tests in [false, true] {
+            let result = projection::analyze(&request(root.path(), None, include_tests)).unwrap();
+            let retained = include_tests || production_owner;
+            assert_eq!(
+                coverage(&result),
+                BTreeMap::from([
+                    (
+                        "checks.rs",
+                        if retained {
+                            "analyzed"
+                        } else {
+                            "excluded_test"
+                        }
+                    ),
+                    ("lib.rs", "analyzed"),
+                ]),
+                "{case}, include_tests={include_tests}"
+            );
+            let nodes = result["graph"]["nodes"].as_array().unwrap();
+            assert!(
+                nodes.iter().any(|node| node["name"] == "production"),
+                "{case}"
+            );
+            assert_eq!(
+                nodes
+                    .iter()
+                    .any(|node| node["name"] == "generated_test_helper"),
+                retained,
+                "{case}"
+            );
+            assert_eq!(
+                result["evidence"]["origins"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|origin| origin["selected_paths"] == json!(["checks.rs"])),
+                retained,
+                "{case}"
+            );
+        }
+        // 静态项目的显式选集仍按源码自身属性过滤，不采用本次新增的展开归属。
+        let explicit =
+            projection::analyze(&request(root.path(), Some(&["checks.rs"]), false)).unwrap();
+        assert_eq!(
+            coverage(&explicit),
+            BTreeMap::from([("checks.rs", "analyzed")])
+        );
+        assert!(
+            explicit["graph"]["nodes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|node| node["name"] == "generated_test_helper"),
+            "{case}"
+        );
+        support::assert_unchanged(root.path(), &before);
+    }
+}
+
 /// 已解析的 include 必须保留可读原文，不能把无效字节当作空文件返回覆盖成功。
 #[test]
 fn discovery_rejects_invalid_include_source_text() {

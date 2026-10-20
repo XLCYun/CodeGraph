@@ -4,7 +4,7 @@ mod model;
 mod references;
 mod symbols;
 mod syntax;
-mod test_code;
+pub(crate) mod test_code;
 
 use crate::{DependencyScope, RustProject, protocol::Request};
 use anyhow::{Context, Result, ensure};

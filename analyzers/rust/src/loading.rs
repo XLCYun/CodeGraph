@@ -38,11 +38,12 @@ pub(crate) struct DiscoveredSource {
     pub includes: BTreeSet<IncludeOrigin>,
 }
 
-/// 实际 include 调用在原始源码中的位置；同一文件可同时属于生产和测试调用。
+/// 原始调用位置与展开链测试条件共同标记归属，同一物理位置的不同展开角色不能折叠。
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct IncludeOrigin {
     pub path: PathBuf,
     pub offset: syntax::TextSize,
+    pub test_only: bool,
 }
 
 /// 与现有 Rust 设置对应的三档语义依赖范围。
@@ -427,9 +428,22 @@ pub(super) fn discover_sources(
             continue;
         };
         let path = discovered_source_path(database, vfs, repository, file)?;
-        let origin = location
-            .to_node(database)
-            .original_file_range_rooted(database);
+        let mut expansion = location.to_node(database);
+        let origin = expansion.clone().original_file_range_rooted(database);
+        // 先检查每层原生 AST 的模块/表达式祖先，再回到上一层调用；只保留最外层位置会丢失生成的属性。
+        let test_only = loop {
+            if expansion
+                .value
+                .ancestors()
+                .any(|node| crate::projection::test_code::is_test_only(&node))
+            {
+                break true;
+            }
+            let Some(parent) = expansion.file_id.macro_file() else {
+                break false;
+            };
+            expansion = parent.loc(database).to_node(database);
+        };
         let origin_path = discovered_source_path(database, vfs, repository, origin.file_id)?;
         files
             .entry(path)
@@ -438,6 +452,7 @@ pub(super) fn discover_sources(
             .insert(IncludeOrigin {
                 path: origin_path,
                 offset: origin.range.start(),
+                test_only,
             });
         ensure!(
             files.len() <= codegraph_engine_common::selection::MAX_FILES,
