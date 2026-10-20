@@ -107,6 +107,8 @@ export async function verifyPublicCli(artifacts, language = 'all') {
       const missingError = fixture.missing || !fixture.implicit ? 'analysis_failed' : undefined;
       const missingResult = await exchangeCli(executable, id, request(identity, id, missing.root, 'missing'), identity, missingError);
       if (!missingError) assertGraph(missingResult);
+      // 保留原 Java/C++ 公开负例：显式选集也不能绕过必需配置。
+      if (['java', 'c-cpp'].includes(id)) await exchangeCli(executable, id, request(identity, id, missing.root, 'missing-explicit', fixture.files), identity, 'analysis_failed');
       assert.deepEqual(await exchangeCli(executable, id, request(identity, id, missing.root, 'missing-empty', []), identity), emptyGraph);
       await assertPublicProjectUnchanged(missing);
       if (fixture.implicit && fixture.missing) {
