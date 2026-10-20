@@ -11,7 +11,13 @@ mod protocol;
 pub(crate) use profiles::rust_environment;
 pub use profiles::NativeProfile;
 
-use std::{collections::BTreeMap, ffi::OsString, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    collections::BTreeMap,
+    ffi::OsString,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
 use super::code_graph::{AnalysisError, AnalysisInput, CodeGraph, LanguageAnalyzer};
 
@@ -78,6 +84,8 @@ impl Default for AnalysisLimits {
 #[derive(Clone)]
 pub struct NativeLanguageAnalyzer {
     command: HelperCommand,
+    /// 工厂验证的完整安装包边界；不能由可能更窄的可执行文件信任根推导。
+    package_root: Option<PathBuf>,
     identity: HelperIdentity,
     platforms: Vec<Platform>,
     limits: AnalysisLimits,
@@ -109,6 +117,7 @@ impl NativeLanguageAnalyzer {
         }
         Self {
             command,
+            package_root: None,
             identity,
             platforms,
             limits: AnalysisLimits::default(),
@@ -119,6 +128,21 @@ impl NativeLanguageAnalyzer {
     /// 项目平台探测前复用完整选集和支持包边界校验，不启动 helper。
     pub(crate) fn validate_input(&self, input: &AnalysisInput) -> Result<()> {
         input::validate(self, input).map(|_| ())
+    }
+
+    /// 工厂单独保存规范化的完整包根，不改变各语言的可执行文件授权。
+    pub(crate) fn with_package_root(mut self, root: PathBuf) -> Self {
+        self.package_root = Some(root);
+        self
+    }
+
+    /// 实际启动和验收共用完整包边界；没有工厂边界时不能批准观察位置。
+    fn observation_destination(&self, path: &Path, repository: &Path) -> Result<PathBuf> {
+        let package = self
+            .package_root
+            .as_ref()
+            .ok_or_else(|| failure("验收观察缺少完整安装包边界"))?;
+        observation::destination(path, repository, std::slice::from_ref(package)).map_err(failure)
     }
 
     /// 工厂按类型化 Rust 范围固定已探测的项目平台，仍强制共用环境白名单。

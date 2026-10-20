@@ -408,6 +408,8 @@ in ordinary consumers and graph checks. It adds no protocol field, public option
 delay or execution gate. The Host accepts only a fresh `reached.json` destination
 in an empty `codegraph-discovery-probe-*` directory under the system temporary
 directory, canonicalized outside the input repository and installed package.
+The production adapter retains the complete package root separately from executable
+trust roots; Python's executable trust remains restricted to the package's `bin`.
 Existing destinations, direct parent links and canonical repository/package
 overlap are rejected. Native
 writers publish a bounded complete marker atomically without replacing a target.

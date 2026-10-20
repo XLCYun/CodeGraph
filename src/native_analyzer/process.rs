@@ -65,12 +65,7 @@ impl Session {
             .stderr(Stdio::piped());
         if input.files.is_none() {
             if let Some(path) = std::env::var_os(super::observation::VARIABLE) {
-                let path = super::observation::destination(
-                    Path::new(&path),
-                    &input.repository,
-                    &analyzer.command.trusted_roots,
-                )
-                .map_err(failure)?;
+                let path = analyzer.observation_destination(Path::new(&path), &input.repository)?;
                 command.env(super::observation::VARIABLE, path);
             }
         }

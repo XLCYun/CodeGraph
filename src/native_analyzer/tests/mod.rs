@@ -708,6 +708,7 @@ mod directory;
 mod discovery;
 #[path = "migration.rs"]
 mod migration;
+mod package_observation;
 
 mod python_graph;
 mod python_native;

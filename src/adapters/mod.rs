@@ -112,7 +112,8 @@ pub(crate) trait Adapter: Copy + Send + 'static {
                 profile: Self::ENGINE.profile.into(),
             },
             platforms,
-        ))
+        )
+        .with_package_root(root))
     }
 
     /// 普通语言通过私有 Host 完成来源与图校验，Rust 在自己的适配器覆盖依赖政策。
