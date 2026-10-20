@@ -204,6 +204,11 @@ When `resolveJsonModule` is enabled, JSON files explicitly selected by native
 configured roots also receive selection and configuration evidence. Their
 projection is a source file container; JSON data is not an executable region.
 Imported-only JSON and arbitrary metadata do not become selected sources.
+JSON source eligibility comes from the initial first-party input inventory,
+independently of metadata read authorization. Extends may still read permitted
+configuration in excluded dependency/tool trees, but nominating that metadata
+as a source root fails. This source boundary is separate from package-manager
+membership and does not veto authorized native roots outside workspace packages.
 If a selected JSON file is also a control file, its source AST uses the original
 snapshot bytes while configuration parsing retains its separate overlay.
 Explicit file requests keep the existing TS/JS-only source authorization.

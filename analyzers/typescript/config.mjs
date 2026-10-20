@@ -145,8 +145,8 @@ export function prepareConfigurations(context, ts, sources, discovery = false) {
       context.checkpoint();
       validateEffectivePath(file, configDirectory, '配置成员');
       const identity = fs.existsSync(file) ? canonicalPath(file) : path.resolve(file);
-      // JSON 仅在发现模式下由原生配置根授权；metadata 和导入可达性本身不提供选集资格。
-      if (discovery && /\.json$/i.test(identity) && context.metadata.has(identity)) {
+      // JSON 须同时属于原生配置根和第一方输入；extends 后补元数据不提供源码资格。
+      if (discovery && /\.json$/i.test(identity) && context.firstPartyFiles.has(identity)) {
         if (!parsed.options.resolveJsonModule) throw new Error(`JSON 配置成员需要 resolveJsonModule：${file}`);
         configuredJsonFiles.add(identity);
         if (!candidates.has(identity)) candidates.set(identity, []);

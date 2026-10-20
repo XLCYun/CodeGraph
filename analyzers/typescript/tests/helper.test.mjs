@@ -86,6 +86,43 @@ test('configured JSON roots retain original control-file bytes and reject invali
   assert.throws(() => analyze(ts, request(root, undefined)), /无法解析/);
 });
 
+/** 相同授权边界覆盖依赖、工具目录和可识别的 Cargo 输出目录。 */
+for (const directory of ['node_modules', '.git', '.tools', '.narrant-typescript', 'target']) {
+  /** 被排除目录的配置可供 extends 读取，但不能因此取得第一方源码资格。 */
+  test(`discovery keeps excluded extends metadata outside source eligibility: ${directory}`, t => {
+    const base = `${directory}/base/tsconfig.json`;
+    const config = { extends: `./${base}`, compilerOptions: { module: 'Preserve', moduleResolution: 'Bundler', resolveJsonModule: true, types: [] }, files: ['src/main.ts'] };
+    const contents = {
+      'tsconfig.json': JSON.stringify(config), 'src/main.ts': 'export function own(){}',
+      [base]: '{"compilerOptions":{}}', ...(directory === 'target' ? { 'Cargo.toml': '' } : {}),
+    };
+    const root = fixture(t, contents);
+    const allowed = analyze(ts, request(root, undefined));
+    assert.deepEqual(allowed.evidence.files.map(file => file.path), ['src/main.ts']);
+    assert.ok(allowed.evidence.configurations[0].source_paths.includes(base));
+    config.files.push(base);
+    contents['tsconfig.json'] = JSON.stringify(config);
+    fs.writeFileSync(path.join(root, 'tsconfig.json'), contents['tsconfig.json']);
+    assert.throws(() => analyze(ts, request(root, undefined)), /配置成员不是受控源码/);
+    assert.deepEqual(analyze(ts, request(root, ['src/main.ts'])).evidence.files.map(file => file.path), ['src/main.ts']);
+    for (const [name, source] of Object.entries(contents)) assert.equal(fs.readFileSync(path.join(root, name), 'utf8'), source);
+  });
+}
+
+/** 第一方源码资格不等于 package-manager membership，普通 target 目录也仍可包含源文件。 */
+test('discovery source eligibility preserves native JSON roots outside workspace package membership', t => {
+  const root = fixture(t, {
+    'package.json': '{"workspaces":["packages/*","!packages/ignored"]}',
+    'packages/ignored/package.json': '{"name":"ignored"}',
+    'packages/ignored/data.json': '{"value":1}', 'target/data.json': '{"value":2}',
+    'tsconfig.json': '{"compilerOptions":{"module":"Preserve","moduleResolution":"Bundler","resolveJsonModule":true,"types":[]},"files":["src/main.ts","packages/ignored/data.json","target/data.json"]}',
+    'src/main.ts': 'export function own(){}',
+  });
+  const result = analyze(ts, request(root, undefined));
+  assert.deepEqual(result.evidence.files.map(file => file.path), ['packages/ignored/data.json', 'src/main.ts', 'target/data.json']);
+  assert.equal(result.graph.nodes.filter(node => node.native_kind === 'file').length, 3);
+});
+
 /** 合法默认项目和空配置都保留配置证据；无效配置不能伪装为空选集。 */
 test('discovery supports defaults and configured empty while rejecting bad configuration', t => {
   for (const contents of [{}, {'tsconfig.json':'{"files":[]}'}, {'jsconfig.json':'{"include":["missing"]}'}]) {

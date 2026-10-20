@@ -114,6 +114,8 @@ export function createWorkspace(input) {
     }
   }
   visit(root);
+  // 源输入资格固定为第一方遍历结果；extends 后补的可读元数据不能扩充此集合。
+  const firstPartyFiles = new Set([...sources, ...metadata]);
   const rootManifest = path.join(root, 'package.json');
   const packageData = manifests.includes(rootManifest) ? JSON.parse(read(rootManifest).toString('utf8')) : {};
   let patterns = packageData.workspaces?.packages ?? packageData.workspaces ?? [];
@@ -153,7 +155,7 @@ export function createWorkspace(input) {
   function member(file) {
     return !matchers.length || memberPackages.has(packageDirectories.find(directory => within(directory, file)) ?? root);
   }
-  return { root, runtime, sources, metadata, links, overlays, member, checkpoint, read, unchanged, snapshots, directories, policyError: input.policy_error };
+  return { root, runtime, sources, metadata, firstPartyFiles, links, overlays, member, checkpoint, read, unchanged, snapshots, directories, policyError: input.policy_error };
 }
 
 /** 给 TypeScript 的文件读取接口限定上下文，所有真实源码仍从 Git workspace 原位读取。 */
