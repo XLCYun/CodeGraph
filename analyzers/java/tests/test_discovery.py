@@ -1,5 +1,6 @@
 """用真实 JDT 验证配置驱动的目录发现与精确显式选集。"""
 
+import os
 import pathlib
 import sys
 import tempfile
@@ -103,6 +104,28 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(result["outcome"], "cancelled", result)
         result = run(discover(self.root, timeout=1))
         self.assertEqual(result["error"]["code"], "resource_limit", result)
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX directory traversal permissions")
+    def test_inaccessible_source_root_ancestor_is_not_empty(self):
+        """已存在源码根的祖先不可访问时必须报错，不能伪装成缺失目录。"""
+        write(self.root, "pom.xml", "<project><groupId>fixture</groupId><artifactId>unreadable</artifactId><version>1</version><properties><maven.compiler.release>17</maven.compiler.release></properties><build><sourceDirectory>blocked/code</sourceDirectory></build></project>")
+        write(self.root, "blocked/code/Hidden.java", "class Hidden {}")
+        blocked = self.root / "blocked"
+        original_mode = blocked.stat().st_mode & 0o7777
+        blocked.chmod(0)
+        try:
+            try:
+                (blocked / "code").stat()
+            except PermissionError:
+                pass
+            else:
+                self.skipTest("current privileges or filesystem do not enforce POSIX traversal permissions")
+            result = run(discover(self.root))
+            self.assertEqual(result["outcome"], "error", result)
+            self.assertEqual(result["error"]["code"], "unsupported_configuration", result)
+            self.assertNotIn("graph", result)
+        finally:
+            blocked.chmod(original_mode)
 
     @unittest.skipIf(sys.platform == "win32", "symlink creation needs Windows privileges")
     def test_source_root_cannot_escape_repository(self):

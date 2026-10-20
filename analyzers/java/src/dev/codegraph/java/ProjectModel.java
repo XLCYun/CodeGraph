@@ -3,11 +3,14 @@ package dev.codegraph.java;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -524,13 +527,26 @@ final class ProjectModel {
             current = current.resolve(part);
             if (Files.isSymbolicLink(current)) throw new Failure("unsupported_configuration", "source directory symlink unsupported", List.of(relative));
         }
-        if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) return directory;
+        if (!sourceDirectoryExists(directory, relative)) return directory;
         try {
-            if (!directory.toRealPath().startsWith(repository) || !Files.isDirectory(directory))
+            if (!directory.toRealPath().startsWith(repository))
                 throw new Failure("unsupported_configuration", "invalid source root", List.of(relative));
         } catch (Failure e) { throw e; }
         catch (Exception e) { throw new Failure("unsupported_configuration", "cannot read source root", List.of(relative)); }
         return directory;
+    }
+
+    /** 只把属性读取明确报告的缺失目录视为空根，保留访问失败和其他 I/O 错误。 */
+    private static boolean sourceDirectoryExists(Path directory, String relative) throws Failure {
+        try {
+            BasicFileAttributes attributes = Files.readAttributes(directory, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+            if (!attributes.isDirectory())
+                throw new Failure("unsupported_configuration", "invalid source root", List.of(relative));
+            return true;
+        } catch (NoSuchFileException e) { return false; }
+        catch (IOException | SecurityException e) {
+            throw new Failure("unsupported_configuration", "cannot read source root", List.of(relative));
+        }
     }
 
     /** 对声明根仅枚举一次，发现与语义上下文共享有界且可取消的清单。 */
@@ -539,7 +555,7 @@ final class ProjectModel {
         if (inventories.containsKey(sourceRoot.path)) return inventories.get(sourceRoot.path);
         Path directory = checkedRoot(repository, sourceRoot.path);
         List<String> discovered = new ArrayList<>();
-        if (Files.exists(directory)) try (var stream = Files.walk(directory)) {
+        if (sourceDirectoryExists(directory, sourceRoot.path)) try (var stream = Files.walk(directory)) {
             var paths = stream.iterator();
             while (paths.hasNext()) {
                 checkpoint.check();
