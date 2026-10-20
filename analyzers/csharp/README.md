@@ -135,3 +135,10 @@ python3 -m unittest discover -s analyzers/csharp/tests -v
 The .NET 8/9/10 versions above are test fixtures, not the product's target catalog.
 The optional .NET 9 fixture proves a previously unlisted TFM and a nonzero patch
 with real reference assemblies; CI configures it so this regression test runs.
+
+## 目录发现
+
+私有 `input.files` 省略时，由本语言配置加载器确定完整选集；`[]` 是明确空选集，
+`null` 无效。显式数组保持精确选择。具体成员、排除规则、测试角色与限制见
+[引擎选集政策](../../docs/engine-selection.md)。新增目录发现测试由现有原生验收命令运行，
+Host 来源校验另由 `src/native_analyzer/tests/directory/` 的真实引擎用例覆盖。

@@ -20,9 +20,28 @@ internal static class Analyzer
             !Directory.Exists(input.RepositoryRoot) || !Path.IsPathFullyQualified(request.Environment.ScratchRoot))
             throw new HelperException("invalid_input", "Invalid C# profile, repository, or scratch root");
         var root = Path.GetFullPath(input.RepositoryRoot).TrimEnd(Path.DirectorySeparatorChar);
-        var selected = input.Files.ToHashSet(StringComparer.Ordinal);
-        foreach (var file in selected) Configuration.CheckFile(root, file);
+        var selected = new HashSet<string>(StringComparer.Ordinal);
+        if (input.Files is { } explicitFiles)
+        {
+            foreach (var file in explicitFiles)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                Configuration.CheckFile(root, file);
+                selected.Add(file);
+                if (selected.Count > Protocol.MaxFiles) throw new HelperException("resource_limit", "C# selection exceeds file limit");
+            }
+            if (explicitFiles.Length == 0) return new GraphAccumulator().Finish(new Evidence([], [], []));
+        }
         var configurations = Configuration.Discover(root, cancellation);
+        if (input.Files is null)
+            foreach (var config in configurations)
+                foreach (var file in config.Files)
+                {
+                    cancellation.ThrowIfCancellationRequested();
+                    Configuration.CheckFile(root, file);
+                    selected.Add(file);
+                    if (selected.Count > Protocol.MaxFiles) throw new HelperException("resource_limit", "C# discovery exceeds file limit");
+                }
         var platformIds = request.Environment.Platforms.Select(p => p.Id).ToArray();
         if (platformIds.Distinct(StringComparer.Ordinal).Count() != platformIds.Length)
             throw new HelperException("invalid_input", "Duplicate platform ids");
@@ -72,7 +91,7 @@ internal static class Analyzer
         foreach (var (path, ids) in coverage)
             if (ids.Count == 0 && excludedTests[path].Count == 0 && inactive[path].Count == 0)
                 throw new HelperException("unsupported_configuration", "Selected C# file is outside all supported configurations", path);
-        var files = input.Files.Select(path => coverage[path].Count > 0
+        var files = selected.Order(StringComparer.Ordinal).Select(path => coverage[path].Count > 0
             ? new FileEvidence(path, "analyzed", coverage[path].Order(StringComparer.Ordinal).ToArray())
             : excludedTests[path].Count > 0
                 ? new FileEvidence(path, "excluded_test", excludedTests[path].Order(StringComparer.Ordinal).ToArray())

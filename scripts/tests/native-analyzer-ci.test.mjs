@@ -83,7 +83,7 @@ test('all enabled helpers and narrow absolute platform roots are mandatory', () 
 test('verification uses every helper suite and serialized Cargo host and real graph tests', () => {
   const environment = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`CODEGRAPH_${name}`, '/isolated/tools']));
   const commands = verificationCommands(environment, 'win32');
-  assert.equal(commands.length, 16);
+  assert.equal(commands.length, 20);
   assert.equal(commands[2].environment.CODEGRAPH_TEST_REFS8, path.join('/isolated/tools', 'ref/net8.0'));
   assert.match(commands[0].executable, /go\.exe$/);
   assert.deepEqual(commands.filter(command => command.args[0] === '-m').map(command => command.args[4]), ['analyzers/java/tests', 'analyzers/csharp/tests', 'analyzers/clang/tests']);
@@ -95,7 +95,7 @@ test('verification uses every helper suite and serialized Cargo host and real gr
   assert.deepEqual(csharpFactory.args, ['scripts/cargo-agent.sh', 'test', '--locked', '--lib', 'adapters::csharp_graph::', '--', '--ignored', '--test-threads=1']);
   assert.deepEqual(csharpFactory.requiredTests, ['adapters::csharp_graph::factory_preserves_source_and_local_calls']);
   assert.ok(commands.at(-1).args.includes('scripts/language-packs/verify-public-cli.mjs'));
-  assert.equal(commands.flatMap(command => command.requiredTests ?? []).length, 67);
+  assert.equal(commands.flatMap(command => command.requiredTests ?? []).length, 71);
   assert.throws(() => verificationCommands({}), /Missing fixed toolchain/);
 });
 
@@ -104,8 +104,8 @@ test('shared process and native acceptance use the same live groups on both plat
   const environment = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`CODEGRAPH_${name}`, '/isolated/tools']));
   const windows = verificationCommands(environment, 'win32');
   const macOS = verificationCommands(environment, 'darwin');
-  assert.equal(macOS.length, 17);
-  assert.equal(windows.length, 16);
+  assert.equal(macOS.length, 21);
+  assert.equal(windows.length, 20);
   assert.ok(macOS.some(command => command.args.includes('adapters::rust::tests::')));
   assert.ok(windows.every(command => !command.args.includes('adapters::rust::tests::')));
   for (const commands of [windows, macOS]) {
@@ -224,8 +224,8 @@ test('reference package verification checks SHA512 content', async () => {
 /** 每个平台编译出的原有语义断言都必须逐名接入。 */
 test('semantic acceptance inventory exactly covers all retained ignored tests', async () => {
   const inventory = JSON.parse(await fs.readFile(new URL('../../resources/semantic-acceptance.json', import.meta.url)));
-  assert.equal(inventory.filter(item => item.platforms.includes('darwin')).length, 73);
-  assert.equal(inventory.filter(item => item.platforms.includes('win32')).length, 67);
+  assert.equal(inventory.filter(item => item.platforms.includes('darwin')).length, 77);
+  assert.equal(inventory.filter(item => item.platforms.includes('win32')).length, 71);
   const environment = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`CODEGRAPH_${name}`, '/isolated/tools']));
   for (const platform of ['darwin', 'win32']) {
     const commands = verificationCommands(environment, platform);

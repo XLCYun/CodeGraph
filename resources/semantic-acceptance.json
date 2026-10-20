@@ -1,5 +1,41 @@
 [
   {
+    "language": "go",
+    "source": "src/native_analyzer/tests/directory/go.rs",
+    "name": "native_analyzer::tests::directory::go::workspace_discovery_preserves_exact_selection_and_test_roles",
+    "platforms": [
+      "darwin",
+      "win32"
+    ]
+  },
+  {
+    "language": "java",
+    "source": "src/native_analyzer/tests/directory/java.rs",
+    "name": "native_analyzer::tests::directory::java::source_root_discovery_preserves_exact_selection_and_test_roles",
+    "platforms": [
+      "darwin",
+      "win32"
+    ]
+  },
+  {
+    "language": "csharp",
+    "source": "src/native_analyzer/tests/directory/csharp.rs",
+    "name": "native_analyzer::tests::directory::csharp::compile_discovery_preserves_exact_selection_and_test_roles",
+    "platforms": [
+      "darwin",
+      "win32"
+    ]
+  },
+  {
+    "language": "c-cpp",
+    "source": "src/native_analyzer/tests/directory/clang.rs",
+    "name": "native_analyzer::tests::directory::clang::participation_discovery_preserves_headers_and_exact_selection",
+    "platforms": [
+      "darwin",
+      "win32"
+    ]
+  },
+  {
     "language": "python",
     "source": "src/native_analyzer/tests/python_graph.rs",
     "name": "native_analyzer::tests::python_graph::directory_discovery_preserves_members_context_and_explicit_selection",

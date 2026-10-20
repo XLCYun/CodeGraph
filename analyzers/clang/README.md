@@ -105,3 +105,10 @@ macOS CI 可设置 `CODEGRAPH_MACOS_SDK` 指向固定 Xcode SDK，测试读取 S
 LinkageSpec 签名只保留 `extern` 与语言字符串。共用 Var/Field 声明通过 AST 基础 TypeLoc 取得
 共享声明前缀，然后分离每个 declarator；前一个 initializer 不进入后一个节点的 code/signature。
 这支持已验证的全局多变量、类字段、指针及数组声明，父节点仍只保留独立子对象锚点。
+
+## 目录发现
+
+私有 `input.files` 省略时，由本语言配置加载器确定完整选集；`[]` 是明确空选集，
+`null` 无效。显式数组保持精确选择。具体成员、排除规则、测试角色与限制见
+[引擎选集政策](../../docs/engine-selection.md)。新增目录发现测试由现有原生验收命令运行，
+Host 来源校验另由 `src/native_analyzer/tests/directory/` 的真实引擎用例覆盖。

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"go/build"
 	"go/build/constraint"
@@ -29,6 +30,7 @@ type module struct {
 
 // project 持有只读仓库模块索引和配置文件来源。
 type project struct {
+	Context        context.Context
 	Root           string
 	Modules        []*module
 	WorkSource     string
@@ -85,10 +87,18 @@ func relativeFile(root, relative string) (string, error) {
 
 // scanConfig 将 go.mod/go.work 的有限声明式子集分组成指令。
 func scanConfig(data []byte) ([][]string, error) {
+	return scanConfigContext(context.Background(), data)
+}
+
+// scanConfigContext 在逐行解析配置时响应取消，避免大工作区阻塞发现。
+func scanConfigContext(ctx context.Context, data []byte) ([][]string, error) {
 	var directives [][]string
 	var block string
 	scanner := bufio.NewScanner(strings.NewReader(string(data)))
 	for scanner.Scan() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "//") {
 			continue
@@ -146,16 +156,27 @@ func localDirectivePath(root, base, spelling string) (string, error) {
 
 // parseMod 解释 module、go、require 和仓内 replace；未知构建语义失败。
 func parseMod(root, filename string) (*module, error) {
+	return parseModContext(context.Background(), root, filename)
+}
+
+// parseModContext 复用请求期限解析已准入模块，不重新加载项目模型。
+func parseModContext(ctx context.Context, root, filename string) (*module, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	data, err := safeFile(root, filename)
 	if err != nil {
 		return nil, err
 	}
-	directives, err := scanConfig(data)
+	directives, err := scanConfigContext(ctx, data)
 	if err != nil {
 		return nil, err
 	}
 	m := &module{Dir: filepath.Dir(filename), Replaces: map[string]string{}}
 	for _, p := range directives {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		switch p[0] {
 		case "module":
 			if len(p) != 2 || m.Path != "" {
@@ -207,7 +228,12 @@ func parseMod(root, filename string) (*module, error) {
 
 // loadProject 静态发现仓内 module/workspace，不查询 go 命令或用户缓存。
 func loadProject(root string, selected []string) (*project, *analysisError) {
-	p := &project{Root: root, Replace: map[string]string{}, WorkReplace: map[string]string{}, ContextModules: map[string]*module{}}
+	return loadProjectContext(context.Background(), root, selected)
+}
+
+// loadProjectContext 在同一请求期限内解释根配置或显式文件的模块归属。
+func loadProjectContext(ctx context.Context, root string, selected []string) (*project, *analysisError) {
+	p := &project{Context: ctx, Root: root, Replace: map[string]string{}, WorkReplace: map[string]string{}, ContextModules: map[string]*module{}}
 	work := filepath.Join(root, "go.work")
 	var useDirs []string
 	if _, err := os.Lstat(work); err == nil {
@@ -215,12 +241,18 @@ func loadProject(root string, selected []string) (*project, *analysisError) {
 		if err != nil {
 			return nil, fail("unsupported_configuration", err.Error(), "go.work")
 		}
-		directives, err := scanConfig(data)
+		directives, err := scanConfigContext(ctx, data)
+		if problem := p.checkpoint(); problem != nil {
+			return nil, problem
+		}
 		if err != nil {
 			return nil, fail("unsupported_configuration", err.Error(), "go.work")
 		}
 		p.WorkSource = "go.work"
 		for _, parts := range directives {
+			if problem := p.checkpoint(); problem != nil {
+				return nil, problem
+			}
 			switch parts[0] {
 			case "go":
 				if len(parts) != 2 || p.WorkGo != "" || !validGoVersion(parts[1]) {
@@ -270,9 +302,14 @@ func loadProject(root string, selected []string) (*project, *analysisError) {
 	} else if !os.IsNotExist(err) {
 		return nil, fail("unsupported_configuration", err.Error(), "go.work")
 	}
-	if p.WorkSource == "" {
+	if p.WorkSource == "" && selected == nil {
+		useDirs = append(useDirs, root)
+	} else if p.WorkSource == "" {
 		seen := map[string]bool{}
 		for _, rel := range selected {
+			if problem := p.checkpoint(); problem != nil {
+				return nil, problem
+			}
 			dir := filepath.Dir(filepath.Join(root, filepath.FromSlash(rel)))
 			for {
 				if err := within(root, dir); err != nil {
@@ -302,7 +339,13 @@ func loadProject(root string, selected []string) (*project, *analysisError) {
 	sort.Strings(useDirs)
 	paths := map[string]bool{}
 	for _, dir := range useDirs {
-		m, err := parseMod(root, filepath.Join(dir, "go.mod"))
+		if problem := p.checkpoint(); problem != nil {
+			return nil, problem
+		}
+		m, err := parseModContext(ctx, root, filepath.Join(dir, "go.mod"))
+		if problem := p.checkpoint(); problem != nil {
+			return nil, problem
+		}
 		if err != nil {
 			return nil, fail("unsupported_configuration", err.Error(), filepath.ToSlash(strings.TrimPrefix(dir, root+string(filepath.Separator)))+"/go.mod")
 		}
@@ -362,7 +405,7 @@ func (p *project) moduleForPackage(dir string) (*module, error) {
 	if m := p.ContextModules[base]; m != nil {
 		return m, nil
 	}
-	m, err := parseMod(p.Root, filepath.Join(base, "go.mod"))
+	m, err := parseModContext(p.Context, p.Root, filepath.Join(base, "go.mod"))
 	if err != nil {
 		return nil, fmt.Errorf("local replacement go.mod: %w", err)
 	}
@@ -498,6 +541,9 @@ func discoverPlatforms(project *project, selected []string, includeTests bool, c
 		selectedSet[rel] = true
 	}
 	for _, rel := range contextFiles {
+		if problem := project.checkpoint(); problem != nil {
+			return nil, problem
+		}
 		hasTarget, problem := hasTargetConstraint(project.Root, rel)
 		if problem != nil {
 			return nil, problem
@@ -525,6 +571,9 @@ func discoverPlatforms(project *project, selected []string, includeTests bool, c
 		}
 		buildContext := standardTarget(candidate)
 		for _, rel := range explicit {
+			if problem := project.checkpoint(); problem != nil {
+				return nil, problem
+			}
 			matches, err := buildContext.MatchFile(filepath.Join(project.Root, filepath.Dir(rel)), filepath.Base(rel))
 			if err != nil {
 				return nil, fail("unsupported_configuration", err.Error(), rel)
@@ -602,6 +651,9 @@ func projectContextFiles(p *project, selected []string, includeTests bool, sdk p
 	sort.Strings(queue)
 	visited := map[string]bool{}
 	for len(queue) > 0 {
+		if problem := p.checkpoint(); problem != nil {
+			return nil, problem
+		}
 		dir := queue[0]
 		queue = queue[1:]
 		if visited[dir] {
@@ -609,6 +661,9 @@ func projectContextFiles(p *project, selected []string, includeTests bool, sdk p
 		}
 		visited[dir] = true
 		m, err := p.moduleForPackage(dir)
+		if problem := p.checkpoint(); problem != nil {
+			return nil, problem
+		}
 		if err != nil {
 			return nil, fail("unsupported_configuration", err.Error())
 		}
@@ -620,7 +675,10 @@ func projectContextFiles(p *project, selected []string, includeTests bool, sdk p
 			return nil, fail("object_extraction_failed", err.Error())
 		}
 		for _, entry := range entries {
-			if !strings.HasSuffix(entry.Name(), ".go") || ((!includeTests || !dirs[dir]) && strings.HasSuffix(entry.Name(), "_test.go")) {
+			if problem := p.checkpoint(); problem != nil {
+				return nil, problem
+			}
+			if entry.IsDir() || !goSourceName(entry.Name()) || ((!includeTests || !dirs[dir]) && strings.HasSuffix(entry.Name(), "_test.go")) {
 				continue
 			}
 			filename := filepath.Join(dir, entry.Name())

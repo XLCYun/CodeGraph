@@ -326,12 +326,25 @@ func checkRequiredNested(data []byte) error {
 		return err
 	}
 	for field, names := range map[string][]string{
-		"input":       {"repository_root", "files", "include_tests", "profile"},
+		"input":       {"repository_root", "include_tests", "profile"},
 		"environment": {"scratch_root", "platforms"},
 		"limits":      {"analysis_timeout_ms", "max_result_bytes", "max_diagnostic_bytes"},
 	} {
 		if err := requiredFields(root[field], names...); err != nil {
 			return err
+		}
+	}
+	var inputFields map[string]json.RawMessage
+	_ = json.Unmarshal(root["input"], &inputFields)
+	if files, present := inputFields["files"]; present {
+		var values []json.RawMessage
+		if bytes.Equal(bytes.TrimSpace(files), []byte("null")) || json.Unmarshal(files, &values) != nil {
+			return errors.New("files must be a non-null array")
+		}
+		for _, value := range values {
+			if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+				return errors.New("files must contain strings")
+			}
 		}
 	}
 	var env map[string]json.RawMessage
@@ -360,4 +373,13 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// MarshalJSON 保留省略与显式空数组的差别，测试请求也使用同一私有契约。
+func (value input) MarshalJSON() ([]byte, error) {
+	fields := map[string]any{"repository_root": value.RepositoryRoot, "include_tests": value.IncludeTests, "profile": value.Profile}
+	if value.Files != nil {
+		fields["files"] = value.Files
+	}
+	return json.Marshal(fields)
 }

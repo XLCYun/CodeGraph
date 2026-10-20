@@ -175,9 +175,11 @@ void B(){}
             self.assertRegex(ordinary, r"^[A-Za-z]:\\")
             roots.append("\\\\?\\" + ordinary)
         graph = None
-        for root in roots:
-            with self.subTest(root=root):
+        for root, discovery in [(path, mode) for path in roots for mode in (False, True)]:
+            with self.subTest(root=root, discovery=discovery):
                 request = self.request(["Sample.cs"])
+                if discovery:
+                    del request["input"]["files"]
                 request["input"]["repository_root"] = root
                 result = self.run_helper(request)
                 self.assertEqual(result["outcome"], "ok", result.get("error"))

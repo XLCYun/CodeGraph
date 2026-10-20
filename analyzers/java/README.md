@@ -58,3 +58,10 @@ python3 -m unittest discover -s analyzers/java/tests -v
 Java 8 夹具未配置且未在 `.tools` 中找到时，对应测试会明确跳过；完整跨版本验收应提供三个真实目标。`test_target_versions.py` 覆盖经典标准 JAR、8／17／25 的 API 与语法隔离、预览禁用、多配置与 Maven 模块、共享源码并集、缺失／错配／重复平台、非法或超出编译器能力的 release，以及扩展 JAR 隔离。所有项目均为临时夹具，并验证关键分析前后的文件哈希不变。
 
 当前能力来源可直接用锁定 JAR 的 `JavaCore.getAllJavaSourceVersionsSupportedByCompiler()` 查询；编译器错误分类使用同一 JDT 的 `IProblem.Syntax`、`Compliance`、`PreviewRelated` 常量，不依赖错误消息文本。
+
+## 目录发现
+
+私有 `input.files` 省略时，由本语言配置加载器确定完整选集；`[]` 是明确空选集，
+`null` 无效。显式数组保持精确选择。具体成员、排除规则、测试角色与限制见
+[引擎选集政策](../../docs/engine-selection.md)。新增目录发现测试由现有原生验收命令运行，
+Host 来源校验另由 `src/native_analyzer/tests/directory/` 的真实引擎用例覆盖。

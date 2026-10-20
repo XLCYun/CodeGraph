@@ -13,7 +13,7 @@ internal sealed class HelperException(string code, string message, params string
 internal sealed record AnalyzeRequest(string Id, Input Input, EnvironmentInput Environment, Limits Limits);
 
 /// <summary>保存固定侧仓库及选集。</summary>
-internal sealed record Input(string RepositoryRoot, string[] Files, bool IncludeTests, string Profile);
+internal sealed record Input(string RepositoryRoot, string[]? Files, bool IncludeTests, string Profile);
 
 /// <summary>保存宿主准许读取的目标平台与 scratch。</summary>
 internal sealed record EnvironmentInput(string ScratchRoot, Platform[] Platforms);
@@ -30,6 +30,7 @@ internal sealed record Limits(int AnalysisTimeoutMs, long MaxResultBytes, int Ma
 /// <summary>按 v1 协议读取消息，拒绝重复字段、缺字段和未知字段。</summary>
 internal static class Protocol
 {
+    public const int MaxFiles = 100000;
     public const string Version = "codegraph.engine/1";
     public static readonly JsonSerializerOptions Json = new()
     {
@@ -48,7 +49,9 @@ internal static class Protocol
         var id = String(root, "id");
         if (id.Length == 0) throw new HelperException("invalid_input", "Empty request id");
         var input = root.GetProperty("input");
-        Fields(input, "repository_root", "files", "include_tests", "profile");
+        var explicitFiles = input.TryGetProperty("files", out _);
+        Fields(input, explicitFiles ? ["repository_root", "files", "include_tests", "profile"]
+            : ["repository_root", "include_tests", "profile"]);
         var environment = root.GetProperty("environment");
         Fields(environment, "scratch_root", "platforms");
         var limits = root.GetProperty("limits");
@@ -65,7 +68,7 @@ internal static class Protocol
                     String(metadata, "reference_pack_version"))));
         }
         var request = new AnalyzeRequest(id,
-            new Input(String(input, "repository_root"), Strings(input, "files"),
+            new Input(String(input, "repository_root"), explicitFiles ? Strings(input, "files") : null,
                 input.GetProperty("include_tests").GetBoolean(), String(input, "profile")),
             new EnvironmentInput(String(environment, "scratch_root"), platforms.ToArray()),
             new Limits(limits.GetProperty("analysis_timeout_ms").GetInt32(),
@@ -113,7 +116,10 @@ internal static class Protocol
     /// <summary>读取字符串数组并拒绝重复项。</summary>
     private static string[] Strings(JsonElement element, string name)
     {
-        var values = element.GetProperty(name).EnumerateArray().Select(value => value.GetString()
+        var array = element.GetProperty(name);
+        if (array.ValueKind != JsonValueKind.Array) throw new HelperException("invalid_input", $"Expected array: {name}");
+        if (array.GetArrayLength() > MaxFiles) throw new HelperException("resource_limit", "C# selection exceeds file limit");
+        var values = array.EnumerateArray().Select(value => value.GetString()
             ?? throw new HelperException("invalid_input", $"Invalid {name}")).ToArray();
         if (values.Distinct(StringComparer.Ordinal).Count() != values.Length)
             throw new HelperException("invalid_input", $"Duplicate {name}");

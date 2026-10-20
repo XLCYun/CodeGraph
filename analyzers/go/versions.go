@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -151,18 +152,41 @@ type analysisConfiguration struct {
 
 // loadProjectSelections 在 workspace 内共用上下文，在无 workspace 时隔离每个独立 module。
 func loadProjectSelections(root string, selected []string) ([]projectSelection, *analysisError) {
-	first, problem := loadProject(root, selected[:1])
+	return loadProjectSelectionsContext(context.Background(), root, selected)
+}
+
+// loadProjectSelectionsContext 复用请求期限，根发现不依赖首个选中文件。
+func loadProjectSelectionsContext(ctx context.Context, root string, selected []string) ([]projectSelection, *analysisError) {
+	seed := selected
+	if len(selected) > 0 {
+		seed = selected[:1]
+	}
+	first, problem := loadProjectContext(ctx, root, seed)
 	if problem != nil {
 		return nil, problem
 	}
-	if first.WorkSource != "" {
+	if first.WorkSource != "" || selected == nil {
 		return []projectSelection{{Project: first, Files: selected}}, nil
 	}
 	groups := map[string]*projectSelection{}
 	for _, rel := range selected {
-		p, problem := loadProject(root, []string{rel})
-		if problem != nil {
-			return nil, problem
+		p := first
+		filename := filepath.Join(root, filepath.FromSlash(rel))
+		if p.moduleForFile(filename) == nil {
+			p = nil
+			for _, group := range groups {
+				if group.Project.moduleForFile(filename) != nil {
+					p = group.Project
+					break
+				}
+			}
+			if p == nil {
+				var problem *analysisError
+				p, problem = loadProjectContext(ctx, root, []string{rel})
+				if problem != nil {
+					return nil, problem
+				}
+			}
 		}
 		key := filepath.Clean(p.Modules[0].Dir)
 		if groups[key] == nil {

@@ -281,3 +281,121 @@ Executable fixtures live in the TypeScript `helper`, `workspace`, `protocol`,
 and `lifecycle` tests under `analyzers/typescript/tests/`, in
 `analyzers/python/src/projection/tests/discovery.rs`, and in both languages'
 registered Host semantic groups.
+
+## Go resolution
+
+Discovery requires `go.work` or `go.mod` at the requested root. A root workspace
+selects only its explicit `use` modules; otherwise the root module owns discovery.
+The same loaded module/replacement model supplies package membership, build
+conditions, target selection and projection. Explicit lists retain nearest-module
+resolution, including separate contexts for independent modules without a workspace.
+
+Within admitted modules the loader considers Go package source files, excluding
+`vendor`, `testdata`, dot/underscore directories and dot/underscore file names.
+A nested `go.mod` is a boundary unless that module is independently admitted by
+`go.work`. Local `replace` modules and imported packages supply context; their
+presence in the import closure does not select them. Directory links are rejected;
+all source paths must resolve to ordinary files inside the repository.
+
+Supported filename and build constraints are evaluated against the existing
+supported target matrix and the selected SDK's release/experiment tags. Candidates
+inactive throughout that matrix are omitted; selected explicit inactive sources
+retain the existing failure policy. Unknown custom tags and unsupported cgo/embed
+semantics fail. With tests disabled, `_test.go` members retain `excluded_test`
+coverage without letting test-only build conditions change production targets.
+With tests enabled, eligible same-package tests join the graph; external test
+packages remain unsupported. A valid empty root module has configuration evidence;
+a missing module, malformed configuration, empty `go.work` use list or unavailable
+required SDK does not become an empty success. Configuration scanning, module and
+package traversal share cancellation/deadline checks and the selection bound.
+
+## Java resolution
+
+Discovery loads root `narrant-java.json` static source roots or the supported root
+`pom.xml`, rejecting an ambiguous combination. Only declared Maven modules and
+their effective local parent/source-root policies enter the model. Maven default
+roots are `src/main/java` and `src/test/java`; supported literal overrides retain
+those roles. Undeclared sibling modules and other repository folders are not
+selection roots. Metadata roots must exist; a valid POM may declare roots that
+have not been created yet, yielding an empty selection with actual POM evidence.
+An aggregator without its own source directories does not create an extra source
+configuration. Required releases and exact target JDKs are still validated.
+
+The loader caches POM documents/effective parents and per-root source inventories
+within the request. Both discovery and JDT context use those inventories. Only
+`.java` files in declared roots participate in this profile. Test-only membership
+comes from all owning source-root roles, not a `Test` filename suffix. Explicit
+files must match declared roots and never expand to referenced source objects;
+unselected source declarations can still resolve as repository externals.
+
+Directory/source links are rejected before traversal and every returned file is
+validated inside the repository. Inventories and selection are bounded and
+checkpointed; POM parent chains are limited to 256 entries. Existing static-profile
+limitations remain: no Maven/Gradle invocation, build-plugin execution, arbitrary
+Maven compiler include/exclude rules, dependency installation, annotation processing
+or JPMS support. Gradle requires explicit static metadata. Missing or unsupported
+configuration is an error, while explicit `[]` does not load a model or target JDK.
+
+## C# resolution
+
+Discovery uses the same `StaticConfiguration.Files` sets passed to Roslyn. The
+loader accepts a root `narrant.csharp.json` source-set or its existing supported
+`.csproj` discovery, excluding `bin`, `obj` and `.git` during project enumeration.
+It does not infer solution membership. SDK default Compile items additionally
+exclude hidden source directories. Literal `Compile Include`/`Remove`, supported
+TFM and Debug/Release/AnyCPU conditions, and matching `ProjectReference` contexts
+retain their existing semantics. Project XML and default Compile inventories are
+reused across configurations; XML is still loaded from `File.OpenRead` streams so
+Windows extended paths and URI characters remain filesystem paths.
+
+The discovered set is the union of actual Compile members across configurations.
+Conditionally nominated files that are inactive everywhere do not enter discovery;
+explicit requests can still receive their existing `inactive` coverage. Synthetic
+implicit-using trees are never members. Files owned only by `IsTestProject` or
+`test_only` configurations retain `excluded_test` coverage when tests are disabled.
+Active configurations use only their exact approved target reference assemblies;
+excluded test configurations retain their existing no-compilation policy.
+
+A valid empty source-set configuration or SDK project returns its configuration
+record. Missing/invalid project models and required target references fail. The
+loader checkpoints project traversal, source enumeration, configuration branches
+and selection collection, enforcing the 100,000-file bound. Existing unsupported
+MSBuild imports, arbitrary globs/conditions, generators, custom SDKs and workloads
+remain rejected; no project build or SDK installation is performed.
+
+## C / C++ resolution
+
+Discovery requires the existing nonempty root `compile_commands.json` with
+supported `arguments` entries. Every configured translation unit is selected,
+including unconventional suffixes when native `-x`/driver rules establish its
+language. Each TU still requires its explicit supported language standard and
+an unambiguous approved target. An empty CDB remains invalid in this static profile;
+an empty TU is valid and still has file/configuration evidence.
+
+Headers join selection only when Clang's `LexedFileChanged` callback proves that
+lexing actually entered them in a successfully analyzed TU. Their physical paths
+must be ordinary files inside the repository and outside the existing dependency
+and cache exclusions. Empty headers, macro-only headers, `.inc`/`.def` files and
+files without suffixes are eligible. Unused files, `__has_include` probes, inactive
+includes and other VFS observations cannot select a file. `-isystem` headers,
+approved external SDK headers and files finally classified as system headers by
+`#pragma ... system_header` remain context. `#line` does not replace physical
+membership. C/C++ has no reliable test-role metadata, so `include_tests` does not
+invent test exclusions from filenames.
+
+Each participating file records every successful non-system TU configuration in
+which it was entered, and the existing declaration/content/conflict union remains
+in force. Explicit lists retain exact selection and their existing TU-context
+coverage requirement. The same Clang run produces membership and graph evidence;
+there is no extension scan, dependency-file subprocess or second compiler pass.
+Configuration loading runs in the cancellable worker alongside parsing; CDB loops,
+VFS access, participation collection and AST traversal share the request deadline.
+The file limit applies during TU and header collection. Public process supervision
+still bounds native work that cannot immediately cooperate with cancellation.
+
+The four native suites include directory behavior and lifecycle cases. Their real
+Host semantic fixtures live under `src/native_analyzer/tests/directory/` and are
+registered separately for Go, Java, C# and C/C++ on both supported CI platforms.
+Java's existing top-level source glob and C#'s existing `Compile Include="*.cs"`
+include the changed files; the existing Go and Python-unittest discovery commands
+also pick up every new native test file.

@@ -80,7 +80,7 @@ class NativeHelperTests(unittest.TestCase):
                                                    '-DFAST=' + str(fast), *extra, '-c', name]})
         (self.root / 'compile_commands.json').write_text(json.dumps(commands))
         return {'protocol': PROTOCOL, 'type': 'analyze', 'id': 'test',
-                'input': {'repository_root': str(self.root), 'files': selected or list(sources),
+                'input': {'repository_root': str(self.root), 'files': list(sources) if selected is None else selected,
                           'include_tests': True, 'profile': 'clang-static-v1'},
                 'environment': {'scratch_root': str(self.scratch), 'platforms': [
                     {'id': 'freestanding', 'kind': 'clang-target', 'version': '1',

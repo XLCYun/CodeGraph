@@ -116,7 +116,10 @@ func (l *sourceLoader) load(importPath string, checkBodies, includeTests bool) (
 		}
 		var contextFiles []string
 		for _, entry := range entries {
-			if !strings.HasSuffix(entry.Name(), ".go") || (!includeTests && strings.HasSuffix(entry.Name(), "_test.go")) {
+			if err := l.Ctx.Err(); err != nil {
+				return nil, err
+			}
+			if entry.IsDir() || !goSourceName(entry.Name()) || (!includeTests && strings.HasSuffix(entry.Name(), "_test.go")) {
 				continue
 			}
 			filename := filepath.Join(dir, entry.Name())
@@ -127,6 +130,9 @@ func (l *sourceLoader) load(importPath string, checkBodies, includeTests bool) (
 			contextFiles = append(contextFiles, filepath.ToSlash(rel))
 		}
 		for _, rel := range contextFiles {
+			if err := l.Ctx.Err(); err != nil {
+				return nil, err
+			}
 			if _, problem := hasTargetConstraint(l.Project.Root, rel); problem != nil {
 				l.Fatal = problem
 				return nil, fmt.Errorf("package %s: %s", importPath, problem.Message)
@@ -147,6 +153,9 @@ func (l *sourceLoader) load(importPath string, checkBodies, includeTests bool) (
 	}
 	unit := &packageUnit{Path: importPath, Info: &types.Info{Defs: map[*ast.Ident]types.Object{}, Uses: map[*ast.Ident]types.Object{}, Types: map[ast.Expr]types.TypeAndValue{}, Selections: map[*ast.SelectorExpr]*types.Selection{}, Instances: map[*ast.Ident]types.Instance{}}, ObjectIDs: map[types.Object]string{}, Missing: map[string]bool{}, BodiesChecked: checkBodies, TestsIncluded: includeTests}
 	for _, name := range names {
+		if err := l.Ctx.Err(); err != nil {
+			return nil, err
+		}
 		filename := filepath.Join(dir, name)
 		data, err := safeFile(allowed, filename)
 		if err != nil {
@@ -913,16 +922,51 @@ func (b *graphBuilder) finish(configs []configurationEvidence, files []fileEvide
 // analyze 校验输入、加载真实仓内项目并生成原子单图结果。
 func analyze(ctx context.Context, req request) completed {
 	base := completed{Protocol: protocol, Type: "completed", ID: req.ID}
-	returnError := func(err *analysisError) completed { base.Outcome = "error"; base.Error = err; return base }
+	returnError := func(err *analysisError) completed {
+		if err.Code == "cancelled" {
+			base.Outcome = "cancelled"
+			return base
+		}
+		base.Outcome = "error"
+		base.Error = err
+		return base
+	}
 	if req.Input.Profile != "go-static-v1" || !filepath.IsAbs(req.Input.RepositoryRoot) || !filepath.IsAbs(req.Environment.ScratchRoot) || req.Limits.AnalysisTimeoutMS <= 0 || req.Limits.MaxResultBytes <= 0 || req.Limits.MaxDiagnosticBytes <= 0 {
 		return returnError(fail("invalid_input", "invalid Go profile, absolute roots, or limits"))
 	}
-	if len(req.Input.Files) == 0 {
-		return returnError(fail("invalid_input", "empty Go selection"))
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(req.Limits.AnalysisTimeoutMS)*time.Millisecond)
+	defer cancel()
+	stopped := func() (completed, bool) {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return returnError(fail("resource_limit", "Go analysis exceeded analysis_timeout_ms")), true
+		}
+		if errors.Is(ctx.Err(), context.Canceled) {
+			base.Outcome = "cancelled"
+			return base, true
+		}
+		return completed{}, false
+	}
+	if response, yes := stopped(); yes {
+		return response
 	}
 	root := req.Input.RepositoryRoot
+	if info, err := os.Stat(root); err != nil || !info.IsDir() {
+		return returnError(fail("invalid_input", "invalid repository root"))
+	}
+	if req.Input.Files != nil && len(req.Input.Files) == 0 {
+		result, ev := newGraphBuilder().finish([]configurationEvidence{}, []fileEvidence{})
+		base.Outcome, base.Graph, base.Evidence = "ok", &result, &ev
+		return base
+	}
+	if len(req.Input.Files) > maxSelectionFiles {
+		return returnError(fail("resource_limit", "too many selected files"))
+	}
+	discovery := req.Input.Files == nil
 	seen := map[string]bool{}
 	for _, rel := range req.Input.Files {
+		if response, yes := stopped(); yes {
+			return response
+		}
 		if seen[rel] {
 			return returnError(fail("invalid_input", "duplicate selected file", rel))
 		}
@@ -944,12 +988,26 @@ func analyze(ctx context.Context, req request) completed {
 			return returnError(fail("invalid_input", err.Error()))
 		}
 	}
-	groups, problem := loadProjectSelections(root, req.Input.Files)
+	groups, problem := loadProjectSelectionsContext(ctx, root, req.Input.Files)
 	if problem != nil {
 		return returnError(problem)
 	}
 	plans := []analysisConfiguration{}
 	for index, group := range groups {
+		if discovery {
+			files, problem := discoverProjectFiles(group.Project, req.Input.IncludeTests, req.Environment.Platforms)
+			if problem != nil {
+				return returnError(problem)
+			}
+			group.Files = files
+			for _, file := range files {
+				seen[file] = true
+			}
+			req.Input.Files = append(req.Input.Files, files...)
+			if problem := rejectSpecialSources(root, files, req.Input.IncludeTests); problem != nil {
+				return returnError(problem)
+			}
+		}
 		discoveryFiles := []string{}
 		for _, rel := range group.Files {
 			if req.Input.IncludeTests || !strings.HasSuffix(rel, "_test.go") {
@@ -967,18 +1025,6 @@ func analyze(ctx context.Context, req request) completed {
 			}
 			plans = append(plans, analysisConfiguration{Project: group.Project, Files: group.Files, SDK: sdk, ID: configID})
 		}
-	}
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(req.Limits.AnalysisTimeoutMS)*time.Millisecond)
-	defer cancel()
-	stopped := func() (completed, bool) {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return returnError(fail("resource_limit", "Go analysis exceeded analysis_timeout_ms")), true
-		}
-		if errors.Is(ctx.Err(), context.Canceled) {
-			base.Outcome = "cancelled"
-			return base, true
-		}
-		return completed{}, false
 	}
 	builder := newGraphBuilder()
 	active := map[string][]string{}
@@ -1013,7 +1059,10 @@ func analyze(ctx context.Context, req request) completed {
 				return returnError(fail("object_extraction_failed", readErr.Error(), rel))
 			}
 			for _, entry := range entries {
-				if strings.HasSuffix(entry.Name(), ".go") {
+				if response, yes := stopped(); yes {
+					return response
+				}
+				if !entry.IsDir() && goSourceName(entry.Name()) {
 					if _, readErr := safeFile(root, filepath.Join(dir, entry.Name())); readErr != nil {
 						return returnError(fail("unsupported_configuration", readErr.Error(), rel))
 					}
@@ -1080,6 +1129,9 @@ func analyze(ctx context.Context, req request) completed {
 	}
 	fileEvidenceList := []fileEvidence{}
 	for _, rel := range req.Input.Files {
+		if response, yes := stopped(); yes {
+			return response
+		}
 		disposition := "analyzed"
 		configIDs := active[rel]
 		if strings.HasSuffix(rel, "_test.go") && !req.Input.IncludeTests {

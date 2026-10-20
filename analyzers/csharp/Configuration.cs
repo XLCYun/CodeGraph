@@ -56,23 +56,30 @@ internal static class Configuration
     /// <summary>发现配置，并确保每个文件的归属由静态规则证明。</summary>
     public static List<StaticConfiguration> Discover(string root, CancellationToken cancellation)
     {
-        foreach (var extension in new[] { ".razor", ".cshtml", ".asmdef" })
-            if (SafeFiles(root, extension).Any())
+        var projects = new List<string>();
+        foreach (var file in SafeFiles(root, null, cancellation))
+        {
+            var extension = Path.GetExtension(file).ToLowerInvariant();
+            if (extension != ".csproj")
                 throw new HelperException("unsupported_configuration", $"Generated-source project model {extension} is unsupported");
+            projects.Add(file);
+        }
+        projects.Sort(StringComparer.Ordinal);
+        var documents = new Dictionary<string, XDocument>(StringComparer.Ordinal);
+        var sourceInventories = new Dictionary<string, string[]>(StringComparer.Ordinal);
         var sourceSet = Path.Combine(root, "narrant.csharp.json");
-        var projects = SafeFiles(root, ".csproj").Order(StringComparer.Ordinal).ToArray();
         if (File.Exists(sourceSet))
         {
             CheckRepositoryPath(root, sourceSet);
-            if (projects.Length > 0) throw new HelperException("unsupported_configuration", "Source-set and csproj models cannot be mixed");
-            return ReadSourceSet(root, sourceSet);
+            if (projects.Count > 0) throw new HelperException("unsupported_configuration", "Source-set and csproj models cannot be mixed");
+            return ReadSourceSet(root, sourceSet, cancellation);
         }
-        if (projects.Length == 0) throw new HelperException("unsupported_configuration", "No narrant.csharp.json or supported csproj found");
+        if (projects.Count == 0) throw new HelperException("unsupported_configuration", "No narrant.csharp.json or supported csproj found");
         var output = new List<StaticConfiguration>();
         foreach (var project in projects)
         {
             cancellation.ThrowIfCancellationRequested();
-            output.AddRange(ReadProject(root, project));
+            output.AddRange(ReadProject(root, project, cancellation, documents, sourceInventories));
         }
         // 引用方的明确配置是被引用项目的静态输入，即使后者自身没有配置条件也必须重建。
         for (var index = 0; index < output.Count; index++)
@@ -83,7 +90,7 @@ internal static class Configuration
             {
                 if (output.Any(candidate => candidate.SourcePaths[0] == dependency &&
                     candidate.Tfm == caller.Tfm && candidate.ConfigurationName == caller.ConfigurationName)) continue;
-                var propagated = ReadProject(root, Path.Combine(root, dependency), caller.ConfigurationName)
+                var propagated = ReadProject(root, Path.Combine(root, dependency), cancellation, documents, sourceInventories, caller.ConfigurationName)
                     .SingleOrDefault(candidate => candidate.Tfm == caller.Tfm &&
                         candidate.ConfigurationName == caller.ConfigurationName);
                 if (propagated is null)
@@ -96,8 +103,9 @@ internal static class Configuration
     }
 
     /// <summary>读取显式 source-set，所有编译成员必须逐一列出。</summary>
-    private static List<StaticConfiguration> ReadSourceSet(string root, string path)
+    private static List<StaticConfiguration> ReadSourceSet(string root, string path, CancellationToken cancellation)
     {
+        cancellation.ThrowIfCancellationRequested();
         using var document = JsonDocument.Parse(File.ReadAllText(path));
         var objectRoot = document.RootElement;
         ExactFields(objectRoot, "version", "configurations");
@@ -106,13 +114,16 @@ internal static class Configuration
         var output = new List<StaticConfiguration>();
         foreach (var config in objectRoot.GetProperty("configurations").EnumerateArray())
         {
+            cancellation.ThrowIfCancellationRequested();
             if (config.TryGetProperty("test_only", out _))
                 ExactFields(config, "id", "files", "tfm", "language_version", "define_constants", "implicit_usings", "test_only");
             else ExactFields(config, "id", "files", "tfm", "language_version", "define_constants", "implicit_usings");
-            var files = config.GetProperty("files").EnumerateArray().Select(v => v.GetString()!).ToArray();
+            var entries = config.GetProperty("files");
+            if (entries.GetArrayLength() > Protocol.MaxFiles) throw new HelperException("resource_limit", "C# source-set exceeds file limit");
+            var files = entries.EnumerateArray().Select(v => v.GetString()!).ToArray();
             if (files.Distinct(StringComparer.Ordinal).Count() != files.Length)
                 throw new HelperException("unsupported_configuration", "Duplicate source-set file", "narrant.csharp.json");
-            foreach (var file in files) CheckFile(root, file);
+            foreach (var file in files) { cancellation.ThrowIfCancellationRequested(); CheckFile(root, file); }
             var id = config.GetProperty("id").GetString();
             if (string.IsNullOrWhiteSpace(id))
                 throw new HelperException("unsupported_configuration", "Empty source-set id", "narrant.csharp.json");
@@ -136,8 +147,11 @@ internal static class Configuration
     }
 
     /// <summary>按固定子集读取普通 Microsoft.NET.Sdk 项目，不执行 MSBuild。</summary>
-    private static List<StaticConfiguration> ReadProject(string root, string path, string? requiredConfiguration = null)
+    private static List<StaticConfiguration> ReadProject(string root, string path, CancellationToken cancellation,
+        Dictionary<string, XDocument> documents, Dictionary<string, string[]> sourceInventories,
+        string? requiredConfiguration = null)
     {
+        cancellation.ThrowIfCancellationRequested();
         var relative = Path.GetRelativePath(root, path).Replace('\\', '/');
         CheckRepositoryPath(root, path);
         for (var directory = Path.GetDirectoryName(path); directory is not null && directory.StartsWith(root, StringComparison.Ordinal);
@@ -145,14 +159,15 @@ internal static class Configuration
             if (File.Exists(Path.Combine(directory, "Directory.Build.props")) ||
                 File.Exists(Path.Combine(directory, "Directory.Build.targets")))
                 throw new HelperException("unsupported_configuration", "Directory.Build imports require MSBuild evaluation", relative);
-        XDocument document;
-        try
+        if (!documents.TryGetValue(path, out var document)) try
         {
             // 已授权路径交给文件系统；string 重载会把 Windows 的 \\?\ 前缀误解析为 URI 主机名。
             using var input = File.OpenRead(path);
             document = XDocument.Load(input, LoadOptions.None);
+            documents.Add(path, document);
         }
         catch (Exception error) { throw new HelperException("unsupported_configuration", error.Message, relative); }
+        cancellation.ThrowIfCancellationRequested();
         var project = document.Root;
         if (project?.Name.LocalName != "Project" || project.Attribute("Sdk")?.Value != "Microsoft.NET.Sdk" ||
             project.Attributes().Count() != 1)
@@ -162,6 +177,7 @@ internal static class Configuration
         var projectReferences = new List<(string path, string? groupCondition, string? condition)>();
         foreach (var group in project.Elements())
         {
+            cancellation.ThrowIfCancellationRequested();
             var groupCondition = group.Attribute("Condition")?.Value;
             if (group.Attributes().Any(a => a.Name.LocalName != "Condition"))
                 throw new HelperException("unsupported_configuration", "Conditional groups are not supported", relative);
@@ -171,6 +187,7 @@ internal static class Configuration
                     throw new HelperException("unsupported_configuration", "Conditional PropertyGroup is unsupported", relative);
                 foreach (var prop in group.Elements())
                 {
+                    cancellation.ThrowIfCancellationRequested();
                     if (prop.Attributes().Any() || !new[] { "TargetFramework", "TargetFrameworks", "LangVersion", "DefineConstants",
                         "ImplicitUsings", "EnableDefaultCompileItems", "Nullable", "OutputType", "RootNamespace",
                         "AssemblyName", "TreatWarningsAsErrors", "IsTestProject", "Configuration", "Platform" }.Contains(prop.Name.LocalName))
@@ -184,6 +201,7 @@ internal static class Configuration
             {
                 foreach (var item in group.Elements())
                 {
+                    cancellation.ThrowIfCancellationRequested();
                     if (item.Name.LocalName == "ProjectReference" && item.Attribute("Include") is { } include &&
                         item.Attributes().All(a => a.Name.LocalName is "Include" or "Condition") && !item.Elements().Any())
                     {
@@ -255,25 +273,30 @@ internal static class Configuration
             _ => throw new HelperException("unsupported_configuration", "Unsupported OutputType", relative)
         };
         var assemblyName = properties.GetValueOrDefault("AssemblyName", Path.GetFileNameWithoutExtension(path));
+        if (defaultItems && !sourceInventories.ContainsKey(projectDir))
+            sourceInventories.Add(projectDir, SafeFiles(projectDir, ".cs", cancellation, excludeHiddenDirectories: true)
+                .Select(file => Path.GetRelativePath(root, file).Replace('\\', '/')).ToArray());
         var output = new List<StaticConfiguration>();
         foreach (var tfm in tfms)
         foreach (var configuration in configurationVariants.Order(StringComparer.Ordinal))
         {
+            cancellation.ThrowIfCancellationRequested();
             var target = Target(tfm);
             var languageVersion = properties.TryGetValue("LangVersion", out var language)
                 ? ParseLanguage(language) : DefaultLanguage(target);
             var conditionalCandidates = new HashSet<string>(StringComparer.Ordinal);
             var files = defaultItems
-                ? SafeFiles(projectDir, ".cs", excludeHiddenDirectories: true)
-                    .Select(file => Path.GetRelativePath(root, file).Replace('\\', '/'))
+                ? sourceInventories[projectDir]
                     .ToHashSet(StringComparer.Ordinal)
                 : new HashSet<string>(StringComparer.Ordinal);
             foreach (var item in compile)
             {
+                cancellation.ThrowIfCancellationRequested();
                 var applies = ConditionMatches(item.groupCondition, tfm, configuration, targetPlatform, relative) &&
                     ConditionMatches(item.condition, tfm, configuration, targetPlatform, relative);
                 foreach (var part in item.value.Split(';'))
                 {
+                    cancellation.ThrowIfCancellationRequested();
                     if (part.Contains('*') || part.Contains('?') || part.Contains("$(", StringComparison.Ordinal))
                         throw new HelperException("unsupported_configuration", "Compile glob or property expansion is unsupported", relative);
                     var file = Path.GetRelativePath(root, Path.GetFullPath(Path.Combine(projectDir, part))).Replace('\\', '/');
@@ -281,9 +304,10 @@ internal static class Configuration
                     if (item.operation == "Include") conditionalCandidates.Add(file);
                     if (!applies) continue;
                     if (item.operation == "Include") files.Add(file); else files.Remove(file);
+                    if (files.Count > Protocol.MaxFiles) throw new HelperException("resource_limit", "C# Compile set exceeds file limit");
                 }
             }
-            foreach (var file in files) CheckFile(root, file);
+            foreach (var file in files) { cancellation.ThrowIfCancellationRequested(); CheckFile(root, file); }
             var defines = new List<string>();
             if (configuration == "Debug") defines.Add("DEBUG");
             defines.Add("TRACE");
@@ -355,15 +379,18 @@ internal static class Configuration
     }
 
     /// <summary>以不跟随目录链接的方式枚举受控源码或项目文件。</summary>
-    private static IEnumerable<string> SafeFiles(string root, string extension, bool excludeHiddenDirectories = false)
+    private static IEnumerable<string> SafeFiles(string root, string? extension, CancellationToken cancellation, bool excludeHiddenDirectories = false)
     {
+        var count = 0;
         var pending = new Stack<string>();
         pending.Push(root);
         while (pending.Count > 0)
         {
+            cancellation.ThrowIfCancellationRequested();
             var directory = pending.Pop();
             foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
             {
+                cancellation.ThrowIfCancellationRequested();
                 var attributes = File.GetAttributes(entry);
                 if (attributes.HasFlag(FileAttributes.Directory))
                 {
@@ -375,11 +402,13 @@ internal static class Configuration
                             Path.GetRelativePath(root, entry).Replace('\\', '/'));
                     pending.Push(entry);
                 }
-                else if (Path.GetExtension(entry).Equals(extension, StringComparison.OrdinalIgnoreCase))
+                else if (extension is null ? new[] { ".csproj", ".razor", ".cshtml", ".asmdef" }.Contains(Path.GetExtension(entry), StringComparer.OrdinalIgnoreCase)
+                    : Path.GetExtension(entry).Equals(extension, StringComparison.OrdinalIgnoreCase))
                 {
                     if (attributes.HasFlag(FileAttributes.ReparsePoint))
                         throw new HelperException("unsupported_configuration", "Symbolic-link project/source is unsupported",
                             Path.GetRelativePath(root, entry).Replace('\\', '/'));
+                    if (++count > Protocol.MaxFiles) throw new HelperException("resource_limit", "C# input discovery exceeds file limit");
                     yield return entry;
                 }
             }

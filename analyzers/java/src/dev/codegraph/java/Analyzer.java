@@ -146,7 +146,7 @@ final class Analyzer {
         this.resultLimit = positive(limits, "max_result_bytes");
         positive(limits, "max_diagnostic_bytes");
         this.deadline = System.nanoTime() + timeout * 1_000_000L;
-        this.model = ProjectModel.discover(request);
+        this.model = ProjectModel.discover(request, this::checkpoint);
     }
 
     /** 解析正整数限制。 */

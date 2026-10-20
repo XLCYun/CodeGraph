@@ -205,10 +205,20 @@ func TestInvalidSelection(t *testing.T) {
 
 // TestProtocolCompletion 验证进程协议在一次终结后不等待 stdin EOF。
 func TestProtocolCompletion(t *testing.T) {
+	for _, discovery := range []bool{false, true} {
+		t.Run(map[bool]string{false: "explicit", true: "discovery"}[discovery], func(t *testing.T) { testProtocolCompletion(t, discovery) })
+	}
+}
+
+// testProtocolCompletion 验证两种选集模式均在输入保持打开时完整退出。
+func testProtocolCompletion(t *testing.T, discovery bool) {
 	root := t.TempDir()
 	writeFixture(t, root, "go.mod", "module example.test/app\ngo "+fixtureLanguage(t)+"\n")
 	writeFixture(t, root, "unit.go", "package app\nfunc F(){}\n")
 	req := fixtureRequest(t, root, "unit.go")
+	if discovery {
+		req.Input.Files = nil
+	}
 	req.Environment.Platforms = req.Environment.Platforms[2:]
 	read, write := io.Pipe()
 	defer write.Close()

@@ -39,3 +39,10 @@ CODEGRAPH_GO_TEST_SDKS="/path/to/go1.23.8:/path/to/go1.27.1" \
 ```
 
 The tests also inspect `runtime.GOROOT()` and `/usr/local/go` when present. If real cross-minor targets are absent, those cases explicitly skip; that is not evidence of cross-version support. They cover SDK patch minimums, missing/future targets, `toolchain`/workspace precedence, per-package language rules, independent modules, old-SDK API absence, release guards, and default experiment isolation. The previous Go 1.23.8 validation record remains [historical implementation evidence](../../docs/research/go-native-implementation.md); it does not establish acceptance for an untested SDK or host platform.
+
+## 目录发现
+
+私有 `input.files` 省略时，由本语言配置加载器确定完整选集；`[]` 是明确空选集，
+`null` 无效。显式数组保持精确选择。具体成员、排除规则、测试角色与限制见
+[引擎选集政策](../../docs/engine-selection.md)。新增目录发现测试由现有原生验收命令运行，
+Host 来源校验另由 `src/native_analyzer/tests/directory/` 的真实引擎用例覆盖。

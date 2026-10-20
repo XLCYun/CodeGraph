@@ -25,6 +25,10 @@ export function verificationCommands(environment, platform = process.platform, l
       { executable: 'bash', args: [...cargo, '--lib', 'adapters::csharp_graph::', '--', '--ignored', '--test-threads=1'] },
     ] : []),
     ...(ids.includes('c-cpp') ? [{ executable: python, args: ['-m', 'unittest', 'discover', '-s', 'analyzers/clang/tests', '-v'], environment: { CODEGRAPH_LLVM_ROOT: environment.CODEGRAPH_LLVM_SDK, CODEGRAPH_CLANG_HELPER: paths.join(root, `analyzers/clang/build/codegraph-clang-engine${suffix}`) } }] : []),
+    // 四个原生加载器的目录发现也必须穿过真实 Host，完整校验覆盖和节点来源。
+    ...['go', 'java', 'csharp', 'c-cpp'].filter(id => ids.includes(id)).map(id => ({
+      executable: 'bash', args: [...cargo, '--lib', `native_analyzer::tests::directory::${id === 'c-cpp' ? 'clang' : id}::`, '--', '--ignored', '--test-threads=1'],
+    })),
     // 真实协议子进程与 CPU 生命周期夹具按文件串行，避免准备测试本身耗尽退出观察期限。
     ...(ids.includes('typescript-javascript') ? [
       { executable: node, args: ['--test', '--test-concurrency=1', 'analyzers/typescript/tests/projection.test.mjs', 'analyzers/typescript/tests/occurrences.test.mjs', 'analyzers/typescript/tests/config.test.mjs', 'analyzers/typescript/tests/workspace.test.mjs', 'analyzers/typescript/tests/helper.test.mjs', 'analyzers/typescript/tests/syntax.test.mjs', 'analyzers/typescript/tests/lifecycle.test.mjs', 'analyzers/typescript/tests/output.test.mjs', 'analyzers/typescript/tests/protocol.test.mjs'] },

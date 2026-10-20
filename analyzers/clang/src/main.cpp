@@ -38,6 +38,7 @@ namespace fs = std::filesystem;
 namespace j = llvm::json;
 using namespace clang;
 static const char *Protocol = "codegraph.engine/1";
+static constexpr size_t MaxFiles = 100000;
 
 // 受控失败保留稳定协议错误码，禁止以空图掩盖错误。
 struct Failure : std::runtime_error {
@@ -122,7 +123,7 @@ static bool excluded(const fs::path &relative) {
 }
 // 验证协议相对路径，不接受平台相关的替代分隔符或父级跳转。
 static fs::path relativePath(const std::string &s) {
-  fs::path p=fs::u8path(s); require(!s.empty() && !p.is_absolute() && s.find('\\')==std::string::npos && s.find(':')==std::string::npos && s.find('\0')==std::string::npos, "invalid relative path");
+  fs::path p=fs::u8path(s); require(!s.empty() && !p.is_absolute() && s.front()!='/' && s.back()!='/' && s.find("//")==std::string::npos && s.find('\\')==std::string::npos && s.find(':')==std::string::npos && s.find('\0')==std::string::npos, "invalid relative path");
   for (const auto &part : p) require(part!=".." && part!=".","invalid path component"); return p;
 }
 // 保存本侧已批准的目标声明路径，不包含任意编译器参数。
@@ -134,7 +135,7 @@ struct Config { std::string id, language; fs::path file, directory; std::vector<
 // 单请求状态维护最终并集、来源和协作取消。
 struct Request {
   fs::path root; std::set<std::string> selected; std::vector<Platform> platforms; std::vector<Config> configs;
-  std::string id, language; std::atomic<bool> stopped{false}; size_t maxResult=0, maxDiagnostic=0;
+  std::string id, language; bool discovery=false; std::atomic<bool> stopped{false}; size_t maxResult=0, maxDiagnostic=0;
   std::chrono::steady_clock::time_point deadline;
   // 检查取消和总期限，不被诊断日志延长。
   void checkpoint() const { if (stopped) throw Failure("cancelled","request cancelled"); if (std::chrono::steady_clock::now()>deadline) throw Failure("resource_limit","analysis deadline exceeded"); }
@@ -177,6 +178,7 @@ struct Graph {
   std::vector<SourceMacroUse> macroUses;
   std::map<std::string,std::set<std::string>> symbolKeys;
   std::map<std::string,std::string> files; std::map<std::string,std::set<std::string>> coverage;
+  std::set<std::string> discoveryCandidates;
   // 绑定请求对象，所有并集数据仅在单次请求中生存。
   explicit Graph(Request &r) : request(r) {}
 };
@@ -365,16 +367,52 @@ public:
   }
 };
 
+// 仅记录真正进入词法分析的仓内文件，探测、跳过和系统头不能扩大选集。
+class Participation : public PPCallbacks {
+  SourceManager &sm; Graph &graph;
+  std::map<unsigned,std::pair<FileID,std::string>> entered;
+public:
+  // 与当前 TU 的 SourceManager 共用生命周期，最终分类在预处理完成后检查。
+  Participation(SourceManager &manager,Graph &g):sm(manager),graph(g) {}
+  // #line 不改变物理参与文件，只有真正进入词法分析的文件触发发现。
+  void LexedFileChanged(FileID fid,LexedFileChangeReason reason,SrcMgr::CharacteristicKind type,
+                        FileID,SourceLocation) override {
+    graph.request.checkpoint();
+    if(!graph.request.discovery || reason!=LexedFileChangeReason::EnterFile || type!=SrcMgr::C_User) return;
+    auto entry=sm.getFileEntryRefForID(fid); if(!entry) return;
+    auto path=real(fs::u8path(entry->getName().str()));
+    if(!under(path,graph.request.root)) return;
+    auto relative=path.lexically_relative(graph.request.root);
+    if(excluded(relative)) return;
+    auto name=relative.generic_u8string(); relativePath(name);
+    require(fs::is_regular_file(path),"participating source must be a regular repository file");
+    entered.emplace(fid.getHashValue(),std::make_pair(fid,name));
+    graph.discoveryCandidates.insert(name);
+    require(graph.discoveryCandidates.size()<=MaxFiles,"Clang discovery exceeds file limit","resource_limit");
+  }
+  // pragma system_header 发生在进入文件之后，必须以最终的原生分类排除整份头文件。
+  void complete(const std::string &config) {
+    for(auto &entry:entered) {
+      graph.request.checkpoint(); auto &file=entry.second;
+      if(sm.isInSystemHeader(sm.getLocForEndOfFile(file.first))) continue;
+      graph.request.selected.insert(file.second);
+      require(graph.request.selected.size()<=MaxFiles,"Clang discovery exceeds file limit","resource_limit");
+      graph.coverage[file.second].insert(config);
+    }
+  }
+};
+
 // 只在 AST 完整解析后执行声明提取，任何诊断错误都使整次请求失败。
 class Consumer : public ASTConsumer {
-  Graph &graph; std::string config;
+  Graph &graph; std::string config; Participation &participation;
 public:
   // 绑定本次配置。
-  Consumer(Graph &g,std::string id):graph(g),config(std::move(id)) {}
+  Consumer(Graph &g,std::string id,Participation &files):graph(g),config(std::move(id)),participation(files) {}
   // 消费原生 AST 并确认文件覆盖。
   void HandleTranslationUnit(ASTContext &context) override {
     require(!context.getDiagnostics().hasErrorOccurred(),"Clang cannot extract complete objects","object_extraction_failed");
     Collector c(context,graph,config); c.TraverseDecl(context.getTranslationUnitDecl());
+    if(graph.request.discovery) { participation.complete(config); return; }
     auto &sm=context.getSourceManager();
     for(auto &file:graph.request.selected) {
       auto entry=sm.getFileManager().getOptionalFileRef((graph.request.root/fs::u8path(file)).u8string());
@@ -389,7 +427,13 @@ public:
   // 绑定单图并集与配置。
   Action(Graph &g,std::string id):graph(g),config(std::move(id)) {}
   // 创建 AST consumer，不允许项目自定义 action。
-  std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &instance,llvm::StringRef) override { instance.getPreprocessor().addPPCallbacks(std::make_unique<Macros>(instance.getSourceManager(),instance.getLangOpts(),graph)); return std::make_unique<Consumer>(graph,config); }
+  std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &instance,llvm::StringRef) override {
+    auto participation=std::make_unique<Participation>(instance.getSourceManager(),graph);
+    auto &files=*participation;
+    instance.getPreprocessor().addPPCallbacks(std::move(participation));
+    instance.getPreprocessor().addPPCallbacks(std::make_unique<Macros>(instance.getSourceManager(),instance.getLangOpts(),graph));
+    return std::make_unique<Consumer>(graph,config,files);
+  }
 };
 // ClangTool 为每个受控 TU 创建单一前端 action。
 class Factory : public tooling::FrontendActionFactory {
@@ -418,12 +462,12 @@ public:
 static void platforms(Request &r,const j::Array &catalog) {
   std::map<std::string,const j::Object *> entries;
   for(auto &v:catalog) {
-    auto o=v.getAsObject(); require(o,"platform must be an object"); keys(*o,{"id","kind","version","root","metadata"});
+    r.checkpoint(); auto o=v.getAsObject(); require(o,"platform must be an object"); keys(*o,{"id","kind","version","root","metadata"});
     auto id=str(*o,"id"); require(!id.empty() && entries.emplace(id,o).second,"duplicate/empty platform id");
     require(!str(*o,"version").empty(),"empty platform version");
   }
   for(auto &entry:entries) {
-    auto &o=*entry.second; auto kind=str(o,"kind"); require(kind=="clang-target" || kind=="clang-resource" || kind=="clang-system-headers","unsupported platform kind");
+    r.checkpoint(); auto &o=*entry.second; auto kind=str(o,"kind"); require(kind=="clang-target" || kind=="clang-resource" || kind=="clang-system-headers","unsupported platform kind");
     auto meta=o.getObject("metadata"); require(meta,"platform metadata must be an object");
     if(kind=="clang-system-headers") { keys(*meta,{}); require(fs::u8path(str(o,"root")).is_absolute() && fs::is_directory(real(fs::u8path(str(o,"root")))),"invalid system header root"); continue; }
     if(kind=="clang-resource") { keys(*meta,{}); require(str(o,"version")=="21.1.8","incompatible resource headers","target_unavailable"); continue; }
@@ -484,7 +528,7 @@ static Config configuration(Request &r,const j::Object &o,size_t index) {
   Config c; c.id="tu-"+std::to_string(index); c.directory=real(fs::u8path(str(o,"directory"))); require(under(c.directory,r.root),"CDB directory outside repository","unsupported_configuration");
   auto path=fs::u8path(str(o,"file")); c.file=real(path.is_absolute()?path:c.directory/path); require(under(c.file,r.root) && !excluded(c.file.lexically_relative(r.root)),"CDB source outside allowed repository","unsupported_configuration");
   auto args=o.getArray("arguments"); require(args && !args->empty(),"CDB requires arguments array, command strings are not executable input","unsupported_configuration");
-  std::vector<std::string> input; for(auto &v:*args) { auto s=v.getAsString(); require(s.has_value() && s->find('\0')==llvm::StringRef::npos,"invalid CDB argument"); input.push_back(s->str()); }
+  std::vector<std::string> input; for(auto &v:*args) { r.checkpoint(); auto s=v.getAsString(); require(s.has_value() && s->find('\0')==llvm::StringRef::npos,"invalid CDB argument"); input.push_back(s->str()); }
   auto driver=fs::u8path(input.front()).filename().u8string(); require(driver=="clang" || driver=="clang++" || driver=="clang.exe" || driver=="clang++.exe" || driver=="cc" || driver=="c++" || driver=="gcc" || driver=="g++","compiler wrappers are unsupported","unsupported_configuration");
   std::string triple,standard,explicitLanguage; std::vector<fs::path> roots; bool sourceSeen=false;
   // 参数值必须存在，禁止忽略截断的命令。
@@ -497,7 +541,7 @@ static Config configuration(Request &r,const j::Object &o,size_t index) {
     require(allowed && fs::is_directory(resolved),"unapproved include directory","unsupported_configuration"); return resolved.u8string();
   };
   for(size_t i=1;i<input.size();++i) {
-    auto a=input[i];
+    r.checkpoint(); auto a=input[i];
     if(a=="-c" || a=="-fsyntax-only" || a=="-g") continue;
     if(a=="-O0" || a=="-O1" || a=="-O2" || a=="-O3" || a=="-Os" || a=="-Oz" || a=="-Og") { c.args.push_back(a); continue; }
     if(a=="-o") { next(i); continue; }
@@ -547,21 +591,29 @@ static Config configuration(Request &r,const j::Object &o,size_t index) {
 // 校验请求、catalog 和静态 CDB；不运行项目发现脚本。
 static void configure(Request &r,const j::Object &message) {
   keys(message,{"protocol","type","id","input","environment","limits"});
-  require(str(message,"protocol")==Protocol && str(message,"type")=="analyze","invalid analyze envelope"); r.id=str(message,"id"); require(!r.id.empty(),"empty request id");
+  require(str(message,"protocol")==Protocol && str(message,"type")=="analyze","invalid analyze envelope"); require(str(message,"id")==r.id && !r.id.empty(),"invalid request id");
   auto in=message.getObject("input"), env=message.getObject("environment"), limits=message.getObject("limits"); require(in && env && limits,"invalid analyze objects");
-  keys(*in,{"repository_root","files","include_tests","profile"}); keys(*env,{"scratch_root","platforms"}); keys(*limits,{"analysis_timeout_ms","max_result_bytes","max_diagnostic_bytes"});
+  r.discovery=!in->get("files");
+  auto required=j::Object(*in); required.erase("files");
+  keys(required,{"repository_root","include_tests","profile"}); keys(*env,{"scratch_root","platforms"}); keys(*limits,{"analysis_timeout_ms","max_result_bytes","max_diagnostic_bytes"});
   require(str(*in,"profile")=="clang-static-v1","unsupported profile"); require(in->getBoolean("include_tests").has_value(),"invalid include_tests");
-  require(fs::u8path(str(*in,"repository_root")).is_absolute(),"repository root must be absolute"); r.root=real(fs::u8path(str(*in,"repository_root")));
+  require(fs::u8path(str(*in,"repository_root")).is_absolute(),"repository root must be absolute"); r.root=real(fs::u8path(str(*in,"repository_root"))); require(fs::is_directory(r.root),"repository root must be a directory");
   auto scratch=real(fs::u8path(str(*env,"scratch_root"))); require(scratch.is_absolute() && !under(scratch,r.root),"scratch must be outside repository");
   auto timeout=limits->getInteger("analysis_timeout_ms"), result=limits->getInteger("max_result_bytes"), diagnostic=limits->getInteger("max_diagnostic_bytes");
   require(timeout && *timeout>0 && result && *result>0 && diagnostic && *diagnostic>0,"limits must be positive integers");
   r.deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(*timeout); r.maxResult=*result; r.maxDiagnostic=*diagnostic;
-  auto files=in->getArray("files"), catalog=env->getArray("platforms"); require(files && catalog,"invalid files/platforms array");
-  for(auto &v:*files) { auto s=v.getAsString(); require(s.has_value(),"file must be string"); auto rel=relativePath(s->str()); auto full=real(r.root/rel); require(under(full,r.root) && !excluded(rel) && fs::is_regular_file(full),"source outside allowed repository"); require(r.selected.insert(rel.generic_u8string()).second,"duplicate source file"); }
-  platforms(r,*catalog);
+  auto files=in->getArray("files"), catalog=env->getArray("platforms"); require((r.discovery || files) && catalog,"invalid files/platforms array");
+  if(files) require(files->size()<=MaxFiles,"Clang selection exceeds file limit","resource_limit");
+  if(files) for(auto &v:*files) { r.checkpoint(); auto s=v.getAsString(); require(s.has_value(),"file must be string"); auto rel=relativePath(s->str()); auto full=real(r.root/rel); require(under(full,r.root) && !excluded(rel) && fs::is_regular_file(full),"source outside allowed repository"); require(r.selected.insert(rel.generic_u8string()).second,"duplicate source file"); }
+  if(files && files->empty()) return;
+  r.checkpoint(); platforms(r,*catalog);
   auto path=r.root/"compile_commands.json"; require(fs::exists(path),"clang-static-v1 requires compile_commands.json","unsupported_configuration"); require(under(real(path),r.root),"CDB symlink escapes repository");
   auto cdb=parse(read(path)); auto entries=cdb.getAsArray(); require(entries && !entries->empty(),"CDB must be a nonempty array","unsupported_configuration");
-  for(auto &v:*entries) { r.checkpoint(); auto o=v.getAsObject(); require(o,"CDB entry must be object"); auto c=configuration(r,*o,r.configs.size()); r.configs.push_back(std::move(c)); }
+  for(auto &v:*entries) { r.checkpoint(); auto o=v.getAsObject(); require(o,"CDB entry must be object"); auto c=configuration(r,*o,r.configs.size()); if(r.discovery) {
+      auto relative=c.file.lexically_relative(r.root).generic_u8string(); relativePath(relative);
+      r.selected.insert(relative); require(r.selected.size()<=MaxFiles,"Clang discovery exceeds file limit","resource_limit");
+    }
+    r.configs.push_back(std::move(c)); }
 }
 // 对身份字段进行无歧义转义，保持相对路径和源声明槽位可复查。
 static std::string escape(const std::string &s) {
@@ -593,6 +645,7 @@ static void splitDeclarators(Graph &graph) {
 }
 // 构造完成后的单图 DTO；任何未覆盖文件或不兼容归并都硬失败。
 static j::Object finish(Graph &g) {
+  if(g.request.discovery) for(auto &entry:g.decls) entry.second.selected=g.request.selected.count(entry.second.path);
   splitDeclarators(g);
   auto &r=g.request; std::map<std::string,std::vector<DeclInfo *>> slots;
   for(auto &use:g.macroUses) {
@@ -704,7 +757,7 @@ int main() {
     while(true) {
       if(started && work.wait_for(std::chrono::milliseconds(0))==std::future_status::ready) {
         auto result=work.get(); auto output=jsonText(j::Value(std::move(result)));
-        if(output.size()>request.maxResult) output=jsonText(error(request.id,Failure("resource_limit","result byte limit exceeded")));
+        if(request.maxResult && output.size()>request.maxResult) output=jsonText(error(request.id,Failure("resource_limit","result byte limit exceeded")));
         if(!closed) std::cout<<output<<std::endl; return 0;
       }
       char chunk[4096]; int count=readProtocol(chunk,sizeof(chunk));
@@ -717,10 +770,9 @@ int main() {
           auto line=buffer.substr(0,newline); buffer.erase(0,newline+1); auto value=parse(line); auto object=value.getAsObject(); require(object,"message must be object");
           if(!started) {
             require(str(*object,"protocol")==Protocol && str(*object,"type")=="analyze","expected analyze"); request.id=str(*object,"id");
-            try { configure(request,*object); }
-            catch(const Failure &f) { std::cout<<jsonText(error(request.id,f))<<std::endl; return 0; }
-            started=true; work=std::async(std::launch::async,[&request] {
-              try { return analyze(request); }
+            // 配置加载也在工作线程中运行，让主线程在 CDB/目录读取期间响应取消。
+            started=true; work=std::async(std::launch::async,[&request,message=j::Object(*object)] {
+              try { configure(request,message); return analyze(request); }
               catch(const Failure &f) { if(f.code=="cancelled") return j::Object{{"protocol",Protocol},{"type","completed"},{"id",request.id},{"outcome","cancelled"}}; return error(request.id,f); }
               catch(const std::exception &e) { return error(request.id,Failure("internal_failure",e.what())); }
             });

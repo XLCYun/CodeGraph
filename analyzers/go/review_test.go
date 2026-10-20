@@ -357,12 +357,22 @@ func TestNestedModuleBoundary(t *testing.T) {
 
 // TestProtocolCancelWhileRunning 验证匹配 ID 取消、错 ID 拒绝与入口自行退出。
 func TestProtocolCancelWhileRunning(t *testing.T) {
+	for _, discovery := range []bool{false, true} {
+		t.Run(map[bool]string{false: "explicit", true: "discovery"}[discovery], func(t *testing.T) { testProtocolCancelWhileRunning(t, discovery) })
+	}
+}
+
+// testProtocolCancelWhileRunning 验证配置发现也能被同请求取消帧中断。
+func testProtocolCancelWhileRunning(t *testing.T, discovery bool) {
 	for _, matching := range []bool{true, false} {
 		t.Run(map[bool]string{true: "matching", false: "wrong_id"}[matching], func(t *testing.T) {
 			root := t.TempDir()
 			writeFixture(t, root, "go.mod", "module example.test/app\ngo "+fixtureLanguage(t)+"\n")
 			writeFixture(t, root, "unit.go", "package app\nimport \"strings\"\nfunc F(){_ = strings.Contains(\"a\",\"b\")}\n")
 			req := fixtureRequest(t, root, "unit.go")
+			if discovery {
+				req.Input.Files = nil
+			}
 			req.Environment.Platforms = req.Environment.Platforms[2:]
 			read, write := io.Pipe()
 			defer write.Close()
