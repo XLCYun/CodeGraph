@@ -6,6 +6,83 @@ import { test } from 'node:test';
 import { analyze } from '../analyze.mjs';
 import { ts, runtime } from './support.mjs';
 
+/** 省略选集必须按原生配置发现，排除成员仍能作为图外导航上下文。 */
+test('discovery keeps configured membership separate from inferred and imported context', t => {
+  const contents = {
+    'tsconfig.base.json': '{"compilerOptions":{"module":"Preserve","moduleResolution":"Bundler","types":[]}}',
+    'tsconfig.json': '{"extends":"./tsconfig.base.json","include":["src"],"exclude":["src/excluded"]}',
+    'src/main.ts': "import {hidden} from './excluded/hidden'; export function caller(){ hidden(); }",
+    'src/excluded/hidden.ts': 'export function hidden(){}',
+    'stray.ts': 'export function stray(){}',
+    'src/main.test.ts': 'export function testOnly(){}',
+  };
+  const root = fixture(t, contents);
+  const result = analyze(ts, request(root, undefined));
+  assert.deepEqual(result.evidence.files.map(f => [f.path, f.disposition]), [['src/main.test.ts', 'excluded_test'], ['src/main.ts', 'analyzed']]);
+  assert.ok(result.graph.external_symbols.some(s => s.name === 'hidden'));
+  assert.ok(!result.graph.nodes.some(n => ['hidden', 'stray', 'testOnly'].includes(n.name)));
+  assert.ok(analyze(ts, request(root, ['src/excluded/hidden.ts'])).graph.nodes.some(n => n.name === 'hidden'));
+  for (const [name, value] of Object.entries(contents)) assert.equal(fs.readFileSync(path.join(root, name), 'utf8'), value);
+  assert.deepEqual(fs.readdirSync(root).sort(), ['src', 'stray.ts', 'tsconfig.base.json', 'tsconfig.json']);
+});
+
+/** 方案引用与 jsconfig 默认 allowJs 都由原生配置决定，声明库不会变成完整图。 */
+test('discovery follows solution references and native JavaScript membership', t => {
+  const root = fixture(t, {
+    'tsconfig.json': '{"files":[],"references":[{"path":"./app"},{"path":"./web/jsconfig.json"}]}',
+    'app/tsconfig.json': '{"compilerOptions":{"allowJs":false,"types":[]},"include":["src"]}',
+    'app/src/main.ts': 'export function typed(){}', 'app/src/ignored.js': 'export function ignored(){}',
+    'web/jsconfig.json': '{"include":["src"]}', 'web/src/main.js': 'export function script(){Promise.resolve(1)}',
+    'stray.ts': 'export function stray(){}',
+  });
+  const result = analyze(ts, request(root, undefined));
+  assert.deepEqual(result.evidence.files.map(f => f.path), ['app/src/main.ts', 'web/src/main.js']);
+  assert.ok(result.graph.external_symbols.some(s => s.scope === 'dependency'));
+  assert.equal(result.graph.root_contains.length, 2);
+});
+
+/** 合法默认项目和空配置都保留配置证据；无效配置不能伪装为空选集。 */
+test('discovery supports defaults and configured empty while rejecting bad configuration', t => {
+  for (const contents of [{}, {'tsconfig.json':'{"files":[]}'}, {'jsconfig.json':'{"include":["missing"]}'}]) {
+    const result = analyze(ts, request(fixture(t, contents), undefined));
+    assert.deepEqual(result.graph.nodes, []);
+    assert.deepEqual(result.evidence.files, []);
+    assert.ok(result.evidence.configurations.length > 0);
+  }
+  const root = fixture(t, {'main.js':'export function plain(){}'});
+  assert.ok(analyze(ts, request(root, undefined)).graph.nodes.some(n => n.name === 'plain'));
+  for (const config of ['{bad', '{"compilerOptions":{"target":"bogus"}}', '{"files":["missing.ts"]}', '{"extends":"./missing.json"}']) {
+    fs.writeFileSync(path.join(root, 'tsconfig.json'), config);
+    assert.throws(() => analyze(ts, request(root, undefined)));
+    assert.deepEqual(analyze(ts, request(root, [])).graph.nodes, []);
+  }
+  // 旧显式请求允许缺失 business extends 后按选中源码回退；发现不能据此猜配置成员。
+  assert.ok(analyze(ts, request(root, ['main.js'])).graph.nodes.some(node => node.name === 'plain'));
+});
+
+/** 工作区负成员和子项目配置边界同时限制默认发现，单个具名配置仍可作为入口。 */
+test('discovery respects workspace package membership and standalone named configs', t => {
+  const root = fixture(t, {
+    'package.json': '{"workspaces":["packages/*","!packages/ignored"]}',
+    'packages/app/package.json': '{"name":"app"}',
+    'packages/app/tsconfig.app.json': '{"include":["src"]}',
+    'packages/app/src/main.ts': 'export function app(){}',
+    'packages/app/stray.ts': 'export function stray(){}',
+    'packages/plain/package.json': '{"name":"plain","type":"commonjs"}',
+    'packages/plain/main.cjs': 'exports.run = () => Promise.resolve(1);',
+    'packages/ignored/package.json': '{"name":"ignored"}',
+    'packages/ignored/tsconfig.json': '{"files":["main.ts"]}',
+    'packages/ignored/main.ts': 'export function ignored(){}',
+  });
+  assert.deepEqual(analyze(ts, request(root, undefined)).evidence.files.map(f => f.path), ['packages/app/src/main.ts', 'packages/plain/main.cjs']);
+  // 原生配置可独立纳入非 package-manager 成员，import 可达性本身仍不扩选。
+  fs.writeFileSync(path.join(root, 'tsconfig.json'), '{"compilerOptions":{"allowJs":true},"include":["packages"]}');
+  assert.ok(analyze(ts, request(root, undefined)).evidence.files.some(file => file.path === 'packages/ignored/main.ts'));
+  fs.writeFileSync(path.join(root, 'tsconfig.json'), '{"files":[],"references":[{"path":"packages/ignored"}]}');
+  assert.deepEqual(analyze(ts, request(root, undefined)).evidence.files.map(file => file.path), ['packages/app/src/main.ts', 'packages/ignored/main.ts']);
+  assert.equal(fs.existsSync(path.join(root, 'node_modules')), false);
+});
+
 /** 每个案例在独立真实目录中提供输入，生产读取政策必须生效。 */
 function fixture(t, files) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'native-ts-test-')));

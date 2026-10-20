@@ -1,18 +1,20 @@
 //! Python 对象和运行时关系政策迁自既有实现，原文/AST/导航全部来自固定原生数据库。
 mod bindings;
+mod discovery;
 mod fields;
 mod known;
 mod project;
 mod references;
 mod syntax;
 
-use crate::{ProjectInput, PythonProject, protocol::Request};
+use crate::{ProjectInput, protocol::Request};
 use anyhow::{Context, Result, ensure};
 use codegraph_engine_common::model::{CodeGraph, NodeId, ReferenceTarget};
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
 
 /// 保留可读语言上下文，提取失败不变成空图。
@@ -37,11 +39,29 @@ fn is_test(relative: &Path) -> bool {
 pub fn analyze(request: &Request) -> Result<Value> {
     request.validate()?;
     let repository = request.input.repository_root.canonicalize()?;
+    let deadline = Instant::now()
+        .checked_add(Duration::from_millis(request.limits.analysis_timeout_ms))
+        .context("Python 分析期限越界")?;
+    let discovered = request
+        .input
+        .files
+        .is_none()
+        .then(|| discovery::load(&repository, deadline))
+        .transpose()?;
+    let selected_files = request
+        .input
+        .files
+        .as_ref()
+        .unwrap_or_else(|| &discovered.as_ref().unwrap().files);
     let mut groups = BTreeMap::new();
     let mut files = Vec::new();
     let mut configurations = Vec::new();
-    let mut snapshots = BTreeMap::new();
-    for relative in &request.input.files {
+    let mut snapshots = discovered
+        .as_ref()
+        .map(|value| value.snapshots.clone())
+        .unwrap_or_default();
+    for relative in selected_files {
+        crate::loading::checkpoint(Some(deadline))?;
         let path = repository.join(relative);
         let actual = project::checked_path(&repository, &path)?;
         ensure!(
@@ -56,8 +76,17 @@ pub fn analyze(request: &Request) -> Result<Value> {
             files.push(json!({"path":relative,"disposition":"excluded_test","configuration_ids":["python-excluded"]}));
             continue;
         }
-        let source = project::read_source(&path)?;
-        let policy = project::Project::for_file(&repository, &path, &source)?;
+        let source = if let Some(discovered) = &discovered {
+            discovered.projects[&discovered.owners[relative]].source(Path::new(relative))?
+        } else {
+            project::read_source(&path)?
+        };
+        // 发现成员沿用实际接纳它的项目；PEP 723 仍按文件原文选择版本。
+        let policy = if let Some(discovered) = &discovered {
+            discovered.policies[&discovered.owners[relative]].with_source(&source)?
+        } else {
+            project::Project::for_file(&repository, &path, &source)?
+        };
         snapshots.insert(path.clone(), source.clone());
         groups
             .entry(policy)
@@ -74,14 +103,20 @@ pub fn analyze(request: &Request) -> Result<Value> {
     let mut nodes = Vec::new();
     let mut externals = BTreeMap::new();
     let mut origins = Vec::new();
+    let mut projected_roots = BTreeSet::new();
     for (index, (policy, selected)) in groups.into_iter().enumerate() {
+        crate::loading::checkpoint(Some(deadline))?;
+        projected_roots.insert(policy.root.clone());
         let configuration_id = format!("python-project-{index}");
         let mut source_paths = Vec::new();
         for name in ["pyproject.toml", "ty.toml"] {
             let path = policy.root.join(name);
             if path.exists() {
                 project::checked_path(&repository, &path)?;
-                snapshots.insert(path.clone(), std::fs::read_to_string(&path)?);
+                let source = std::fs::read_to_string(&path)?;
+                if let Some(previous) = snapshots.insert(path.clone(), source.clone()) {
+                    ensure!(previous == source, "分析期间配置已改变：{}", path.display());
+                }
                 source_paths.push(
                     path.strip_prefix(&repository)?
                         .to_string_lossy()
@@ -90,18 +125,31 @@ pub fn analyze(request: &Request) -> Result<Value> {
             }
         }
         configurations.push(json!({"id":configuration_id,"source_paths":source_paths,"platform_ids":[request.environment.platforms[0].id]}));
-        let native = PythonProject::load(ProjectInput {
-            repository: repository.clone(),
-            project_root: policy.root.strip_prefix(&repository)?.into(),
-            source_roots: policy
-                .source_roots
-                .iter()
-                .map(|path| path.strip_prefix(&repository).map(PathBuf::from))
-                .collect::<std::result::Result<Vec<_>, _>>()?,
-            python_minor: policy.minor,
-        })?;
+        let native = if let Some(discovered) = &discovered {
+            discovered
+                .projects
+                .get(&policy.root)
+                .context("Python 成员未归属发现项目")?
+                .with_minor(policy.minor)?
+        } else {
+            crate::loading::load_configured(
+                ProjectInput {
+                    repository: repository.clone(),
+                    project_root: policy.root.strip_prefix(&repository)?.into(),
+                    source_roots: policy
+                        .source_roots
+                        .iter()
+                        .map(|path| path.strip_prefix(&repository).map(PathBuf::from))
+                        .collect::<std::result::Result<Vec<_>, _>>()?,
+                    python_minor: policy.minor,
+                },
+                None,
+                Some(deadline),
+            )?
+        };
         let mut parsed = BTreeMap::new();
         for (path, source) in selected {
+            crate::loading::checkpoint(Some(deadline))?;
             let relative = path.strip_prefix(&repository)?;
             ensure!(
                 native.source(relative)? == source,
@@ -136,6 +184,7 @@ pub fn analyze(request: &Request) -> Result<Value> {
             &policy,
             parsed,
             request.input.include_tests,
+            discovered.as_ref().map(|value| &value.policies),
         )?;
         for document in documents {
             if let Some(root) = &document.root {
@@ -164,6 +213,29 @@ pub fn analyze(request: &Request) -> Result<Value> {
         }
     }
     externals.retain(|symbol, _| !ids.contains(&NodeId(symbol.clone())));
+    if let Some(discovered) = &discovered {
+        for project in discovered.projects.values() {
+            project.ensure_unchanged(deadline)?;
+        }
+        for root in discovered
+            .projects
+            .keys()
+            .filter(|root| !projected_roots.contains(*root))
+        {
+            let source_paths: Vec<_> = ["ty.toml", "pyproject.toml"]
+                .into_iter()
+                .map(|name| root.join(name))
+                .filter(|path| snapshots.contains_key(path))
+                .map(|path| {
+                    path.strip_prefix(&repository)
+                        .unwrap()
+                        .to_string_lossy()
+                        .replace('\\', "/")
+                })
+                .collect();
+            configurations.push(json!({"id":format!("python-empty-{}",configurations.len()),"source_paths":source_paths,"platform_ids":[request.environment.platforms[0].id]}));
+        }
+    }
     for (path, source) in snapshots {
         ensure!(
             std::fs::read_to_string(&path)? == source,
@@ -179,3 +251,7 @@ pub fn analyze(request: &Request) -> Result<Value> {
 #[cfg(test)]
 #[path = "tests/project.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/discovery.rs"]
+mod discovery_tests;

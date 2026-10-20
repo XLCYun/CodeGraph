@@ -60,6 +60,74 @@ fn analyze(source: &str) -> CodeGraph {
         })
         .unwrap()
 }
+
+/// 真实 helper 发现配置成员，Host 校验完整覆盖后仍保留图外上下文和测试开关。
+#[test]
+#[ignore = "需要已构建 Python helper，单独串行运行"]
+fn directory_discovery_preserves_members_context_and_explicit_selection() {
+    let repository = tempfile::tempdir().unwrap();
+    let sources = [
+        ("ty.toml", "[environment]\nroot=['src']\nextra-paths=['context']\n[src]\nexclude=['src/excluded']\n"),
+        ("src/main.py", "from hidden import target\ndef caller():\n    target()\n"),
+        ("src/api.pyi", "def declared() -> None: ...\n"),
+        ("src/test_api.py", "def test_only(): pass\n"),
+        ("src/excluded/out.py", "def excluded(): pass\n"),
+        ("context/hidden.py", "def target(): pass\n"),
+    ];
+    for (name, source) in sources {
+        let file = repository.path().join(name);
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(file, source).unwrap();
+    }
+    let mut input = AnalysisInput {
+        repository_root: repository.path().into(),
+        files: None,
+        options: Default::default(),
+    };
+    let graph = analyzer().analyze(&input).unwrap();
+    assert_eq!(graph.root().contains.len(), 2);
+    assert_eq!(
+        named(&graph, "caller").data().name.as_deref(),
+        Some("caller")
+    );
+    assert!(graph
+        .external_symbols()
+        .values()
+        .any(|symbol| symbol.name == "target"));
+    input.options.include_tests = true;
+    assert_eq!(analyzer().analyze(&input).unwrap().root().contains.len(), 3);
+    input.files = Some(vec!["src/excluded/out.py".into()]);
+    assert_eq!(
+        named(&analyzer().analyze(&input).unwrap(), "excluded")
+            .data()
+            .name
+            .as_deref(),
+        Some("excluded")
+    );
+    input.files = Some(vec![]);
+    assert!(analyzer()
+        .analyze(&input)
+        .unwrap()
+        .root()
+        .contains
+        .is_empty());
+    for (name, source) in sources {
+        assert_eq!(
+            fs::read_to_string(repository.path().join(name)).unwrap(),
+            source
+        );
+    }
+    fs::write(repository.path().join("ty.toml"), "[src]\ninclude=[]\n").unwrap();
+    input.files = None;
+    assert!(analyzer()
+        .analyze(&input)
+        .unwrap()
+        .root()
+        .contains
+        .is_empty());
+    fs::write(repository.path().join("ty.toml"), "[src]\ninclude=3\n").unwrap();
+    assert!(analyzer().analyze(&input).is_err());
+}
 /// 仅通过公共包含图找到源码对象，不依赖适配器的身份编码和内部 AST。
 pub(super) fn named<'a>(graph: &'a CodeGraph, name: &str) -> &'a CodeNode {
     let mut pending = graph.root().contains.clone();

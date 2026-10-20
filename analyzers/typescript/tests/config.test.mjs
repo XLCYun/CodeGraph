@@ -92,8 +92,9 @@ for (const field of ['files', 'include', 'exclude']) {
     const config = JSON.parse(fs.readFileSync(file, 'utf8'));
     config[field] = ['${configDir}/../../outside/missing.ts'];
     fs.writeFileSync(file, JSON.stringify(config));
-    const sources = [...context.sources];
-    assert.throws(() => prepareConfigurations(context, ts, sources), /越界|仓库外/);
+    // 配置变更属于下一次请求，必须在变更之后冻结该请求的工作区。
+    const updated = createWorkspace({ root: context.root, runtime });
+    assert.throws(() => prepareConfigurations(updated, ts, [...updated.sources]), /越界|仓库外/);
   });
 }
 test('configDir rejects original symlink ancestor for nonexistent output', t => {

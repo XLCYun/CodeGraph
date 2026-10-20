@@ -1,13 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createWorkspace, within, checkedWorkspacePath, canonicalPath } from './workspace.mjs';
-import { prepareConfigurations, inferredOptions } from './config.mjs';
+import { prepareConfigurations, inferredOptions, discoverFiles } from './config.mjs';
 import { project, normalize, unwrap, isTest } from './projection.mjs';
 import { hasSyntaxErrors } from './syntax.mjs';
 
 /** 一侧一次固定请求：同一个 LanguageService 同时提供语法树、类型诊断和定义导航。 */
 export function analyze(ts, request) {
   const input = request.input;
+  const discovery = input.files === undefined;
+  const deadline = performance.now() + (request.limits?.analysis_timeout_ms ?? 1800000);
+  /** 同步原生遍历检查期限，活动取消仍由主线程回收整个 Worker。 */
+  function checkpoint() { if (performance.now() > deadline) throw new Error('TypeScript 分析超过期限'); }
   if (input.profile !== 'typescript-static-v1') throw new Error('不支持的 TypeScript profile');
   const platforms = request.environment.platforms;
   const library = platforms.find(p => p.metadata.package === 'typescript');
@@ -20,23 +24,30 @@ export function analyze(ts, request) {
     if (entries.length !== 1 || canonicalPath(entries[0].root) !== canonicalPath(expected)) throw new Error('声明 catalog 与固定运行时目录不一致');
   }
   const root = canonicalPath(input.repository_root);
-  const selected = input.files.map(file => canonicalPath(checkedWorkspacePath(root, path.join(root, file))));
+  let paths = input.files ?? [];
+  let selected = paths.map(file => canonicalPath(checkedWorkspacePath(root, path.join(root, file))));
   if (selected.some(file => !fs.statSync(file).isFile())) throw new Error('选集必须是普通源码文件');
   // 旧入口先校验路径，再短路空选集/全词法测试选集；不读取无关坏配置。
-  if (!selected.length || !input.include_tests && input.files.every(isTest)) {
+  if (!discovery && (!selected.length || !input.include_tests && paths.every(isTest))) {
     const id = 'excluded:typescript-tests';
     return {
       graph: { root_contains: [], nodes: [], external_symbols: [] },
       evidence: {
         configurations: selected.length ? [{ id, source_paths: [], platform_ids: [] }] : [],
-        files: input.files.map(file => ({ path: file, disposition: 'excluded_test', configuration_ids: [id] })),
+        files: paths.map(file => ({ path: file, disposition: 'excluded_test', configuration_ids: [id] })),
         origins: [],
       },
     };
   }
-  const context = createWorkspace({ root, runtime });
-  const { host, projects, candidates, configFiles } = prepareConfigurations(context, ts, [...context.sources]);
+  const context = createWorkspace({ root, runtime, checkpoint });
+  const prepared = prepareConfigurations(context, ts, [...context.sources], discovery);
+  const { host, projects, candidates, configFiles } = prepared;
+  if (discovery) {
+    paths = discoverFiles(context, ts, prepared);
+    selected = paths.map(file => canonicalPath(path.join(root, file)));
+  }
   for (const file of selected) {
+    checkpoint();
     if (!context.sources.has(canonicalPath(file))) throw new Error(`选集不是受控源码：${file}`);
     if (!candidates.get(file)?.length) {
       const converted = ts.convertCompilerOptionsFromJson(inferredOptions(context, file), context.root);
@@ -75,13 +86,14 @@ export function analyze(ts, request) {
     if (!sf) throw new Error(`导航目标不在已加载项目中：${file}`);
     if (hasSyntaxErrors(ts, svc.program, sf)) throw new Error(`源码无法解析：${path.relative(context.root, file)}`);
     const runtime = !within(context.root, file);
-    if (!runtime) new TextDecoder('utf-8', { fatal: true }).decode(fs.readFileSync(file));
+    if (!runtime) new TextDecoder('utf-8', { fatal: true }).decode(context.read(file));
     const doc = project(ts, sf, runtime ? context.runtime : context.root, runtime);
     documents.set(file, doc); return doc;
   }
   const output = [], origins = [], files = [], originById = new Map();
   for (let i = 0; i < selected.length; i++) {
-    const file = selected[i], relative = input.files[i];
+    checkpoint();
+    const file = selected[i], relative = paths[i];
     const configs = candidates.get(file);
     const excluded = !input.include_tests && (isTest(relative) || isTest(path.relative(context.root, file).split(path.sep).join('/')));
     files.push({ path: relative, disposition: excluded ? 'excluded_test' : 'analyzed', configuration_ids: configs });
@@ -207,6 +219,7 @@ export function analyze(ts, request) {
   }
   const visited = new Set();
   for (let i = 0; i < selected.length; i++) {
+    checkpoint();
     if (files[i].disposition === 'excluded_test' || visited.has(selected[i])) continue;
     const file = selected[i];
     visited.add(file);
@@ -226,9 +239,10 @@ export function analyze(ts, request) {
     node.references.forEach(r => { if (r.target.kind === 'external') used.add(r.target.symbol); });
   }
   services.forEach(s => s.ls.dispose());
+  context.unchanged();
   return {
     graph: { root_contains: output.filter(n => n.native_kind === 'file').map(n => n.id), nodes: output, external_symbols: [...external.values()].filter(s => used.has(s.symbol)) },
-    evidence: { configurations: [...new Set(files.flatMap(f => f.configuration_ids))].map(id => ({ id, source_paths: id.startsWith('inferred:') ? [] : configFiles.map(f => path.relative(context.root, f).split(path.sep).join('/')), platform_ids: platforms.map(p => p.id) })), files, origins },
+    evidence: { configurations: [...new Set(files.length ? files.flatMap(f => f.configuration_ids) : discovery ? projects.map(p => p.name).concat(projects.length ? [] : ['inferred:default']) : [])].map(id => ({ id, source_paths: id.startsWith('inferred:') ? [] : configFiles.map(f => path.relative(context.root, f).split(path.sep).join('/')), platform_ids: platforms.map(p => p.id) })), files, origins },
   };
 }
 

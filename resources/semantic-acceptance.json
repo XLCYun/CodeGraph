@@ -2,6 +2,24 @@
   {
     "language": "python",
     "source": "src/native_analyzer/tests/python_graph.rs",
+    "name": "native_analyzer::tests::python_graph::directory_discovery_preserves_members_context_and_explicit_selection",
+    "platforms": [
+      "darwin",
+      "win32"
+    ]
+  },
+  {
+    "language": "typescript-javascript",
+    "source": "src/adapters/tests/typescript_graph.rs",
+    "name": "adapters::typescript_graph::directory_discovery_preserves_config_members_and_explicit_selection",
+    "platforms": [
+      "darwin",
+      "win32"
+    ]
+  },
+  {
+    "language": "python",
+    "source": "src/native_analyzer/tests/python_graph.rs",
     "name": "native_analyzer::tests::python_graph::receiver_fields_follow_lexical_bindings",
     "platforms": [
       "darwin",

@@ -14,7 +14,10 @@ use std::{
 pub(super) struct Project {
     pub root: PathBuf,
     pub source_roots: Vec<PathBuf>,
+    pub member_roots: Vec<PathBuf>,
     pub minor: u8,
+    explicit: Option<String>,
+    requires: Option<String>,
 }
 
 impl Project {
@@ -53,13 +56,24 @@ impl Project {
                 .filter(|path| path.starts_with(repository))
                 .ok_or_else(|| failure("项目配置发现越过仓库边界"))?;
         };
+        Self::from_configuration(repository, root, &configuration, requires, source)
+    }
+
+    /// 已冻结的配置和脚本元数据共用原有根、版本策略，不重新读取配置文件。
+    pub(super) fn from_configuration(
+        repository: &Path,
+        root: PathBuf,
+        configuration: &toml::Value,
+        requires: Option<String>,
+        source: &str,
+    ) -> Result<Self> {
         let environment = configuration.get("environment");
         let explicit = environment
             .and_then(|value| value.get("python-version"))
             .map(string)
             .transpose()?;
-        let requires = script_requires(source)?.or(requires);
-        let minor = select_minor(explicit.as_deref(), requires.as_deref())?;
+        let effective_requires = script_requires(source)?.or_else(|| requires.clone());
+        let minor = select_minor(explicit.as_deref(), effective_requires.as_deref())?;
         let mut source_roots = Vec::new();
         if let Some(roots) = environment.and_then(|value| value.get("root")) {
             add_roots(repository, &root, roots, &mut source_roots)?;
@@ -69,6 +83,11 @@ impl Project {
             }
             source_roots.push(root.clone());
         }
+        let member_roots = if source_roots.is_empty() {
+            vec![root.clone()]
+        } else {
+            source_roots.clone()
+        };
         if let Some(extra) = environment.and_then(|value| value.get("extra-paths")) {
             add_roots(repository, &root, extra, &mut source_roots)?;
         }
@@ -80,8 +99,19 @@ impl Project {
         Ok(Self {
             root,
             source_roots,
+            member_roots,
             minor,
+            explicit,
+            requires,
         })
+    }
+
+    /// PEP 723 只调整此文件的目标版本，不重新发现配置、根或源码。
+    pub(super) fn with_source(&self, source: &str) -> Result<Self> {
+        let mut policy = self.clone();
+        let requires = script_requires(source)?.or_else(|| self.requires.clone());
+        policy.minor = select_minor(self.explicit.as_deref(), requires.as_deref())?;
+        Ok(policy)
     }
 }
 
@@ -197,16 +227,24 @@ pub(super) fn checked_path(repository: &Path, path: &Path) -> Result<PathBuf> {
 }
 
 /// 不存在的配置可继续向上查找；存在但无效的配置不能忽略。
-fn read_toml(repository: &Path, path: &Path) -> Result<Option<toml::Value>> {
+pub(super) fn read_toml(repository: &Path, path: &Path) -> Result<Option<toml::Value>> {
+    Ok(read_toml_snapshot(repository, path)?.map(|(value, _)| value))
+}
+
+/// 配置 AST 与变更检查保留同一次读取的字节，不能通过第二次读取刷新快照。
+pub(super) fn read_toml_snapshot(
+    repository: &Path,
+    path: &Path,
+) -> Result<Option<(toml::Value, String)>> {
     match fs::symlink_metadata(path) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(failure(error)),
         Ok(_) => {
             checked_path(repository, path)?;
             let source = fs::read_to_string(path).map_err(failure)?;
-            toml::from_str(&source)
-                .map(Some)
-                .map_err(|error| failure(format!("{} 配置无效：{error}", path.display())))
+            let value = toml::from_str(&source)
+                .map_err(|error| failure(format!("{} 配置无效：{error}", path.display())))?;
+            Ok(Some((value, source)))
         }
     }
 }

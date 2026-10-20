@@ -3,10 +3,11 @@ import path from 'node:path';
 import { within, checkedWorkspacePath, workspaceSystem, canonicalPath } from './workspace.mjs';
 
 /** 使用固定 TS 解析受限 JSONC；将原生配置结果交给同进程 LanguageService。 */
-export function prepareConfigurations(context, ts, sources) {
+export function prepareConfigurations(context, ts, sources, discovery = false) {
   const host = workspaceSystem(context, ts);
   const done = new Set();
   const configs = new Set();
+  const bases = new Set(), referenced = new Set();
   const pathOptions = ['baseUrl', 'rootDir', 'outDir', 'declarationDir', 'tsBuildInfoFile'];
   const listPathOptions = ['rootDirs', 'typeRoots'];
   /** 在内存中把配置路径规范到 Git workspace，不存在的输出目录也不能越界。 */
@@ -35,7 +36,7 @@ export function prepareConfigurations(context, ts, sources) {
       const manifest = path.join(candidate, 'package.json');
       if (fs.existsSync(manifest)) {
         checkedWorkspacePath(context.root, manifest);
-        const packageData = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+        const packageData = JSON.parse(context.read(manifest).toString('utf8'));
         if (typeof packageData.tsconfig === 'string') candidates.unshift(path.resolve(candidate, packageData.tsconfig));
       }
       for (const file of candidates) {
@@ -50,11 +51,12 @@ export function prepareConfigurations(context, ts, sources) {
   }
   /** 保留每层 extends/references；只剥离插件入口和改写路径。 */
   function processConfig(original) {
+    context.checkpoint();
     original = canonicalPath(checkedWorkspacePath(context.root, original));
     if (done.has(original)) return original;
     done.add(original);
     // Compiler API 的诊断文件身份要求正斜杠；磁盘读取与授权仍使用原生真实路径。
-    const parsed = ts.parseConfigFileTextToJson(ts.normalizePath(original), fs.readFileSync(original, 'utf8'));
+    const parsed = ts.parseConfigFileTextToJson(ts.normalizePath(original), context.read(original).toString('utf8'));
     if (parsed.error || !parsed.config || typeof parsed.config !== 'object' || Array.isArray(parsed.config)) {
       throw new Error(`无效配置 JSONC：${original}`);
     }
@@ -77,7 +79,7 @@ export function prepareConfigurations(context, ts, sources) {
     for (const key of ['files', 'include', 'exclude']) if (config[key] !== undefined) config[key] = config[key].map(value => rewrite(value, base));
     if (config.extends !== undefined) {
       const resolved = (Array.isArray(config.extends) ? config.extends : [config.extends])
-        .map(value => resolveExtends(value, base)).filter(Boolean).map(processConfig);
+        .map(value => { const file = resolveExtends(value, base); if (discovery && !file) throw new Error(`缺失继承配置：${value}`); return file; }).filter(Boolean).map(file => { bases.add(file); return processConfig(file); });
       if (resolved.length) config.extends = resolved; else delete config.extends;
     }
     if (config.references !== undefined) {
@@ -87,6 +89,7 @@ export function prepareConfigurations(context, ts, sources) {
         checkedWorkspacePath(context.root, file);
         if (!fs.existsSync(file)) throw new Error(`缺失引用项目配置：${file}`);
         configs.add(canonicalPath(file));
+        referenced.add(canonicalPath(file));
         processConfig(file);
         return { ...reference, path: checkedWorkspacePath(context.root, absolute) };
       });
@@ -97,16 +100,22 @@ export function prepareConfigurations(context, ts, sources) {
   }
   // 配置来自同一个 workspace 的清单；不扫描生成目录或安装依赖的配置。
   for (const file of context.metadata) {
-    if (/^(?:tsconfig|jsconfig)(?:\.[\w.-]+)?\.json$/.test(path.basename(file))) configs.add(file);
+    if (/^(?:tsconfig|jsconfig)(?:\.[\w.-]+)?\.json$/.test(path.basename(file)) && (!discovery || context.member(file))) configs.add(file);
   }
   for (const original of configs) processConfig(original);
   const projects = [];
   const candidates = new Map(sources.map(source => [source, []]));
   for (const original of configs) {
+    context.checkpoint();
+    if (discovery && bases.has(original) && !referenced.has(original) && !/^(?:tsconfig|jsconfig)\.json$/.test(path.basename(original))) continue;
     const config = checkedWorkspacePath(context.root, original);
     const errors = [];
     const parsed = ts.getParsedCommandLineOfConfigFile(config, {}, { ...host, onUnRecoverableConfigFileDiagnostic: error => errors.push(error) });
     if (!parsed || errors.length) throw new Error(`无法确定项目上下文：${original}`);
+    // 无匹配输入和明确空 files 是合法空项目，其余原生配置错误不能降级为空图。
+    if (discovery && parsed.errors.some(error => ![18002, 18003].includes(error.code))) {
+      throw new Error(`无效项目配置：${original}: ${ts.flattenDiagnosticMessageText(parsed.errors[0].messageText, '\n')}`);
+    }
     // 继承与模板展开全部完成后校验有效路径；不存在的输出和 glob 也检查最近现存祖先。
     /** 校验有效路径和现存祖先，工作区外的配置仍然拒绝。 */
     function validateEffectivePath(value, base, label) {
@@ -132,12 +141,36 @@ export function prepareConfigurations(context, ts, sources) {
       for (const value of specs[key] ?? []) validateEffectivePath(value, configDirectory, key);
     }
     for (const file of parsed.fileNames) {
+      context.checkpoint();
       validateEffectivePath(file, configDirectory, '配置成员');
-      candidates.get(path.resolve(file))?.push(config);
+      const identity = fs.existsSync(file) ? canonicalPath(file) : path.resolve(file);
+      candidates.get(identity)?.push(config);
     }
     projects.push({ name: config, roots: parsed.fileNames, options: parsed.options, references: parsed.projectReferences });
   }
   return { host, projects, candidates, configFiles: [...done].map(original => checkedWorkspacePath(context.root, original)) };
+}
+
+/** 自动选集只来自原生项目成员；默认项目不能把已有配置排除的文件重新纳入。 */
+export function discoverFiles(context, ts, prepared) {
+  const selected = new Set();
+  const owningDirectories = prepared.projects.map(project => path.dirname(project.name));
+  /** 原生配置仍须经过普通文件、真实边界和第一方授权校验，数量在收集时检查。 */
+  function add(file) {
+    context.checkpoint();
+    file = canonicalPath(checkedWorkspacePath(context.root, file));
+    if (!fs.statSync(file).isFile() || !context.sources.has(file)) throw new Error(`配置成员不是受控源码：${file}`);
+    selected.add(file);
+    if (selected.size > 100000) throw new Error('文件选集超过数量上限');
+  }
+  for (const project of prepared.projects) for (const file of project.roots) add(file);
+  // 原生 glob 提供默认源码集合；解析环境仍逐文件使用既有 browser/Node 推断。
+  const inferred = ts.parseJsonConfigFileContent({ compilerOptions: { allowJs: true }, include: ['**/*'] }, prepared.host, context.root);
+  for (const file of inferred.fileNames) {
+    context.checkpoint();
+    if (context.member(file) && !owningDirectories.some(directory => within(directory, file))) add(file);
+  }
+  return [...selected].map(file => path.relative(context.root, file).split(path.sep).join('/')).sort();
 }
 
 /** 未配置文件按最近包元数据选固定 NodeNext 或 Preserve/Bundler；不参考工具 Node 版本。 */
@@ -147,7 +180,7 @@ export function inferredOptions(context, file) {
   while (within(context.root, directory)) {
     const manifest = path.join(directory, 'package.json');
     if (fs.existsSync(manifest)) {
-      const metadata = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+      const metadata = JSON.parse(context.read(manifest).toString('utf8'));
       node ||= Boolean(metadata.engines?.node || metadata.dependencies?.['@types/node'] || metadata.devDependencies?.['@types/node'] || metadata.type === 'commonjs');
       break;
     }

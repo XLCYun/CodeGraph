@@ -6,9 +6,10 @@ use ruff_ranged_value::ValueSource;
 use std::{
     collections::BTreeSet,
     fs,
-    path::{Component, Path},
+    path::{Component, Path, PathBuf},
+    time::Instant,
 };
-use ty_project::{ProjectDatabase, ProjectMetadata, UseUv, metadata::options::Options};
+use ty_project::{Db, ProjectDatabase, ProjectMetadata, UseUv, metadata::options::Options};
 
 pub(crate) const SNAPSHOT_ROOT: &str = "/narrant/repository";
 const PREFIX: &str = "/narrant/environment";
@@ -118,6 +119,15 @@ fn read_source(path: &Path) -> Result<String> {
 
 /// 单个项目只读取明确源码根及项目根，配置发现留给应用层既有政策。
 pub(crate) fn load(input: ProjectInput) -> Result<PythonProject> {
+    load_configured(input, None, None)
+}
+
+/// 发现和投影共用一次冻结；配置仅作为受控内存覆盖，不开启磁盘自动发现。
+pub(crate) fn load_configured(
+    input: ProjectInput,
+    source_options: Option<toml::Value>,
+    deadline: Option<Instant>,
+) -> Result<PythonProject> {
     ensure!(
         (7..=14).contains(&input.python_minor),
         "Python 目标必须为 3.7–3.14"
@@ -143,6 +153,7 @@ pub(crate) fn load(input: ProjectInput) -> Result<PythonProject> {
             .into_iter()
             .filter_entry(|entry| !matches!(entry.file_name().to_str(), Some(".git" | ".venv")))
         {
+            checkpoint(deadline)?;
             let entry = entry?;
             check_path(&repository, entry.path())?;
             check_environment(&repository, entry.path())?;
@@ -164,11 +175,23 @@ pub(crate) fn load(input: ProjectInput) -> Result<PythonProject> {
         }
     }
     // 显式空 prefix 阻止 PythonEnvironment 进入解释器或 .venv 发现分支。
-    memory.create_directory_all(&SystemPathBuf::from(format!(
-        "{PREFIX}/lib/python3.{}/site-packages",
-        input.python_minor
-    )))?;
+    for minor in 7..=14 {
+        memory.create_directory_all(&SystemPathBuf::from(format!(
+            "{PREFIX}/lib/python3.{minor}/site-packages"
+        )))?;
+    }
     memory.create_directory_all(&SystemPathBuf::from(format!("{PREFIX}/Lib/site-packages")))?;
+    from_snapshot(input, SnapshotSystem(memory), files, source_options)
+}
+
+/// 不同 PEP 723 版本只创建数据库配置，源码仍来自同一只读内存快照。
+fn from_snapshot(
+    input: ProjectInput,
+    snapshot: SnapshotSystem,
+    files: BTreeSet<PathBuf>,
+    source_options: Option<toml::Value>,
+) -> Result<PythonProject> {
+    let project = system_path(&input.project_root)?;
     let mut environment = toml::Table::new();
     environment.insert(
         "root".into(),
@@ -189,9 +212,120 @@ pub(crate) fn load(input: ProjectInput) -> Result<PythonProject> {
     environment.insert("extra-paths".into(), toml::Value::Array(Vec::new()));
     let mut options = toml::Table::new();
     options.insert("environment".into(), toml::Value::Table(environment));
+    if let Some(src) = &source_options {
+        options.insert("src".into(), src.clone());
+    }
     let options = Options::from_toml_str(&toml::to_string(&options)?, ValueSource::Cli)?;
     let mut metadata = ProjectMetadata::new("narrant", project).with_use_uv(UseUv::Off);
     metadata.set_override_options(options);
-    let db = ProjectDatabase::fallible(metadata, SnapshotSystem(memory))?;
-    Ok(PythonProject { db, files })
+    let db = ProjectDatabase::fallible(metadata, snapshot.clone())?;
+    Ok(PythonProject {
+        db,
+        files,
+        snapshot,
+        input,
+        source_options,
+    })
+}
+
+/// 遍历和收集期间持续检查期限；控制线程仍独立处理取消和 EOF。
+pub(crate) fn checkpoint(deadline: Option<Instant>) -> Result<()> {
+    ensure!(
+        deadline.is_none_or(|end| Instant::now() < end),
+        "Python 分析超过期限"
+    );
+    Ok(())
+}
+
+impl PythonProject {
+    /// 配置入口只受原生 exclude 约束；忽略 include 和脚本开关，仍复用原快照。
+    pub(crate) fn configuration_view(&self) -> Result<Self> {
+        let mut options = self
+            .source_options
+            .clone()
+            .context("Python 发现缺少 src 政策")?;
+        let table = options.as_table_mut().context("Python src 必须为表")?;
+        table.remove("include");
+        table.remove("exclude-scripts");
+        from_snapshot(
+            self.input.clone(),
+            self.snapshot.clone(),
+            self.files.clone(),
+            Some(options),
+        )
+    }
+
+    /// 公开原生 API 同时检查控制文件及祖先排除；不假称提供 ignore-file 语义。
+    pub(crate) fn admits_configuration(&self, path: &Path) -> Result<bool> {
+        Ok(self
+            .db
+            .project()
+            .is_file_included(&self.db, &system_path(path)?)
+            .is_included())
+    }
+
+    /// 完成前核验整个已加载上下文，投影和发现都不能混入并发更新后的源码。
+    pub(crate) fn ensure_unchanged(&self, deadline: Instant) -> Result<()> {
+        let repository = self.input.repository.canonicalize()?;
+        for relative in &self.files {
+            checkpoint(Some(deadline))?;
+            let path = repository.join(relative);
+            check_path(&repository, &path)?;
+            ensure!(
+                fs::read_to_string(&path)? == self.source(relative)?,
+                "分析期间源码已改变：{}",
+                relative.display()
+            );
+        }
+        Ok(())
+    }
+
+    /// 原生索引应用 src 规则；成员根独立于 extra-paths 和已加载上下文。
+    pub(crate) fn discover(
+        &mut self,
+        roots: &[PathBuf],
+        deadline: Instant,
+    ) -> Result<Vec<PathBuf>> {
+        let project = self.db.project();
+        project.set_included_paths(
+            &mut self.db,
+            roots
+                .iter()
+                .map(|path| system_path(path))
+                .collect::<Result<_>>()?,
+        );
+        project.set_force_exclude(&mut self.db, true);
+        let mut output = Vec::new();
+        for file in project.files(&self.db).iter() {
+            checkpoint(Some(deadline))?;
+            let path = file
+                .path(&self.db)
+                .as_system_path()
+                .context("Python 成员不是仓库源码")?;
+            let relative = path.strip_prefix(SNAPSHOT_ROOT)?.as_std_path().to_owned();
+            ensure!(self.files.contains(&relative), "Python 索引引入快照外源码");
+            output.push(relative);
+            ensure!(
+                output.len() <= codegraph_engine_common::selection::MAX_FILES,
+                "文件选集超过数量上限"
+            );
+        }
+        output.sort();
+        Ok(output)
+    }
+
+    /// 目标版本变化不触发第二次磁盘加载，配置与源文件保持同一快照。
+    pub(crate) fn with_minor(&self, minor: u8) -> Result<Self> {
+        if self.input.python_minor == minor {
+            return Ok(self.clone());
+        }
+        let mut input = self.input.clone();
+        input.python_minor = minor;
+        from_snapshot(
+            input,
+            self.snapshot.clone(),
+            self.files.clone(),
+            self.source_options.clone(),
+        )
+    }
 }

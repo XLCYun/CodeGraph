@@ -16,6 +16,18 @@ function fixture(t, files) {
   return root;
 }
 
+/** 原生 glob、配置和源码读取共用冻结内容，之后的磁盘修改会在完成检查失败。 */
+test('workspace snapshot remains stable across discovery and source projection', t => {
+  const root = fixture(t, { 'tsconfig.json': '{"include":["*.ts"]}', 'main.ts': 'export function before(){}' });
+  const { host, context } = prepare({ root, runtime, selected: [] }, ts);
+  fs.writeFileSync(path.join(root, 'main.ts'), 'export function after(){}');
+  fs.writeFileSync(path.join(root, 'late.ts'), 'export function late(){}');
+  assert.equal(host.readFile(path.join(root, 'main.ts')), 'export function before(){}');
+  assert.deepEqual(ts.getParsedCommandLineOfConfigFile(path.join(root, 'tsconfig.json'), {}, host).fileNames,
+    [ts.normalizePath(path.join(root, 'main.ts'))]);
+  assert.throws(() => context.unchanged(), /已改变/);
+});
+
 test('configuration overlays and fixed libraries use the unchanged workspace', t => {
   const config = '{"compilerOptions":{"module":"NodeNext","types":["node"],"plugins":[{"name":"business-plugin"}]},"files":["main.ts"]}';
   const source = "import {readFile} from 'node:fs'; export const read = readFile;";

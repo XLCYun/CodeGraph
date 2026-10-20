@@ -54,7 +54,7 @@ const mutations = [
   ['wrong protocol', r => { r.protocol = 'other'; }], ['unknown type', r => { r.type = 'batch'; }],
   ['missing input', r => { delete r.input; }], ['null input', r => { r.input = null; }],
   ['string boolean', r => { r.input.include_tests = 'false'; }], ['unknown profile', r => { r.input.profile = 'other'; }],
-  ['wrong repository', r => { r.input.repository_root = 1; }], ['wrong files', r => { r.input.files = ''; }], ['wrong file member', r => { r.input.files = [1]; }],
+  ['wrong repository', r => { r.input.repository_root = 1; }], ['wrong files', r => { r.input.files = ''; }], ['null files', r => { r.input.files = null; }], ['wrong file member', r => { r.input.files = [1]; }],
   ['missing environment', r => { delete r.environment; }], ['array environment', r => { r.environment = []; }],
   ['wrong scratch', r => { r.environment.scratch_root = false; }], ['wrong platforms', r => { r.environment.platforms = {}; }],
   ['null platform', r => { r.environment.platforms = [null]; }], ['unknown platform kind', r => { r.environment.platforms[0].kind = 'sdk'; }],
@@ -63,7 +63,7 @@ const mutations = [
   ['unknown package', r => { r.environment.platforms[0].metadata.package = 'business'; }],
   ['missing limits', r => { delete r.limits; }], ['array limits', r => { r.limits = []; }],
 ];
-for (const [object, keys] of [['input', ['repository_root', 'files', 'include_tests', 'profile']], ['environment', ['scratch_root', 'platforms']], ['limits', ['analysis_timeout_ms', 'max_result_bytes', 'max_diagnostic_bytes']]]) {
+for (const [object, keys] of [['input', ['repository_root', 'include_tests', 'profile']], ['environment', ['scratch_root', 'platforms']], ['limits', ['analysis_timeout_ms', 'max_result_bytes', 'max_diagnostic_bytes']]]) {
   mutations.push([`unknown ${object}`, r => { r[object].extra = true; }]);
   for (const key of keys) mutations.push([`missing ${object}.${key}`, r => { delete r[object][key]; }]);
 }
@@ -78,6 +78,17 @@ for (const [name, mutate] of mutations) test(`real protocol rejects ${name}`, as
   assert.equal(result.signal, null);
   assert.equal(result.messages.length, 1, 'invalid analyze cannot fabricate completed');
   assert.ok(result.stderr.length > 0);
+});
+
+/** 包内真实协议允许省略选集，并返回配置发现的完整覆盖。 */
+test('real protocol discovers omitted selection', async t => {
+  const request = await input(t);
+  delete request.input.files;
+  await fs.writeFile(path.join(request.input.repository_root, 'main.ts'), 'export function discovered(){}');
+  const result = await exchange(t, [JSON.stringify(request)]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.messages[1].outcome, 'ok', result.stderr);
+  assert.deepEqual(result.messages[1].evidence.files.map(file => file.path), ['main.ts']);
 });
 
 for (const [name, replace] of [

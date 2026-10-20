@@ -57,9 +57,13 @@ pub struct DefinitionQuery {
 }
 
 /// 数据库及文件集合属于单次固定侧，公共接口没有重载或文件写入入口。
+#[derive(Clone)]
 pub struct PythonProject {
     db: ProjectDatabase,
     files: BTreeSet<PathBuf>,
+    snapshot: system::SnapshotSystem,
+    input: ProjectInput,
+    source_options: Option<toml::Value>,
 }
 
 impl PythonProject {

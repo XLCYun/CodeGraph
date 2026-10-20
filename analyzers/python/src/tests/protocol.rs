@@ -5,6 +5,18 @@ use super::*;
 fn typed_request_rejects_unapproved_data() {
     let request = serde_json::json!({"protocol":PROTOCOL,"type":"analyze","id":"analysis-1","input":{"repository_root":"/repository","files":[],"include_tests":false,"profile":"python-static-v1"},"environment":{"scratch_root":"/scratch","platforms":[]},"limits":{"analysis_timeout_ms":1,"max_result_bytes":1,"max_diagnostic_bytes":1}});
     let _: Request = serde_json::from_value(request.clone()).unwrap();
+    let mut discovered = request.clone();
+    discovered["input"].as_object_mut().unwrap().remove("files");
+    assert!(
+        serde_json::from_value::<Request>(discovered)
+            .unwrap()
+            .input
+            .files
+            .is_none()
+    );
+    let mut invalid_selection = request.clone();
+    invalid_selection["input"]["files"] = serde_json::Value::Null;
+    assert!(serde_json::from_value::<Request>(invalid_selection).is_err());
     for pointer in ["/input/command", "/environment/python", "/limits/unknown"] {
         let mut invalid = request.clone();
         let (parent, name) = pointer.rsplit_once('/').unwrap();

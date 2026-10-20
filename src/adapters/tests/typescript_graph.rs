@@ -24,6 +24,88 @@ fn analyze(directory: &std::path::Path, files: &[&str]) -> CodeGraph {
         .unwrap()
 }
 
+/// 生产装配后的真实 Node helper 按配置发现；排除成员只保留图外关系。
+#[test]
+#[ignore = "需要固定 TypeScript 工具"]
+fn directory_discovery_preserves_config_members_and_explicit_selection() {
+    let sources = [
+        (
+            "tsconfig.base.json",
+            r#"{"compilerOptions":{"module":"Preserve","moduleResolution":"Bundler","types":[]}}"#,
+        ),
+        (
+            "tsconfig.json",
+            r#"{"extends":"./tsconfig.base.json","include":["src"],"exclude":["src/excluded"]}"#,
+        ),
+        (
+            "src/main.ts",
+            "import {target} from './excluded/hidden'; export function caller(){target()}",
+        ),
+        ("src/excluded/hidden.ts", "export function target(){}"),
+        ("src/main.test.ts", "export function testOnly(){}"),
+        ("stray.ts", "export function stray(){}"),
+    ];
+    let repository = fixture(&sources);
+    let mut input = AnalysisInput {
+        repository_root: repository.path().into(),
+        files: None,
+        options: Default::default(),
+    };
+    let graph = analyzer().analyze(&input).unwrap();
+    assert_eq!(graph.root().contains.len(), 1);
+    assert_eq!(
+        named(&graph, "caller").data().name.as_deref(),
+        Some("caller")
+    );
+    assert!(graph
+        .external_symbols()
+        .values()
+        .any(|symbol| symbol.name == "target"));
+    assert!(nodes(&graph).iter().all(|node| !matches!(
+        node.data().name.as_deref(),
+        Some("target" | "stray" | "testOnly")
+    )));
+    input.options.include_tests = true;
+    assert_eq!(analyzer().analyze(&input).unwrap().root().contains.len(), 2);
+    input.files = Some(vec!["stray.ts".into()]);
+    assert_eq!(
+        named(&analyzer().analyze(&input).unwrap(), "stray")
+            .data()
+            .name
+            .as_deref(),
+        Some("stray")
+    );
+    input.files = Some(vec![]);
+    assert!(analyzer()
+        .analyze(&input)
+        .unwrap()
+        .root()
+        .contains
+        .is_empty());
+    for (name, source) in sources {
+        assert_eq!(
+            fs::read_to_string(repository.path().join(name)).unwrap(),
+            source
+        );
+    }
+    fs::write(repository.path().join("tsconfig.json"), r#"{"files":[]}"#).unwrap();
+    // 原来的 base 不再被 extends 引用，此时属于独立具名配置；移除后才是明确空项目。
+    fs::remove_file(repository.path().join("tsconfig.base.json")).unwrap();
+    input.files = None;
+    assert!(analyzer()
+        .analyze(&input)
+        .unwrap()
+        .root()
+        .contains
+        .is_empty());
+    fs::write(
+        repository.path().join("tsconfig.json"),
+        r#"{"compilerOptions":{"target":"bad"}}"#,
+    )
+    .unwrap();
+    assert!(analyzer().analyze(&input).is_err());
+}
+
 /// 遍历图的真实包含树，测试无需依赖身份编码细节。
 fn nodes(graph: &CodeGraph) -> Vec<&CodeNode> {
     let mut pending = graph.root().contains.clone();

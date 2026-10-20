@@ -58,7 +58,13 @@ fn natural_exit(child: &mut Child) -> std::process::ExitStatus {
 /// 活动原生分析在 Host 仍存活时收到 cancel、EOF 或无效控制，必须停止且不发送成功图。
 #[test]
 fn running_analysis_stops_on_cancel_eof_and_invalid_control() {
-    for stop in ["cancel", "eof", "invalid-id"] {
+    for (stop, discovery) in [
+        ("cancel", false),
+        ("eof", false),
+        ("invalid-id", false),
+        ("cancel", true),
+        ("eof", true),
+    ] {
         let repository = tempfile::tempdir().unwrap();
         let scratch = tempfile::tempdir().unwrap();
         let source: String = (0..15000)
@@ -66,12 +72,11 @@ fn running_analysis_stops_on_cancel_eof_and_invalid_control() {
             .collect();
         std::fs::write(repository.path().join("main.py"), source).unwrap();
         let (mut child, mut input, mut output) = start();
-        writeln!(
-            input,
-            "{}",
-            request(repository.path(), scratch.path(), vec!["main.py"])
-        )
-        .unwrap();
+        let mut value = request(repository.path(), scratch.path(), vec!["main.py"]);
+        if discovery {
+            value["input"].as_object_mut().unwrap().remove("files");
+        }
+        writeln!(input, "{value}").unwrap();
         input.flush().unwrap();
         let (sent, received) = mpsc::channel();
         let reader = thread::spawn(move || {

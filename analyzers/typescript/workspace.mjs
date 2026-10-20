@@ -56,13 +56,30 @@ function validateManifest(root, file, manifest) {
 
 /** 第一方目录清单和模块位置只保存在内存，不复制文件、不创建链接、不写入 workspace。 */
 export function createWorkspace(input) {
+  const checkpoint = input.checkpoint ?? (() => {});
   const root = canonicalPath(input.root);
   const runtime = canonicalPath(input.runtime);
   const sources = new Set();
   const metadata = new Set();
   const links = new Map();
   const overlays = new Map();
+  const snapshots = new Map(), directories = new Map();
   const manifests = [];
+  /** 所有源码与元数据只读取一次；后续项目解析和导航共享相同字节。 */
+  function read(file) {
+    if (within(root, path.resolve(file))) checkedWorkspacePath(root, file);
+    file = canonicalPath(file);
+    if (!within(root, file) && !within(runtime, file)) throw new Error(`快照输入越界：${file}`);
+    if (!snapshots.has(file)) snapshots.set(file, fs.readFileSync(file));
+    return snapshots.get(file);
+  }
+  /** 完成前校验已加载的仓库输入；内存覆盖从不掩盖磁盘的并发修改。 */
+  function unchanged() {
+    for (const [file, bytes] of snapshots) {
+      checkpoint();
+      if (within(root, file) && !bytes.equals(fs.readFileSync(checkedWorkspacePath(root, file)))) throw new Error(`分析期间源码或配置已改变：${file}`);
+    }
+  }
   /** 已有 workspace 链接只恢复到同一仓库中的第一方目标。 */
   function existingLinks(directory) {
     if (!fs.existsSync(directory)) return;
@@ -76,8 +93,12 @@ export function createWorkspace(input) {
   }
   /** 原始文件保留唯一真实路径，语义查询和 Rust 均读取同一 Git 签出。 */
   function visit(directory) {
+    checkpoint();
     existingLinks(path.join(directory, 'node_modules'));
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    const entries = fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+    directories.set(directory, entries);
+    for (const entry of entries) {
+      checkpoint();
       const file = path.join(directory, entry.name);
       if (!firstParty(root, file)) continue;
       if (entry.isDirectory()) { visit(file); continue; }
@@ -86,6 +107,7 @@ export function createWorkspace(input) {
       const canonical = canonicalPath(file);
       if (!firstParty(root, canonical)) throw new Error(`不允许的依赖源码：${file}`);
       if (!fs.statSync(canonical).isFile()) throw new Error(`非普通输入文件：${file}`);
+      read(canonical);
       if (sourcePattern.test(canonical)) sources.add(canonical);
       else metadata.add(canonical);
       if (entry.name === 'package.json') manifests.push(canonical);
@@ -93,12 +115,12 @@ export function createWorkspace(input) {
   }
   visit(root);
   const rootManifest = path.join(root, 'package.json');
-  const packageData = manifests.includes(rootManifest) ? JSON.parse(fs.readFileSync(rootManifest, 'utf8')) : {};
+  const packageData = manifests.includes(rootManifest) ? JSON.parse(read(rootManifest).toString('utf8')) : {};
   let patterns = packageData.workspaces?.packages ?? packageData.workspaces ?? [];
   if (!Array.isArray(patterns)) throw new Error('workspaces 必须为列表');
   const pnpm = path.join(root, 'pnpm-workspace.yaml');
   if (fs.existsSync(pnpm)) {
-    const lines = fs.readFileSync(pnpm, 'utf8').match(/^packages:\s*\r?\n((?:[ \t]+.*\r?\n?)*)/m)?.[1] ?? '';
+    const lines = read(checkedWorkspacePath(root, pnpm)).toString('utf8').match(/^packages:\s*\r?\n((?:[ \t]+.*\r?\n?)*)/m)?.[1] ?? '';
     patterns = [...patterns, ...Array.from(lines.matchAll(/^\s*-\s*['"]?([^'"\r\n]+?)['"]?\s*$/gm), match => match[1])];
   }
   /** 保留原有简单 workspace glob，不猜测包 exports 的源码入口。 */
@@ -108,14 +130,16 @@ export function createWorkspace(input) {
     return { exclude: pattern.startsWith('!'), test: new RegExp(`^${escaped.replaceAll('**', '\u0000').replaceAll('*', '[^/]*').replaceAll('\u0000', '.*')}/?$`) };
   }
   const matchers = patterns.map(matcher);
+  const memberPackages = new Set([root]);
   for (const manifest of manifests) {
-    const data = validateManifest(root, manifest, JSON.parse(fs.readFileSync(manifest, 'utf8')));
+    const data = validateManifest(root, manifest, JSON.parse(read(manifest).toString('utf8')));
     const directory = path.dirname(manifest);
     const relative = path.relative(root, directory).split(path.sep).join('/');
     if (!data.name || !matchers.some(item => !item.exclude && item.test.test(relative))
       || matchers.some(item => item.exclude && item.test.test(relative))) continue;
     if (!/^(?:@[\w.-]+\/)?[\w.-]+$/.test(data.name)) throw new Error('工作区包名称无效');
     links.set(path.join(root, 'node_modules', data.name), directory);
+    memberPackages.add(directory);
   }
   for (const name of ['@types/node', 'undici-types']) {
     const virtual = path.join(root, 'node_modules', name);
@@ -124,7 +148,12 @@ export function createWorkspace(input) {
   }
   // Node 声明的依赖从同一固定工具目录解析，不另建 node_modules 物理副本。
   links.set(path.join(runtime, 'node_modules/undici-types'), path.join(runtime, 'undici-types'));
-  return { root, runtime, sources, metadata, links, overlays, policyError: input.policy_error };
+  const packageDirectories = manifests.map(file => path.dirname(file)).sort((a, b) => b.length - a.length);
+  /** 工作区声明限制自动项目成员；未声明 workspace 时保留普通多项目目录。 */
+  function member(file) {
+    return !matchers.length || memberPackages.has(packageDirectories.find(directory => within(directory, file)) ?? root);
+  }
+  return { root, runtime, sources, metadata, links, overlays, member, checkpoint, read, unchanged, snapshots, directories, policyError: input.policy_error };
 }
 
 /** 给 TypeScript 的文件读取接口限定上下文，所有真实源码仍从 Git workspace 原位读取。 */
@@ -171,19 +200,20 @@ export function workspaceSystem(context, ts) {
     const canonical = resolve(directory);
     if (libraries.some(root => within(root, canonical) || within(canonical, root))) return native.directoryExists(canonical);
     if ([...context.links.keys()].some(alias => within(directory, alias))) return true;
-    return firstParty(context.root, canonical) && native.directoryExists(canonical);
+    return firstParty(context.root, canonical) && context.directories.has(canonical);
   }
   /** 为 TypeScript 原生 glob 算法提供经过范围筛选的目录条目。 */
   function entries(directory) {
+    context.checkpoint();
     directory = physicalPath(directory);
     const canonical = resolve(directory);
     const files = new Set();
     const directories = new Set();
     if (directoryExists(directory) && fs.existsSync(canonical)) {
-      for (const entry of fs.readdirSync(canonical, { withFileTypes: true })) {
+      for (const entry of context.directories.get(canonical) ?? fs.readdirSync(canonical, { withFileTypes: true })) {
         const child = path.join(directory, entry.name);
         if (entry.isDirectory() && directoryExists(child)) directories.add(entry.name);
-        else if (permitted(child) && native.fileExists(resolve(child))) files.add(entry.name);
+        else if (permitted(child) && (context.snapshots.has(resolve(child)) || native.fileExists(resolve(child)))) files.add(entry.name);
       }
     }
     for (const alias of context.links.keys()) {
@@ -196,14 +226,15 @@ export function workspaceSystem(context, ts) {
     ...native,
     getCurrentDirectory: () => context.root,
     getExecutingFilePath: () => path.join(context.runtime, 'typescript/lib/typescript.js'),
-    fileExists: file => permitted(file) && (context.overlays.has(resolve(file)) || native.fileExists(resolve(file))),
-    readFile: (file, encoding) => permitted(file) ? context.overlays.get(resolve(file)) ?? (context.sources.has(resolve(file)) ? fs.readFileSync(resolve(file)).toString('utf8') : native.readFile(resolve(file), encoding)) : undefined,
+    fileExists: file => permitted(file) && (context.snapshots.has(resolve(file)) || native.fileExists(resolve(file))),
+    readFile: file => permitted(file) && (context.snapshots.has(resolve(file)) || native.fileExists(resolve(file)))
+      ? context.overlays.get(resolve(file)) ?? context.read(resolve(file)).toString('utf8') : undefined,
     directoryExists,
     getDirectories: directory => entries(directory).directories,
     readDirectory: (directory, extensions, excludes, includes, depth) => ts.matchFiles(directory, extensions, excludes, includes,
       native.useCaseSensitiveFileNames, context.root, depth, entries, resolve),
     realpath: resolve,
-    // Review 保证分析期间 Git workspace 稳定；服务不监听文件或配置变化。
+    // 冻结读取且完成前检查输入；服务不监听文件或配置变化。
     watchFile: () => ({ close() {} }),
     watchDirectory: () => ({ close() {} }),
     writeFile() { throw new Error('TypeScript 分析不能写入 Git workspace'); },

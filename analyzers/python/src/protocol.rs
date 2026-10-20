@@ -22,7 +22,11 @@ pub struct Request {
 #[serde(deny_unknown_fields)]
 pub struct Input {
     pub repository_root: PathBuf,
-    pub files: Vec<String>,
+    #[serde(
+        default,
+        deserialize_with = "codegraph_engine_common::selection::deserialize_files"
+    )]
+    pub files: Option<Vec<String>>,
     pub include_tests: bool,
     pub profile: String,
 }
@@ -103,7 +107,7 @@ impl Request {
             "标准声明平台不属于当前 helper 安装根"
         );
         let mut files = BTreeSet::new();
-        for path in &self.input.files {
+        for path in self.input.files.iter().flatten() {
             ensure!(
                 !path.contains(['\\', ':', '\0'])
                     && !path

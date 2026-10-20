@@ -60,7 +60,7 @@ async function cpuMilliseconds(pid) {
 }
 
 /** 与原有大源码取消夹具同类，等待真实 CPU 活动且尚无 completed 后再施加控制。 */
-async function running(t) {
+async function running(t, discovery = false) {
   const input = await request(t, '');
   input.input.files = Array.from({ length: 40 }, (_, i) => `part${i}.ts`);
   await fs.writeFile(path.join(input.input.repository_root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'Preserve', moduleResolution: 'Bundler', types: [] }, files: input.input.files }));
@@ -68,6 +68,7 @@ async function running(t) {
     const source = Array.from({ length: 100 }, (_, j) => `export function f${i}_${j}(){return ${j ? `f${i}_${j - 1}()` : '1'}}`).join('\n');
     await fs.writeFile(path.join(input.input.repository_root, file), source);
   }
+  if (discovery) delete input.input.files;
   const state = await launch(t);
   state.child.stdin.write(`${JSON.stringify(input)}\n`);
   let cpu = 0;
@@ -77,8 +78,8 @@ async function running(t) {
   return state;
 }
 
-for (const control of ['cancel', 'EOF']) test(`actual executable stops running analysis on ${control}`, { timeout: 25000 }, async t => {
-  const state = await running(t);
+for (const discovery of [false, true]) for (const control of ['cancel', 'EOF']) test(`actual executable stops running ${discovery ? 'discovery' : 'analysis'} on ${control}`, { timeout: 25000 }, async t => {
+  const state = await running(t, discovery);
   if (control === 'cancel') {
     closeOnCompleted(state);
     state.child.stdin.write(`${JSON.stringify({ protocol, type: 'cancel', id: 'analysis-1' })}\n`);

@@ -78,15 +78,17 @@ export function decodeRequest(line, activeId) {
   if (message.type !== 'analyze') throw new Error('无效分析请求');
   fields(message, ['protocol', 'type', 'id', 'input', 'environment', 'limits']);
   string(message.id);
-  fields(message.input, ['repository_root', 'files', 'include_tests', 'profile']);
+  fields(message.input, ['repository_root', 'include_tests', 'profile', ...(Object.hasOwn(message.input ?? {}, 'files') ? ['files'] : [])]);
   directory(message.input.repository_root);
   if (typeof message.input.include_tests !== 'boolean' || message.input.profile !== 'typescript-static-v1') throw new Error('无效 TypeScript 输入政策');
-  if (!Array.isArray(message.input.files)) throw new Error('无效协议文件数组');
-  for (const file of message.input.files) {
+  if (Object.hasOwn(message.input, 'files') && !Array.isArray(message.input.files)) throw new Error('无效协议文件数组');
+  const files = message.input.files ?? [];
+  if (files.length > 100000) throw new Error('文件选集超过数量上限');
+  for (const file of files) {
     string(file);
     if (file.includes('\\') || path.posix.isAbsolute(file) || path.win32.isAbsolute(file) || file.split('/').some(part => !part || part === '..' || part === '.')) throw new Error('无效协议相对文件路径');
   }
-  if (new Set(message.input.files).size !== message.input.files.length) throw new Error('重复协议文件路径');
+  if (new Set(files).size !== files.length) throw new Error('重复协议文件路径');
   fields(message.environment, ['scratch_root', 'platforms']);
   directory(message.environment.scratch_root);
   if (!Array.isArray(message.environment.platforms)) throw new Error('无效协议平台数组');

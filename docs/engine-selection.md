@@ -180,3 +180,85 @@ project build scripts or procedural macros. Tests for this change run offline.
 See `analyzers/rust/src/tests/discovery.rs` for executable fixtures covering
 workspace members, static projects, context, test roles, empty configuration,
 snapshot consistency, malformed configuration and source boundaries.
+
+## TypeScript / JavaScript resolution
+
+Discovery uses the fixed TypeScript parser's `fileNames`, project references,
+`allowJs`, and inherited `files` / `include` / `exclude` settings. Conventional
+`tsconfig.json` / `jsconfig.json`, standalone named variants, and explicit
+reference targets are entry projects. A named configuration used only by
+`extends` is metadata, so its default glob does not independently select files.
+Conventional configs remain entries even when another project extends them.
+
+The existing npm/pnpm workspace policy restricts automatically found entry
+configs and configless members. An admitted entry's native `fileNames` and
+explicit references can independently include repository source outside those
+package-manager members. Import reachability alone never selects a source.
+Unconfigured directories use the native default source glob and existing
+per-file browser/Node options. A directory owned by an entry config never gets
+an inferred discovery fallback around that config's exclusions. Explicit file
+selection retains its existing fallback, including selection of an excluded
+file. Declaration libraries and imported unselected files remain context.
+
+Malformed configurations, invalid native options, missing declared files or
+references, and missing `extends` fail discovery. In particular, missing base
+configuration cannot supply trustworthy membership. Explicit selection keeps
+its historical compatibility fallback for an unavailable business `extends`;
+explicit empty and fully filtered test selections retain their fast paths.
+Valid empty configs and configless empty directories return configuration
+evidence. Files, directory inventories, manifests, and config overlays share
+one request snapshot; loaded repository bytes are checked for changes before
+return. The host still validates physical paths and graph coverage afterward.
+
+## Python resolution
+
+Python starts at the requested repository root, using `ty.toml` in preference
+to `[tool.ty]` in `pyproject.toml`. `[project].requires-python`, the supported
+`environment.python-version`, and per-file PEP 723 policies are preserved.
+Missing configuration retains the supported implicit project. Recognized
+nested projects own their nearest source scope once admitted.
+
+Nested project admission uses the containing project's native exclude/default
+exclude rules. It checks the actual controlling `ty.toml` or `pyproject.toml`
+through the public native `is_file_included` API, with `src.include` and
+`exclude-scripts` removed from that configuration view. This view shares the
+same read-only source snapshot. Thus a `dist/ty.toml` cannot override its
+parent's default `dist` exclusion; native negations such as `!dist` can reopen
+it. A pattern matching the controlling configuration filename also blocks that
+nested entry. Own roots and `src.include` do not gate nested entries. Admitted
+children apply their own policy to deeper entries. The requested root itself
+does not pass through this parent admission check. Explicit file requests keep
+the original nearest-config behavior.
+
+Member roots are separate from import context. Accepted `environment.root`
+directories are the default discovery roots; when omitted, the existing `src/`
+and project-root defaults apply. If all own roots are absent or filtered, the
+member roots fall back to the project root independently of `extra-paths`.
+Native `Project::files` applies `SrcOptions` on the frozen memory filesystem:
+
+- Without `src.include`, `included_paths` is the own-root list.
+- With `src.include`, `included_paths` covers the loaded project root and
+  supported import roots, and the native include filter independently decides
+  membership. The two filters intersect; an explicit empty include stays empty.
+- Native `src.exclude`, its default exclusions, negations, and explicitly set
+  `exclude-scripts` apply to discovery. Only `.py` / `.pyi` members are projected.
+  Extra paths, unselected sources and embedded stdlib stay context unless a
+  project root or explicit source policy independently admits them.
+- Ignore-file discovery is disabled in this snapshot policy. Omitted or false
+  `respect-ignore-files` uses no repository, global or user ignore files;
+  explicitly true is rejected. Native admission's file predicate also does
+  not process ignore files. Unsupported or malformed `src` settings fail
+  discovery rather than being silently ignored.
+
+Explicit `files` still bypasses source filtering, including `exclude-scripts`
+and the newly read `src` settings. Its existing config/default/version handling
+is unchanged. Discovery, PEP 723 version views, graph projection, and context
+navigation reuse frozen sources and accepted project policies. No environment
+auto-discovery, interpreter, install, project command, or writable native system
+is enabled. Source and configuration snapshots are checked before returning.
+Empty selections retain actual or implicit configuration evidence.
+
+Executable fixtures live in the TypeScript `helper`, `workspace`, `protocol`,
+and `lifecycle` tests under `analyzers/typescript/tests/`, in
+`analyzers/python/src/projection/tests/discovery.rs`, and in both languages'
+registered Host semantic groups.
