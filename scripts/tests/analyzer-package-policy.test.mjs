@@ -17,6 +17,7 @@ test('all fourteen package identities reject generic, foreign and incomplete pay
     const files = analyzerPackageFiles(id, target);
     const content = Object.fromEntries(files.map(name => [name, 'fixture bytes']));
     content['licenses/fixture-LICENSE'] = 'fixture license';
+    content['licenses/codegraph/CodeGraph-dependencies.json'] = '[]';
     content['control/codegraph.json'] = JSON.stringify({ schema_version: 1, pack_id: id, pack_version: '0.1.0', engine_version: '0.1.0', protocol: 'codegraph.analyzer/1' });
     content['control/native.json'] = JSON.stringify({ schema_version: 1, helper_version: '0.1.0', platforms: [], ...({ go: 'go', java: 'java', csharp: 'dotnet' }[id] ? { target_sdk: { kind: { go: 'go', java: 'java', csharp: 'dotnet' }[id] } } : {}) });
     for (const [name, bytes] of Object.entries(content)) { await fs.mkdir(path.dirname(path.join(payload, name)), { recursive: true }); await fs.writeFile(path.join(payload, name), bytes, { mode: 0o755 }); }

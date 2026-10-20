@@ -37,7 +37,7 @@ export function validateAnalyzerPackage(manifest) {
   }[id];
   for (const name of files.keys()) {
     const basename = name.split('/').at(-1).toLowerCase();
-    const codegraphEntry = /^codegraph(?:-|\.|$)/.test(basename) && !basename.startsWith('codegraph.csharp.engine.');
+    const codegraphEntry = /^codegraph(?:-[\w-]+)?(?:\.exe)?$/.test(basename);
     const allowed = required.includes(name) || !codegraphEntry && (name.startsWith('licenses/') || regions.some(prefix => name.startsWith(prefix)) || id === 'c-cpp' && suffix && /^bin\/[^/]+\.dll$/i.test(name));
     if (!allowed) throw new Error(`Unexpected package file: ${name}`);
   }
