@@ -70,7 +70,11 @@ export function createWorkspace(input) {
     if (within(root, path.resolve(file))) checkedWorkspacePath(root, file);
     file = canonicalPath(file);
     if (!within(root, file) && !within(runtime, file)) throw new Error(`快照输入越界：${file}`);
-    if (!snapshots.has(file)) snapshots.set(file, fs.readFileSync(file));
+    if (!snapshots.has(file)) {
+      snapshots.set(file, fs.readFileSync(file));
+      // 首次真实仓库快照读取发生在发现/加载内部；运行时声明不作为请求已加载的证据。
+      if (within(root, file)) input.observeSnapshot?.();
+    }
     return snapshots.get(file);
   }
   /** 完成前校验已加载的仓库输入；内存覆盖从不掩盖磁盘的并发修改。 */

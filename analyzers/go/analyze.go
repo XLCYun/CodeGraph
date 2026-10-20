@@ -992,6 +992,11 @@ func analyze(ctx context.Context, req request) completed {
 	if problem != nil {
 		return returnError(problem)
 	}
+	if discovery && len(groups) > 0 {
+		if err := observeDiscovery(req.ID); err != nil {
+			return returnError(fail("internal_failure", err.Error()))
+		}
+	}
 	plans := []analysisConfiguration{}
 	for index, group := range groups {
 		if discovery {

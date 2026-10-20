@@ -21,7 +21,7 @@ fn discovery_and_version_projection_reuse_one_frozen_source_snapshot() {
     let (root, _scratch, _request) = fixture(&[("main.py", "def before(): pass\n")]);
     let repository = root.path().canonicalize().unwrap();
     let deadline = Instant::now() + Duration::from_secs(30);
-    let discovered = discovery::load(&repository, deadline).unwrap();
+    let discovered = discovery::load(&repository, deadline, "discovery").unwrap();
     let native = &discovered.projects[&repository];
     fs::write(root.path().join("main.py"), "def after(): pass\n").unwrap();
     assert_eq!(
@@ -37,7 +37,14 @@ fn discovery_and_version_projection_reuse_one_frozen_source_snapshot() {
         "def before(): pass\n"
     );
     assert!(native.ensure_unchanged(deadline).is_err());
-    assert!(discovery::load(&repository, Instant::now() - Duration::from_secs(1)).is_err());
+    assert!(
+        discovery::load(
+            &repository,
+            Instant::now() - Duration::from_secs(1),
+            "discovery"
+        )
+        .is_err()
+    );
 }
 
 /// 配置先于选集发现；上下文、被排除源码和标准声明都不能因加载而扩选。
@@ -236,8 +243,12 @@ fn admitted_sibling_policy_owns_overlapping_roots_and_versions() {
         ("shared/main.py", "type OwnedAlias = int\n"),
     ]);
     let repository = root.path().canonicalize().unwrap();
-    let discovered =
-        discovery::load(&repository, Instant::now() + Duration::from_secs(30)).unwrap();
+    let discovered = discovery::load(
+        &repository,
+        Instant::now() + Duration::from_secs(30),
+        "discovery",
+    )
+    .unwrap();
     assert_eq!(
         discovered.owners["shared/main.py"],
         repository.join("shared")

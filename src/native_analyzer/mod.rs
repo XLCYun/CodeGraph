@@ -2,6 +2,8 @@
 
 mod graph;
 mod input;
+#[allow(dead_code)]
+mod observation;
 mod process;
 mod profiles;
 mod protocol;

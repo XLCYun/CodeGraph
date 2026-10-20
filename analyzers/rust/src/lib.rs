@@ -60,8 +60,9 @@ impl RustProject {
         manifests: &[PathBuf],
         policies: &[LoadPolicy],
         selected: &[PathBuf],
+        observation: Option<&codegraph_engine_common::observation::Observation>,
     ) -> Result<Self> {
-        let loaded = loading::load_projects(manifests, policies, selected)?;
+        let loaded = loading::load_projects(manifests, policies, selected, observation)?;
         let host = AnalysisHost::with_database(loaded.database);
         let analysis = host.analysis();
         Ok(Self {

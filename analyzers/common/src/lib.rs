@@ -1,5 +1,8 @@
 //! Rust/Python 已迁移调用者共用的序列化 DTO 与单次控制循环；不包含分析引擎或图校验。
 pub mod model;
+#[allow(dead_code)]
+#[path = "../../../src/native_analyzer/observation.rs"]
+pub mod observation;
 pub mod one_shot;
 pub mod selection;
 pub const PROTOCOL: &str = "codegraph.engine/1";

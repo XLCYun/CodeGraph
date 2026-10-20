@@ -114,5 +114,5 @@ test('all seven public projects retain configuration boundaries and omitted-file
 
 /** 标准 SDK 定位可以保留，但私有 helper 配置绝不能令公开包验收虚假通过。 */
 test('public entry acceptance removes producer-only environment', () => {
-  assert.deepEqual(publicEnvironment({ PATH: '/standard/tools', GOROOT: '/go', DOTNET_ROOT: '/dotnet', JAVA_HOME: '/jdk', CODEGRAPH_NATIVE_HELPERS_CONFIG: '/private.json', CODEGRAPH_GO_SDK: '/build/sdk' }), { PATH: '/standard/tools', GOROOT: '/go', DOTNET_ROOT: '/dotnet', JAVA_HOME: '/jdk' });
+  assert.deepEqual(publicEnvironment({ PATH: '/standard/tools', GOROOT: '/go', DOTNET_ROOT: '/dotnet', JAVA_HOME: '/jdk', CODEGRAPH_NATIVE_HELPERS_CONFIG: '/private.json', CODEGRAPH_GO_SDK: '/build/sdk', CODEGRAPH_TEST_DISCOVERY_PROBE: '/unexpected/probe' }), { PATH: '/standard/tools', GOROOT: '/go', DOTNET_ROOT: '/dotnet', JAVA_HOME: '/jdk' });
 });

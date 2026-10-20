@@ -4,6 +4,7 @@ import { createWorkspace, within, checkedWorkspacePath, canonicalPath } from './
 import { prepareConfigurations, inferredOptions, discoverFiles } from './config.mjs';
 import { project, normalize, unwrap, isTest } from './projection.mjs';
 import { hasSyntaxErrors } from './syntax.mjs';
+import { createObservation } from './observation.mjs';
 
 /** 一侧一次固定请求：同一个 LanguageService 同时提供语法树、类型诊断和定义导航。 */
 export function analyze(ts, request) {
@@ -39,7 +40,7 @@ export function analyze(ts, request) {
       },
     };
   }
-  const context = createWorkspace({ root, runtime, checkpoint });
+  const context = createWorkspace({ root, runtime, checkpoint, observeSnapshot: discovery ? createObservation(request.id) : undefined });
   const prepared = prepareConfigurations(context, ts, [...context.sources], discovery);
   const { host, projects, candidates, configFiles } = prepared;
   if (discovery) {

@@ -55,6 +55,7 @@ impl Session {
             .args(&analyzer.command.args)
             .env_clear()
             .envs(&analyzer.command.environment)
+            .env_remove(super::observation::VARIABLE)
             .current_dir(scratch)
             .env("TMPDIR", scratch)
             .env("TMP", scratch)
@@ -62,6 +63,17 @@ impl Session {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        if input.files.is_none() {
+            if let Some(path) = std::env::var_os(super::observation::VARIABLE) {
+                let path = super::observation::destination(
+                    Path::new(&path),
+                    &input.repository,
+                    &analyzer.command.trusted_roots,
+                )
+                .map_err(failure)?;
+                command.env(super::observation::VARIABLE, path);
+            }
+        }
         let process = ProcessTree::spawn(&mut command).map_err(failure)?;
         let (events, incoming) = mpsc::sync_channel(4);
         let (outgoing, writes) = mpsc::sync_channel::<Vec<u8>>(2);

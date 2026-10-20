@@ -399,3 +399,36 @@ registered separately for Go, Java, C# and C/C++ on both supported CI platforms.
 Java's existing top-level source glob and C#'s existing `Compile Include="*.cs"`
 include the changed files; the existing Go and Python-unittest discovery commands
 also pick up every new native test file.
+
+## Private cancellation acceptance observation
+
+Installed-entry cancellation acceptance alone sets `CODEGRAPH_TEST_DISCOVERY_PROBE`
+after removing all producer environment hints. This optional observation is absent
+in ordinary consumers and graph checks. It adds no protocol field, public option,
+delay or execution gate. The Host accepts only a fresh `reached.json` destination
+in an empty `codegraph-discovery-probe-*` directory under the system temporary
+directory, canonicalized outside the input repository and installed package.
+Existing destinations, direct parent links and canonical repository/package
+overlap are rejected. Native
+writers publish a bounded complete marker atomically without replacing a target.
+
+Each marker binds the actual private request, fixed helper identity, process ID
+and one completed loading operation. The cancellation reader validates the marker
+against the still-running owned process tree before sending public cancellation;
+process startup, ready, an expired deadline or an already completed request cannot
+satisfy it. Logs record the loading milestone separately from the cancelled
+terminal, exit code and bounded descendant cleanup.
+
+| Engine | Completed work before observation | Work continuing in the same request |
+| --- | --- | --- |
+| Rust | Real workspace metadata loaded | VFS assembly and source discovery |
+| TypeScript/JavaScript | First repository snapshot bytes read | Workspace/configuration loading and program construction |
+| Python | Actual `ty.toml` or `pyproject.toml` read and parsed | Native project loading and indexing |
+| Go | Native module/project configurations loaded | Member discovery and type checking |
+| Java | Nonempty static project configurations parsed | Target binding, source inventory and JDT parsing |
+| C# | First configured source text read | Roslyn parsing and compilation |
+| C/C++ | Nonempty compilation database read and parsed | TU configuration and Clang parsing |
+
+These are phase observations for producer acceptance, not a new consumer
+workflow or a guarantee that every project supports every milestone (for example,
+configless Python intentionally has no configuration-read marker).

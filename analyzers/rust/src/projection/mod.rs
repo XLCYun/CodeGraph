@@ -58,10 +58,22 @@ pub fn analyze(request: &Request) -> Result<Value> {
     };
     let policies =
         crate::discovery::policies(&manifests, scope, request.environment.platforms.first())?;
+    let observation = request
+        .input
+        .files
+        .is_none()
+        .then(|| {
+            codegraph_engine_common::observation::Observation::from_environment(
+                "codegraph-rust-engine",
+                &request.id,
+            )
+        })
+        .flatten();
     let project = RustProject::load_projects(
         &manifests,
         &policies,
         &selected.keys().cloned().collect::<Vec<_>>(),
+        observation.as_ref(),
     )?;
     let discovered = request
         .input

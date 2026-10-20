@@ -140,6 +140,7 @@ final class ProjectModel {
             throw new Failure("unsupported_configuration", "Gradle needs narrant-java.json static metadata");
         else throw new Failure("unsupported_configuration", "no explicit Java source roots or target release");
         if (configs.isEmpty()) throw new Failure("unsupported_configuration", "no Java configurations");
+        if (discovery) Observation.record(Main.string(request, "id"));
         Map<String, Target> targets = new HashMap<>();
         List<Configuration> bound = new ArrayList<>();
         for (Configuration config : configs) {

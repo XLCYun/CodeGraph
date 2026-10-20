@@ -153,7 +153,12 @@ impl LoadPolicy {
 
 /// 一次加载事务隔离原生内部异常；失败即丢弃数据库，不探测输入、不重试或返回部分结果。
 pub(super) fn load(manifest: &Path, policy: &LoadPolicy) -> Result<LoadedProject> {
-    load_projects(&[manifest.to_owned()], std::slice::from_ref(policy), &[])
+    load_projects(
+        &[manifest.to_owned()],
+        std::slice::from_ref(policy),
+        &[],
+        None,
+    )
 }
 
 /// 将多个真实项目一次装入同一 VFS/数据库；仅组合固定上游公开的 crate 图与文件加载原语。
@@ -161,6 +166,7 @@ pub(super) fn load_projects(
     manifests: &[PathBuf],
     policies: &[LoadPolicy],
     selected: &[PathBuf],
+    observation: Option<&codegraph_engine_common::observation::Observation>,
 ) -> Result<LoadedProject> {
     crate::native_transaction("Rust 多项目工作区未完整加载", || {
         ensure!(
@@ -213,6 +219,10 @@ pub(super) fn load_projects(
             } else {
                 load_complete(manifest, &config, policy)?
             };
+            // 配置已由真实 Cargo/静态模型加载，后续 VFS 与源码发现仍在同一次请求中。
+            if let Some(observation) = observation {
+                observation.record("workspace-metadata-loaded")?;
+            }
             workspaces.push(workspace);
         }
         ensure!(

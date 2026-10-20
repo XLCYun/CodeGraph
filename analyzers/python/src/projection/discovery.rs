@@ -56,7 +56,11 @@ fn source_options(configuration: &toml::Value) -> Result<toml::Value> {
 }
 
 /// 按祖先政策接纳并冻结项目，成员仅来自同一数据库的原生索引。
-pub(super) fn load(repository: &Path, deadline: Instant) -> Result<Discovery> {
+pub(super) fn load(repository: &Path, deadline: Instant, request_id: &str) -> Result<Discovery> {
+    let observation = codegraph_engine_common::observation::Observation::from_environment(
+        "codegraph-python-engine",
+        request_id,
+    );
     let mut scopes = BTreeMap::new();
     let mut snapshots = BTreeMap::new();
     let mut projects = BTreeMap::new();
@@ -104,6 +108,12 @@ pub(super) fn load(repository: &Path, deadline: Instant) -> Result<Discovery> {
         };
         let ty = read("ty.toml")?;
         let pyproject = read("pyproject.toml")?;
+        // 只有真实配置字节已读入并解析后才报告，不能把默认配置或启动当作加载证据。
+        if ty.is_some() || pyproject.is_some() {
+            if let Some(observation) = &observation {
+                observation.record("project-configuration-read")?;
+            }
+        }
         let inline = pyproject
             .as_ref()
             .and_then(|value| value.get("tool"))

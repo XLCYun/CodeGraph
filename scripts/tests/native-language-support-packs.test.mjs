@@ -191,7 +191,7 @@ test('migration build entry preserves completed helpers, rejects missing binarie
     await assert.rejects(buildMigratingNativeHelper('../project', root), /Unknown/);
     assert.deepEqual(await fs.readdir(root), []);
     await buildMigratingNativeHelper('typescript-javascript', root);
-    for (const name of ['main.mjs', 'analyze.mjs', 'projection.mjs', 'workspace.mjs', 'config.mjs', 'syntax.mjs']) {
+    for (const name of ['main.mjs', 'analyze.mjs', 'projection.mjs', 'workspace.mjs', 'config.mjs', 'syntax.mjs', 'observation.mjs']) {
       assert.deepEqual(await fs.readFile(path.join(root, 'runtime/helper', name)), await fs.readFile(new URL(`../../analyzers/typescript/${name}`, import.meta.url)));
     }
   } finally { await fs.rm(root, { recursive: true, force: true }); }

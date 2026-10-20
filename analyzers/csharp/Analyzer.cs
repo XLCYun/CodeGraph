@@ -52,6 +52,7 @@ internal static class Analyzer
         var configurationEvidence = new List<ConfigurationEvidence>();
         var compiled = new Dictionary<string, (CSharpCompilation Compilation, Dictionary<string, SyntaxTree> Trees, Platform Platform)>(StringComparer.Ordinal);
         var compiling = new HashSet<string>(StringComparer.Ordinal);
+        var observed = false;
         foreach (var config in configurations.Where(c => input.IncludeTests || !c.TestOnly)) Compile(config);
         var projection = new ProjectionIndex(compiled.Values.SelectMany(value => value.Trees.Values));
         foreach (var config in configurations)
@@ -134,6 +135,11 @@ internal static class Analyzer
                 try { text = File.ReadAllText(Configuration.CheckFile(root, file), new UTF8Encoding(false, true)); }
                 catch (Exception error) when (error is IOException or UnauthorizedAccessException or DecoderFallbackException)
                 { throw new HelperException("object_extraction_failed", $"Cannot read UTF-8 source: {error.Message}", file); }
+                if (input.Files is null && !observed)
+                {
+                    Observation.Record(request.Id);
+                    observed = true;
+                }
                 var options = new CSharpParseOptions(config.LanguageVersion, preprocessorSymbols: defines);
                 var tree = CSharpSyntaxTree.ParseText(text, options, path: file, cancellationToken: cancellation);
                 var syntaxError = tree.GetDiagnostics(cancellation).FirstOrDefault(d => d.Severity == DiagnosticSeverity.Error);

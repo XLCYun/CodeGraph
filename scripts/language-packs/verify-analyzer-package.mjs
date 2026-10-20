@@ -12,7 +12,7 @@ export function analyzerPackageFiles(id, target) {
     rust: [`bin/codegraph-rust-engine${suffix}`],
     python: [`bin/codegraph-python-engine${suffix}`],
     go: [`bin/codegraph-go-engine${suffix}`],
-    'typescript-javascript': [`bin/node${suffix}`, ...['main', 'request', 'analyze', 'projection', 'workspace', 'config', 'syntax'].map(name => `runtime/helper/${name}.mjs`), 'runtime/typescript/lib/typescript.js', 'runtime/@types/node/index.d.ts', 'runtime/undici-types/index.d.ts'],
+    'typescript-javascript': [`bin/node${suffix}`, ...['main', 'request', 'analyze', 'projection', 'workspace', 'config', 'syntax', 'observation'].map(name => `runtime/helper/${name}.mjs`), 'runtime/typescript/lib/typescript.js', 'runtime/@types/node/index.d.ts', 'runtime/undici-types/index.d.ts'],
     java: [`runtime/jdk/bin/java${suffix}`, 'runtime/helper/classes/dev/codegraph/java/Main.class'],
     csharp: [`bin/dotnet${suffix}`, 'runtime/helper/CodeGraph.CSharp.Engine.dll', 'runtime/helper/CodeGraph.CSharp.Engine.deps.json', 'runtime/helper/CodeGraph.CSharp.Engine.runtimeconfig.json', 'runtime/helper/Microsoft.CodeAnalysis.dll', 'runtime/helper/Microsoft.CodeAnalysis.CSharp.dll'],
     'c-cpp': [`bin/codegraph-clang-engine${suffix}`, 'runtime/platform/clang-resource/include/stddef.h', ...(suffix ? [] : ['runtime/lib/libclang-cpp.dylib'])],

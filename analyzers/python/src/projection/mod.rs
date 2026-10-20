@@ -46,7 +46,7 @@ pub fn analyze(request: &Request) -> Result<Value> {
         .input
         .files
         .is_none()
-        .then(|| discovery::load(&repository, deadline))
+        .then(|| discovery::load(&repository, deadline, &request.id))
         .transpose()?;
     let selected_files = request
         .input

@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <future>
@@ -588,6 +589,28 @@ static Config configuration(Request &r,const j::Object &o,size_t index) {
   for(auto &dir:p.includes) if(!isCxx(dir) && std::find(p.additionalIncludes.begin(),p.additionalIncludes.end(),dir)==p.additionalIncludes.end()) { fixed.push_back("-isystem"); fixed.push_back(dir.u8string()); }
   fixed.insert(fixed.end(),c.args.begin(),c.args.end()); c.args=std::move(fixed); return c;
 }
+// 真实 CDB 已读取后发布只读验收的外部观察；硬链接原子发布且绝不覆盖旧目标。
+static void observeDiscovery(const std::string &id) {
+#ifdef _WIN32
+  auto value=_wgetenv(L"CODEGRAPH_TEST_DISCOVERY_PROBE"); if(!value) return;
+  auto destination=fs::path(value);
+  auto pid=GetCurrentProcessId();
+#else
+  auto value=std::getenv("CODEGRAPH_TEST_DISCOVERY_PROBE"); if(!value) return;
+  auto destination=fs::u8path(value);
+  auto pid=getpid();
+#endif
+  auto pending=destination.parent_path()/"reached.pending";
+  auto bytes=jsonText(j::Object{{"schema_version",1},{"helper_id","codegraph-clang-engine"},{"request_id",id},{"pid",static_cast<int64_t>(pid)},{"milestone","compilation-database-read"}});
+  require(bytes.size()<=4096,"acceptance observation exceeds limit");
+  require(fs::create_directory(pending),"acceptance observation already exists");
+  try {
+    auto temporary=pending/"marker.json";
+    { std::ofstream file(temporary,std::ios::binary); file<<bytes; file.close(); require(!file.fail(),"acceptance observation write failed"); }
+    fs::create_hard_link(temporary,destination);
+  } catch(...) { std::error_code ignored; fs::remove_all(pending,ignored); throw; }
+  std::error_code ignored; fs::remove_all(pending,ignored);
+}
 // 校验请求、catalog 和静态 CDB；不运行项目发现脚本。
 static void configure(Request &r,const j::Object &message) {
   keys(message,{"protocol","type","id","input","environment","limits"});
@@ -609,6 +632,7 @@ static void configure(Request &r,const j::Object &message) {
   r.checkpoint(); platforms(r,*catalog);
   auto path=r.root/"compile_commands.json"; require(fs::exists(path),"clang-static-v1 requires compile_commands.json","unsupported_configuration"); require(under(real(path),r.root),"CDB symlink escapes repository");
   auto cdb=parse(read(path)); auto entries=cdb.getAsArray(); require(entries && !entries->empty(),"CDB must be a nonempty array","unsupported_configuration");
+  if(r.discovery) observeDiscovery(r.id);
   for(auto &v:*entries) { r.checkpoint(); auto o=v.getAsObject(); require(o,"CDB entry must be object"); auto c=configuration(r,*o,r.configs.size()); if(r.discovery) {
       auto relative=c.file.lexically_relative(r.root).generic_u8string(); relativePath(relative);
       r.selected.insert(relative); require(r.selected.size()<=MaxFiles,"Clang discovery exceeds file limit","resource_limit");
