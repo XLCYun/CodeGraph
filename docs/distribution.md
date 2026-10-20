@@ -105,13 +105,13 @@ For the light checks and a real TypeScript pack on a supported native host:
 pnpm test
 pnpm check:scripts
 bash scripts/cargo-agent.sh fmt --all --check
-bash scripts/cargo-agent.sh check --locked --bin codegraph
+bash scripts/cargo-agent.sh check --locked --lib --bins
 node scripts/language-packs/build-language-support-packs.mjs --native --id typescript-javascript --output artifacts
 node scripts/language-packs/verify-native-analyzers.mjs artifacts --language typescript-javascript
 ```
 
-The build command always includes the standalone CLI and defaults to all seven
-packs if `--id` is absent. Rust/Python need installed helper compiler 1.98.0.
+The build command includes each selected package’s own fixed public entry and
+defaults to all seven packages if `--id` is absent. Rust/Python need installed helper compiler 1.98.0.
 Java, Go, C#, C/C++ need their fixed build SDKs; install official checksum-pinned
 inputs with `provision-native-toolchains.mjs <empty-directory> --language <id|all>`.
 It writes `environment.json` and, in Actions, `GITHUB_ENV`; local callers must load
@@ -161,8 +161,9 @@ are not a product target-version allowlist.
 Host architecture is independently checked by native builders. Windows runs the
 shared process probe before expensive downloads, then selects exact MSVC/SDK/redist
 from the unchanged pins. macOS selects Xcode 16.4 / SDK 15.5. All seven helper suites,
-70 named real-pack tests on macOS (64 on Windows), including all 69/63 retained
-semantic tests, the full engine and public CLI lifecycle suites, and real unpacked
+77 named real-pack tests on macOS (71 on Windows; 78 unique cases), including
+all 71 original records with their retained platform scopes and seven directory
+discovery additions, the full engine and public CLI lifecycle suites, and real unpacked
 public CLI graph acceptance run serially by group.
 The C# factory group exercises the packaged runtime through the production factory
 and standard SDK discovery; its internal assertion retains diagnostics without
@@ -174,16 +175,24 @@ Go, Java and C# archives: `target_sdk.kind` is respectively `go`, `java`, `dotne
 `platforms` is empty, and `runtime/platform` is absent. This producer acceptance
 retains the former install-test guarantees without making private layout a
 consumer dependency.
-Public acceptance checks both executable choices, all seven languages, test switches,
-original source/local calls, empty selection and read-only input; Rust covers all
-three dependency scopes. Java uses `src/Sample.java` with a `java-static-v1`
-`narrant-java.json` declaring `src` and release 17. C/C++ uses a compilation
-database bound to the actual temporary project root with `clang++`, `-std=c++20`
-and the selected source. The fixed factory supplies one approved native target
-SDK, so this database selects that target without guessing its deployment triple.
-Both metadata files belong to the read-only snapshot. After valid analysis passes,
-removing the required metadata must produce the public `analysis_failed` outcome
-and exit 1; a spawn error, timeout or successful empty graph cannot pass this check.
+Public acceptance verifies each installed fixed entry and its version-matched
+package policy, from an unrelated cwd with producer-only environment removed.
+Every language exercises configured directory discovery, exact selection with
+outside targets represented as repository external symbols, explicit empty
+selection, test options, original source/local calls, normal stdin EOF and read-only
+input. Rust covers all three dependency scopes. Native test roles remain unchanged:
+C/C++ has no test-role metadata and keeps identical membership for both option values.
+Zero-source configured discovery is checked where supported; C/C++ instead uses a
+valid empty translation unit and rejects an empty CDB. Missing required models and
+malformed configurations return `analysis_failed`, while explicit `[]` still avoids
+loading them. TS/JS and Python additionally retain valid configuration-free projects;
+TS missing referenced configuration is a failure.
+The seven real installed engines also receive omitted-files requests over enlarged
+configured projects. The harness observes the actual worker/helper subtree before
+sending cancellation, requires one `cancelled` terminal result and exit 130 within
+the cleanup bound, and verifies that all observed descendants exit. These checks
+complement the existing native, blocked-output, parent-kill and Windows Job suites.
+No fake helper or startup-only success substitutes for installed package evidence.
 Per-test inventory is
 [semantic-acceptance.json](../resources/semantic-acceptance.json).
 
@@ -195,7 +204,7 @@ covered by the real archive tests.
 Only successful complete clean-source acceptance emits
 `verification-<target>.json`. Focused/local passes never stand in for this evidence.
 The shared [command specification](../scripts/language-packs/verification-commands.mjs)
-defines all 17 macOS / 16 Windows groups, including their argv, working directories, environment
+defines all 21 macOS / 20 Windows groups, including their argv, working directories, environment
 parameters and required semantic names. Before recording evidence, the writer
 compares the actual executed command list with that full specification. The
 receipt stores portable identities using tool/repository path placeholders; the
@@ -225,7 +234,7 @@ No rebuild substitutes different bytes. All hashes and file limits are checked a
 before the publishing step receives its write credential.
 
 The publisher creates `v0.1.0` as a draft prerelease at that exact commit, uploads all
-31 assets, reads back every byte and only then publishes with `make_latest: false`.
+29 assets, reads back every byte and only then publishes with `make_latest: false`.
 Existing tags at another commit, different assets, extra assets, incomplete published
 releases, failed CI or partial evidence stop the operation. No `--clobber`, asset
 delete or version overwrite exists. An identical already-published version is a

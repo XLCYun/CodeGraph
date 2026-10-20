@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { assetNames, nativeTarget, packIds, releaseIdentity, sha256, targets } from '../language-packs/distribution.mjs';
-import { verifyDistribution } from '../language-packs/verify-distribution.mjs';
+import { verifyAnalyzerDistribution } from '../language-packs/verify-analyzer-package.mjs';
 import { recordVerifiedCommands, verificationCommandIdentities } from '../language-packs/verification-commands.mjs';
 
 /** 对一平台七个分析器包做完整字节验证，并核对每个固定入口。 */
@@ -11,9 +11,7 @@ async function readTarget(artifacts, identity, target, requireClean) {
   const entries = [], receipts = [];
   for (const id of packIds) {
     const directory = path.join(artifacts, id, identity.version, target);
-    const { manifest, body, archive } = await verifyDistribution(directory, { id, target, version: identity.version, engineVersion: identity.version, protocol: identity.protocol, sourceCommit: identity.sourceCommit, ...(requireClean ? { sourceDirty: false } : {}) });
-    const cli = manifest.files.find(file => file.path === `bin/codegraph-${id}${target.includes('windows') ? '.exe' : ''}`);
-    if (!cli?.executable) throw new Error('Package missing executable CLI');
+    const { manifest, body, archive } = await verifyAnalyzerDistribution(directory, { id, target, version: identity.version, engineVersion: identity.version, protocol: identity.protocol, sourceCommit: identity.sourceCommit, ...(requireClean ? { sourceDirty: false } : {}) });
     const [archiveName, manifestName] = assetNames(id, target);
     entries.push({ name: archiveName, file: archive, size: manifest.archiveSize, sha256: manifest.archiveSha256 });
     if (manifestName) entries.push({ name: manifestName, file: path.join(directory, 'manifest.json'), size: body.length, sha256: sha256(body) });

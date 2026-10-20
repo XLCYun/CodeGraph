@@ -2,76 +2,16 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { nativeTarget, releaseIdentity } from './distribution.mjs';
 import { selectedNativePacks } from './native-migration.mjs';
 import { verifyAndExtract } from './verify-distribution.mjs';
 import { verifyNativePackPolicy } from './verify-native-pack-policy.mjs';
-
-/** 每种语言都包含真实本地调用；测试项目不借用应用状态或源仓库。 */
-export const fixtures = {
-  rust: { files: ['src/lib.rs'], content: { 'Cargo.toml': '[package]\nname="codegraph_acceptance"\nversion="0.1.0"\nedition="2021"\n', 'src/lib.rs': 'pub fn target() -> i32 { 1 }\npub fn caller() -> i32 { target() }\n#[test]\nfn test_only() { caller(); }\n' } },
-  'typescript-javascript': { files: ['main.ts', 'target.js'], content: { 'main.ts': "import {target} from './target.js'; export function caller() { target(); Promise.resolve(1); }\n", 'target.js': 'export function target() { return 1; }\n' } },
-  python: { files: ['main.py'], content: { 'main.py': 'def target():\n    return 1\ndef caller():\n    return target()\n' } },
-  java: { files: ['src/Sample.java'], prerequisite: 'narrant-java.json', content: { 'src/Sample.java': 'public class Sample { public static int target() { return 1; } public int caller() { return target(); } }\n', 'narrant-java.json': JSON.stringify({ schema: 'java-static-v1', release: '17', source_roots: [{ path: 'src', role: 'main' }] }) + '\n' } },
-  go: { files: ['main.go'], content: { 'go.mod': 'module example.com/codegraph-acceptance\n\ngo 1.23\n', 'main.go': 'package acceptance\nfunc target() int { return 1 }\nfunc caller() int { return target() }\n' } },
-  csharp: { files: ['Sample.cs'], content: { 'Sample.csproj': '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>\n', 'Sample.cs': 'public static class Sample { public static int target() { return 1; } public static int caller() { return target(); } }\n' } },
-  'c-cpp': { files: ['main.cpp'], prerequisite: 'compile_commands.json', content: { 'main.cpp': 'int target() { return 1; }\nint caller() { return target(); }\n' } },
-};
-
-/** 在真实临时仓库生成静态配置，源码与元数据共同构成只读快照。 */
-export async function preparePublicProject(id, directory) {
-  await fs.mkdir(directory, { recursive: true });
-  const root = await fs.realpath(directory), fixture = structuredClone(fixtures[id]);
-  if (id === 'c-cpp') {
-    // 固定工厂只授予一个宿主目标 SDK；不猜部署版本，也不读取私有 helper 配置。
-    fixture.content['compile_commands.json'] = JSON.stringify([{ directory: root, file: 'main.cpp', arguments: ['clang++', '-std=c++20', '-c', 'main.cpp'] }]) + '\n';
-  }
-  for (const [name, content] of Object.entries(fixture.content)) { await fs.mkdir(path.dirname(path.join(root, name)), { recursive: true }); await fs.writeFile(path.join(root, name), content); }
-  return { ...fixture, root };
-}
-
-/** 所有输入文件和配置必须保留原字节，分析也不能在仓库添加文件。 */
-export async function assertPublicProjectUnchanged(project) {
-  for (const [name, content] of Object.entries(project.content)) assert.equal(await fs.readFile(path.join(project.root, name), 'utf8'), content, `Analysis changed ${name}`);
-  assert.deepEqual((await fs.readdir(project.root, { recursive: true, withFileTypes: true })).filter(item => item.isFile()).map(item => path.relative(project.root, path.join(item.parentPath, item.name)).replaceAll('\\', '/')).sort(), Object.keys(project.content).sort(), 'Analysis wrote files into the project');
-}
-
-/** 完整校验公共 NDJSON、完成身份和退出；绝不把进程启动或 EOF 视为成功。 */
-export async function exchangeCli(executable, pack, request, identity, expectedFailure) {
-  const child = spawn(executable, ['analyze'], { env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
-  const chunks = [];
-  let length = 0, stderr = '', failure;
-  const timer = setTimeout(() => { failure = new Error('Public CLI acceptance timed out'); child.kill('SIGKILL'); }, 120_000);
-  child.stdout.on('data', chunk => { length += chunk.length; if (length > 128 * 1024 * 1024) { failure = new Error('Public CLI output exceeds limit'); child.kill('SIGKILL'); } else chunks.push(chunk); });
-  child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-262144); });
-  child.stdin.on('error', error => { failure ??= error; });
-  try {
-    const exit = new Promise((resolve, reject) => { child.once('error', reject); child.once('close', (code, signal) => resolve({ code, signal })); });
-    child.stdin.end(`${JSON.stringify(request)}\n`);
-    const { code, signal } = await exit;
-    if (failure) throw failure;
-    assert.equal(signal, null, stderr);
-    assert.equal(code, expectedFailure ? 1 : 0, stderr + Buffer.concat(chunks).toString());
-    const output = Buffer.concat(chunks).toString('utf8');
-    assert.ok(output.endsWith('\n'), 'Unterminated CLI output');
-    const messages = output.slice(0, -1).split('\n').map(line => JSON.parse(line));
-    assert.equal(messages.length, 2);
-    assert.deepEqual(messages[0], { protocol: identity.protocol, type: 'ready', engine_version: identity.engineVersion, pack_id: pack });
-    assert.equal(messages[1].protocol, identity.protocol);
-    assert.equal(messages[1].type, 'completed');
-    assert.equal(messages[1].id, request.id);
-    assert.equal(messages[1].outcome, expectedFailure ? 'error' : 'ok');
-    if (expectedFailure) {
-      assert.equal(messages[1].error?.code, expectedFailure);
-      assert.equal(typeof messages[1].error?.message, 'string');
-      assert.equal(messages[1].graph, undefined);
-      return;
-    }
-    return messages[1].graph;
-  } finally { clearTimeout(timer); }
-}
+import { verifyAnalyzerDistribution } from './verify-analyzer-package.mjs';
+import { preparePublicProject, writePublicProject, prepareCancellationProject, assertPublicProjectUnchanged } from './public-cli-projects.mjs';
+import { exchangeCli } from './public-cli-session.mjs';
+export { fixtures, preparePublicProject, assertPublicProjectUnchanged } from './public-cli-projects.mjs';
+export { exchangeCli } from './public-cli-session.mjs';
 
 /** 图必须保留调用、源文本、完整 containment 和引用闭包。 */
 export function assertGraph(graph) {
@@ -114,41 +54,80 @@ export async function runPublicPackAcceptances(ids, verify) {
   if (failures.length) throw new AggregateError(failures, `${failures.length} public pack acceptance(s) failed`);
 }
 
-/** 对实际解包后的 CLI 与语言包做端到端分析，保留原文件内容与文件集合。 */
+/** 所有公开请求均只带根、可选选集与公共选项；不暴露生产者配置。 */
+function request(identity, id, root, label, files, includeTests = false, scope = 'repository-only') {
+  return { protocol: identity.protocol, type: 'analyze', id: `${id}-${label}`, repository_root: root, ...(files === undefined ? {} : { files }), options: { include_tests: includeTests, rust_dependency_scope: scope } };
+}
+
+/** 显式选集外仍可解析目标，但不能把完整目标节点或其它源码加入结果。 */
+function assertExactGraph(graph, testRole) {
+  const caller = graph.nodes.find(node => node.name === 'caller');
+  assert.ok(caller?.source?.includes('target'), 'Selected caller/source lost');
+  assert.ok(!graph.nodes.some(node => ['target', 'excluded_member', ...(testRole === false ? [] : ['test_only'])].includes(node.name)), 'Selection expanded to an unselected callable');
+  const calls = caller.references.filter(ref => ref.semantic === 'code.calls' && ref.target.kind === 'external');
+  assert.ok(calls.some(ref => graph.external_symbols.some(symbol => symbol.symbol === ref.target.symbol && symbol.name === 'target' && symbol.scope === 'repository')), 'Outside target is not a repository external symbol');
+}
+
+/** 对实际归档的唯一固定入口做配置发现、精确边界、失败、取消和只读验收。 */
 export async function verifyPublicCli(artifacts, language = 'all') {
   const target = nativeTarget(), identity = await releaseIdentity();
   const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'codegraph-public-cli-'));
+  const emptyGraph = { root_contains: [], nodes: [], external_symbols: [] };
   try {
     await runPublicPackAcceptances(selectedNativePacks(language), async id => {
-      const pack = path.join(scratch, id);
-      await verifyAndExtract(path.join(artifacts, id, identity.version, target), pack, { id, target, version: identity.version });
+      const pack = path.join(scratch, id), directory = path.join(artifacts, id, identity.version, target);
+      await verifyAnalyzerDistribution(directory, { id, target, version: identity.version, sourceCommit: identity.sourceCommit, sourceDirty: identity.sourceDirty });
+      await verifyAndExtract(directory, pack, { id, target, version: identity.version });
       await verifyNativePackPolicy(id, pack);
       const executable = path.join(pack, 'bin', `codegraph-${id}${process.platform === 'win32' ? '.exe' : ''}`);
-      assert.deepEqual(JSON.parse(await fs.readFile(path.join(pack, 'control/codegraph.json'))), { schema_version: 1, pack_id: id, pack_version: identity.version, engine_version: identity.engineVersion, protocol: identity.protocol });
-      const fixture = await preparePublicProject(id, path.join(scratch, `${id}-source`)), source = fixture.root;
+      const fixture = await preparePublicProject(id, path.join(scratch, `${id}-source`));
       const scopes = id === 'rust' ? ['repository-only', 'standard-library', 'all-dependencies'] : ['repository-only'];
-      for (const scope of scopes) for (const includeTests of [false, true]) {
-        const request = { protocol: identity.protocol, type: 'analyze', id: `${id}-${scope}-${includeTests}`, repository_root: await fs.realpath(source), files: fixture.files, options: { include_tests: includeTests, rust_dependency_scope: scope } };
-        // 消费者只启动该语言包的固定公开入口。
-        const graph = await exchangeCli(executable, id, request, identity);
+      for (const scope of scopes) for (const includeTests of [false, true]) for (const discovery of [false, true]) {
+        const graph = await exchangeCli(executable, id, request(identity, id, fixture.root, `${scope}-${includeTests}-${discovery}`, discovery ? undefined : fixture.files, includeTests, scope), identity);
         assertGraph(graph);
-        if (id === 'rust') assert.equal(graph.nodes.some(node => node.name === 'test_only'), includeTests);
+        assert.equal(graph.nodes.some(node => node.name === 'test_only'), fixture.testRole === false || includeTests, `${id}: incorrect native test role`);
+        assert.ok(!graph.nodes.some(node => node.name === 'excluded_member'), 'Configuration excluded source became a full node');
       }
-      const empty = await exchangeCli(executable, id, { protocol: identity.protocol, type: 'analyze', id: `${id}-empty`, repository_root: await fs.realpath(source), files: [], options: { include_tests: false, rust_dependency_scope: 'repository-only' } }, identity);
-      assert.deepEqual(empty, { root_contains: [], nodes: [], external_symbols: [] });
+      const exact = await exchangeCli(executable, id, request(identity, id, fixture.root, 'exact', fixture.selected), identity);
+      // Rust/C++ 的选中文件含本地测试声明，单独验证图外目标，测试开关按各自政策处理。
+      assertExactGraph(exact, fixture.testRole);
+      assert.deepEqual(await exchangeCli(executable, id, request(identity, id, fixture.root, 'empty', []), identity), emptyGraph);
+      await exchangeCli(executable, id, request(identity, id, fixture.root, 'null', null), identity, 'invalid_request');
       await assertPublicProjectUnchanged(fixture);
-      if (fixture.prerequisite) {
-        // 先要求有效项目成功，随后缺配置只能返回明确分析失败，启动错误/超时不能冒充通过。
-        const metadata = path.join(source, fixture.prerequisite);
-        await fs.rm(metadata);
-        try {
-          await exchangeCli(executable, id, { protocol: identity.protocol, type: 'analyze', id: `${id}-missing-metadata`, repository_root: source, files: fixture.files, options: { include_tests: false, rust_dependency_scope: 'repository-only' } }, identity, 'analysis_failed');
-          const content = { ...fixture.content }; delete content[fixture.prerequisite];
-          await assertPublicProjectUnchanged({ ...fixture, content });
-        } finally { await fs.writeFile(metadata, fixture.content[fixture.prerequisite]); }
-        await assertPublicProjectUnchanged(fixture);
+
+      const configuredEmpty = await writePublicProject(path.join(scratch, `${id}-configured-empty`), fixture.empty, id === 'c-cpp');
+      const emptyResult = await exchangeCli(executable, id, request(identity, id, configuredEmpty.root, 'configured-empty'), identity);
+      if (id === 'c-cpp') assert.ok(!emptyResult.nodes.some(node => node.category === 'callable'), 'Empty TU gained a callable');
+      else assert.deepEqual(emptyResult, emptyGraph);
+      await assertPublicProjectUnchanged(configuredEmpty);
+
+      // TS/Python 支持无配置项目；其它语言缺少必需项目模型必须明确失败。
+      const missingContent = fixture.missing ?? (fixture.implicit ? fixture.configless : Object.fromEntries(Object.entries(fixture.content).filter(([name]) => name !== fixture.prerequisite)));
+      const missing = await writePublicProject(path.join(scratch, `${id}-missing`), missingContent);
+      const missingError = fixture.missing || !fixture.implicit ? 'analysis_failed' : undefined;
+      const missingResult = await exchangeCli(executable, id, request(identity, id, missing.root, 'missing'), identity, missingError);
+      if (!missingError) assertGraph(missingResult);
+      assert.deepEqual(await exchangeCli(executable, id, request(identity, id, missing.root, 'missing-empty', []), identity), emptyGraph);
+      await assertPublicProjectUnchanged(missing);
+      if (fixture.implicit && fixture.missing) {
+        const implicit = await writePublicProject(path.join(scratch, `${id}-implicit`), fixture.configless);
+        assertGraph(await exchangeCli(executable, id, request(identity, id, implicit.root, 'implicit'), identity));
+        await assertPublicProjectUnchanged(implicit);
       }
-      console.log(`Public CLI verified: ${id} (${scopes.join(', ')}), read-only, include_tests, source, call graph, empty selection${fixture.prerequisite ? ', missing metadata rejected' : ''}`);
+
+      const malformed = await preparePublicProject(id, path.join(scratch, `${id}-malformed`));
+      malformed.content[fixture.prerequisite] = id === 'c-cpp' ? '[]' : '! invalid configuration [';
+      await fs.writeFile(path.join(malformed.root, fixture.prerequisite), malformed.content[fixture.prerequisite]);
+      await exchangeCli(executable, id, request(identity, id, malformed.root, 'malformed'), identity, 'analysis_failed');
+      assert.deepEqual(await exchangeCli(executable, id, request(identity, id, malformed.root, 'malformed-empty', []), identity), emptyGraph);
+      await assertPublicProjectUnchanged(malformed);
+
+      const cancellation = await prepareCancellationProject(id, path.join(scratch, `${id}-cancellation`));
+      await exchangeCli(executable, id, request(identity, id, cancellation.root, 'directory-cancel'), identity, undefined, { cancel: true });
+      await assertPublicProjectUnchanged(cancellation);
+      console.log(`Public CLI verified: ${id}; configured discovery, explicit/external boundary, native test roles, []/configured empty, missing/invalid configuration, read-only, normal EOF, real directory cancellation and descendant exit; scopes=${scopes.join(',')}`);
+      // 每语言检查完成后释放临时解包；最终候选及 smoke-installed 保留供消费者交接。
+      await fs.rm(pack, { recursive: true, force: true });
     });
   } finally { await fs.rm(scratch, { recursive: true, force: true }); }
 }

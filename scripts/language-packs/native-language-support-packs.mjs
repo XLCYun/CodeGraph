@@ -1,5 +1,6 @@
 import { migratedNativePacks } from './native-migration.mjs';
 import fs from 'node:fs/promises';
+import { verifyAnalyzerDistribution } from './verify-analyzer-package.mjs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawn, execFileSync } from 'node:child_process';
@@ -293,11 +294,12 @@ export async function buildNativePack({ id, target, output, definition, packageD
     await smokeNativeHelper({ executable, args, id: definition.helperId, projection: definition.projectionRevision, languages: id === 'c-cpp' ? ['c', 'cpp'] : [id], profile: definition.profile });
     await stageAnalyzer(payload, id, target);
     const destination = await packageDirectory({ id, version: definition.version, target }, payload, output);
+    await verifyAnalyzerDistribution(destination, { id, version: definition.version, target });
     // 解压归档后再次启动，证明运行环境与可执行权限随支持包保存。
     const extracted = path.join(output, 'smoke-installed', id, definition.version, target);
     await fs.rm(extracted, { recursive: true, force: true });
     await fs.mkdir(path.dirname(extracted), { recursive: true });
-        await verifyAndExtract(destination, extracted);
+    await verifyAndExtract(destination, extracted);
     const relocate = value => value.replaceAll(payload, extracted);
     await smokeNativeHelper({ executable: relocate(executable), args: args.map(relocate), id: `codegraph-${helper}-engine`, projection: definition.projectionRevision, languages: id === 'c-cpp' ? ['c', 'cpp'] : [id], profile: definition.profile });
     const configPath = path.join(output, 'analyzers-config.json');

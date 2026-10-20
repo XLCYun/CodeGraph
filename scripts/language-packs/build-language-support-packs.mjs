@@ -10,6 +10,7 @@ import { packIds, limits, releaseIdentity } from './distribution.mjs';
 import { stageAnalyzer } from './build-analyzer.mjs';
 import { verifyAndExtract, safeFilePath } from './verify-distribution.mjs';
 import { systemTar } from './system-tar.mjs';
+import { verifyAnalyzerDistribution } from './verify-analyzer-package.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const targets = ['aarch64-apple-darwin', 'x86_64-pc-windows-msvc'];
@@ -129,6 +130,7 @@ export async function buildPack({ id, target, output, cache = path.join(reposito
     for (const name of await fs.readdir(path.join(payload, 'bin'))) await fs.chmod(path.join(payload, 'bin', name), 0o755);
     await stageAnalyzer(payload, id, target);
     const destination = await packageDirectory(identity, payload, output);
+    await verifyAnalyzerDistribution(destination, identity);
     // 在目标宿主上执行实际工具入口；跨平台产物必须由对应 CI runner 再验证。
     if ((windows && process.platform === 'win32' && process.arch === 'x64') || (!windows && process.platform === 'darwin' && process.arch === 'arm64')) {
       const executable = path.join(payload, 'bin', `node${windows ? '.exe' : ''}`);

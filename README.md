@@ -47,16 +47,22 @@ python3 scripts/examples/empty-selection.py target/debug/codegraph-rust
 ```
 
 The last command creates isolated temporary directories and exercises a valid empty
-selection with stdin closed after the request. A non-empty selection requires a
-trusted, prepared language pack:
+selection with stdin closed after the request. For real configuration-based directory
+analysis, verify and install the complete language package, then run:
 
 ```sh
-/absolute/trusted/pack/bin/codegraph-typescript-javascript analyze < request.json
+python3 scripts/examples/analyze-directory.py /absolute/trusted/pack/bin/codegraph-typescript-javascript /absolute/project
 ```
+
+This example omits `files`, uses the project's supported language configuration,
+and closes stdin after the request. To select only particular files, supply `files`
+in your request; `files: []` always requests an empty graph. See the per-language
+[discovery policies](docs/engine-selection.md). Installed target SDKs are discovered
+through the standard environment described in [distribution.md](docs/distribution.md).
 
 Each entry derives its package root from its own `bin/` directory and verifies
 its compiled language identity against `control/codegraph.json`. Consumers do not
-pass a language selector or package directory. The request file contains one JSON object followed by a newline. For interactive
+pass a language selector or package directory. Requests contain one JSON object followed by a newline. For interactive
 cancellation, keep stdin open and send `cancel` with the same ID. Consumers that own
 the child process must also retain process-tree ownership for forced cleanup.
 

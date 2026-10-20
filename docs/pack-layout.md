@@ -19,6 +19,13 @@ It accepts `analyze`, `--help`, and `--version`; the language adapter is bound a
 compile time. No generic executable, public language selector, runtime command
 assembly, or `--pack-root` is needed. All runtime dependencies travel with the package.
 
+The producer applies the same package-content policy during builds, public-entry
+acceptance and release verification. It rejects generic or foreign entries,
+unexpected payload regions, missing dependency files and mismatched public
+descriptors, after the manifest/archive byte and permission checks. Public acceptance
+then runs the unpacked fixed entry from an unrelated working directory without
+producer-only `CODEGRAPH_*` environment variables.
+
 `control/native.json` retains its private schema:
 
 ```json

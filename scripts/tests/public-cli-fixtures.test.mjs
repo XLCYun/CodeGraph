@@ -6,6 +6,9 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { preparePublicProject, assertPublicProjectUnchanged, runPublicPackAcceptances } from '../language-packs/verify-public-cli.mjs';
+import { fixtures, prepareCancellationProject } from '../language-packs/public-cli-projects.mjs';
+import { publicEnvironment } from '../language-packs/public-cli-session.mjs';
+import { packIds } from '../language-packs/distribution.mjs';
 
 /** 前一包真实退出失败后仍验证下一包，最终保留每个原始错误且不能转为成功。 */
 test('public pack failures preserve diagnostics and do not prevent later real children', async t => {
@@ -54,8 +57,8 @@ test('public Java project declares its source root and target release', async t 
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const project = await preparePublicProject('java', root);
   const metadata = JSON.parse(await fs.readFile(path.join(root, 'narrant-java.json'), 'utf8'));
-  assert.deepEqual(metadata, { schema: 'java-static-v1', release: '17', source_roots: [{ path: 'src', role: 'main' }] });
-  assert.deepEqual(project.files, ['src/Sample.java']);
+  assert.deepEqual(metadata, { schema: 'java-static-v1', release: '17', source_roots: [{ path: 'src', role: 'main' }, { path: 'checks', role: 'test' }] });
+  assert.deepEqual(project.files, ['src/Sample.java', 'src/Api.java', 'checks/Checks.java']);
   assert.ok((await fs.readFile(path.join(root, project.files[0]), 'utf8')).includes('target()'));
   assert.equal(project.prerequisite, 'narrant-java.json');
   await assertPublicProjectUnchanged(project);
@@ -68,7 +71,7 @@ test('public C++ project has a concrete static compilation database', async t =>
   const project = await preparePublicProject('c-cpp', root);
   const database = JSON.parse(await fs.readFile(path.join(root, 'compile_commands.json'), 'utf8'));
   assert.deepEqual(database, [{ directory: await fs.realpath(root), file: 'main.cpp', arguments: ['clang++', '-std=c++20', '-c', 'main.cpp'] }]);
-  assert.deepEqual(project.files, ['main.cpp']);
+  assert.deepEqual(project.files, ['main.cpp', 'api.inc']);
   assert.equal(project.prerequisite, 'compile_commands.json');
   assert.ok((await fs.stat(path.join(database[0].directory, database[0].file))).isFile());
   await assertPublicProjectUnchanged(project);
@@ -88,4 +91,28 @@ test('public project snapshots detect missing or changed required metadata', asy
     await fs.writeFile(file, project.content[project.prerequisite]);
     await assertPublicProjectUnchanged(project);
   }
+});
+
+/** 每语言的公开夹具都必须包含独立调用目标、配置外成员和真实配置取消负载。 */
+test('all seven public projects retain configuration boundaries and omitted-files cancellation workloads', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codegraph discovery fixtures-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  assert.deepEqual(Object.keys(fixtures).sort(), [...packIds].sort());
+  for (const id of packIds) {
+    const project = await preparePublicProject(id, path.join(root, id));
+    assert.ok(project.files.length >= 2);
+    assert.ok(project.selected.length < project.files.length);
+    assert.ok(Object.values(project.content).some(source => source.includes('excluded_member')));
+    assert.ok(project.content[project.prerequisite]);
+    await assertPublicProjectUnchanged(project);
+    const cancellation = await prepareCancellationProject(id, path.join(root, `${id}-cancel`));
+    assert.ok(Object.keys(cancellation.content).length >= 600);
+    assert.ok(Object.values(cancellation.content).some(source => source.includes('value_599_99')));
+    await assertPublicProjectUnchanged(cancellation);
+  }
+});
+
+/** 标准 SDK 定位可以保留，但私有 helper 配置绝不能令公开包验收虚假通过。 */
+test('public entry acceptance removes producer-only environment', () => {
+  assert.deepEqual(publicEnvironment({ PATH: '/standard/tools', GOROOT: '/go', DOTNET_ROOT: '/dotnet', JAVA_HOME: '/jdk', CODEGRAPH_NATIVE_HELPERS_CONFIG: '/private.json', CODEGRAPH_GO_SDK: '/build/sdk' }), { PATH: '/standard/tools', GOROOT: '/go', DOTNET_ROOT: '/dotnet', JAVA_HOME: '/jdk' });
 });

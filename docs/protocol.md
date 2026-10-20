@@ -84,8 +84,13 @@ A valid empty selection returns:
 
 An empty selection validates the public package identity and repository boundary,
 but does not prepare SDKs or launch a helper. It is distinct from an analysis error.
-For non-empty selections the complete factory, input, source-evidence, graph, and
+For discovered or explicit non-empty selections the complete factory, input, source-evidence, graph, and
 process-tree exit checks all precede successful output.
+Valid configured zero-source discovery is also successful, after validating the
+language's project configuration. Missing or invalid required configuration is an
+analysis error. C/C++ requires a nonempty compilation database even for an empty
+translation unit. Configuration-free TS/JS and Python projects retain their native
+defaults; see [discovery policies](engine-selection.md).
 
 `graph` has exactly `root_contains`, `nodes`, and `external_symbols`. Nodes retain
 the helper graph fields:
@@ -163,7 +168,12 @@ Run the checked example with:
 
 ```sh
 python3 scripts/examples/empty-selection.py target/debug/codegraph-rust
+python3 scripts/examples/analyze-directory.py /verified/pack/bin/codegraph-rust /absolute/project
 ```
+
+The first example creates only an empty-selection fixture. The second requires a
+complete, previously verified package and a real project; it exercises directory
+discovery without private runtime arguments and permits normal stdin EOF.
 
 The distribution pipeline now includes real seven-pack public CLI acceptance on
 both supported CI targets. No published artifacts or successful remote CI runs are
