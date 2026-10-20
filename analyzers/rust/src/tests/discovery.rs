@@ -382,6 +382,334 @@ fn discovery_filters_static_project_test_modules_without_changing_explicit_selec
     support::assert_unchanged(root.path(), &before);
 }
 
+/// 原生 builtin 标记提供无需 sysroot 的真实 include 解析，夹具不运行过程宏或项目代码。
+fn include_project() -> tempfile::TempDir {
+    let root = tempfile::tempdir().unwrap();
+    let builtins = r#"
+#[rustc_builtin_macro] macro_rules! include { ($file:expr) => {} }
+#[rustc_builtin_macro] macro_rules! include_str { ($file:expr) => {} }
+#[rustc_builtin_macro] macro_rules! include_bytes { ($file:expr) => {} }
+"#;
+    write(
+        root.path(),
+        "lib.rs",
+        &format!(
+            r#"
+{builtins}
+include!("included.rs");
+include!("empty.md");
+include!("unloaded.inc");
+#[cfg(any())] include!("inactive.rs");
+unresolved_include!("unresolved.rs");
+pub fn run() {{ included_helper(); production::shared_helper(); }}
+#[cfg(test)] mod checks {{ include!("checks.rs"); include!("shared.inc"); }}
+mod production {{ include!("shared.inc"); }}
+#[cfg(test)] mod file_checks;
+pub fn block() {{ include!("block.rs"); block_helper(); }}
+pub const TEXT: &str = include_str!("text.rs");
+pub const BYTES: &[u8] = include_bytes!("payload.rs");
+"#
+        ),
+    );
+    write(
+        root.path(),
+        "included.rs",
+        "include!(\"nested.rs\"); pub fn included_helper() { nested_helper(); }",
+    );
+    write(root.path(), "nested.rs", "pub fn nested_helper() {}");
+    write(root.path(), "empty.md", "");
+    write(
+        root.path(),
+        "checks.rs",
+        "include!(\"deep_checks.rs\"); pub fn test_helper() {}",
+    );
+    write(
+        root.path(),
+        "deep_checks.rs",
+        "pub fn deep_test_helper() {}",
+    );
+    write(root.path(), "shared.inc", "pub fn shared_helper() {}");
+    write(root.path(), "unloaded.inc", "pub fn unloaded_helper() {}");
+    write(
+        root.path(),
+        "file_checks.rs",
+        "include!(\"file_helpers.rs\");",
+    );
+    write(
+        root.path(),
+        "file_helpers.rs",
+        "pub fn file_test_helper() {}",
+    );
+    write(root.path(), "block.rs", "pub fn block_helper() {}");
+    write(root.path(), "inactive.rs", "pub fn inactive_helper() {}");
+    write(
+        root.path(),
+        "unresolved.rs",
+        "pub fn unresolved_helper() {}",
+    );
+    write(root.path(), "text.rs", "pub fn text_only_helper() {}");
+    fs::write(root.path().join("payload.rs"), [0xff, 0xfe]).unwrap();
+    write(
+        root.path(),
+        "dependency/lib.rs",
+        &format!("{builtins}\ninclude!(\"context.rs\");"),
+    );
+    write(
+        root.path(),
+        "dependency/context.rs",
+        "pub fn dependency_helper() {}",
+    );
+    // 固定上游会预载 rs/toml/md；配置根使 .inc 原文也实际进入 VFS，但不把它声明为成员。
+    write(
+        root.path(),
+        "rust-project.json",
+        &json!({"crates":[
+            {"root_module":"lib.rs","edition":"2021","is_workspace_member":true,
+             "deps":[{"crate":1,"name":"dependency"}],"cfg":["test"],"env":{}},
+            {"root_module":"dependency/lib.rs","edition":"2021","is_workspace_member":false,
+             "deps":[],"cfg":[],"env":{}},
+            {"root_module":"shared.inc","edition":"2021","is_workspace_member":false,
+             "deps":[],"cfg":[],"env":{}}
+        ]})
+        .to_string(),
+    );
+    root
+}
+
+/// 只发现成员实际参与的可执行 include，所有调用归属共同决定测试范围，数据与上下文不能入选。
+#[test]
+fn discovery_preserves_native_include_sources_and_test_ownership() {
+    let root = include_project();
+    let before = support::snapshot(root.path());
+    let native = crate::RustProject::load(
+        &root.path().join("rust-project.json"),
+        &crate::LoadPolicy::repository_only(),
+    )
+    .unwrap();
+    let file = native.file_id(&root.path().join("lib.rs")).unwrap();
+    let source = native.source(file).unwrap();
+    let shared = native.file_id(&root.path().join("shared.inc")).unwrap();
+    native.parse(shared).unwrap();
+    assert!(
+        native
+            .definitions(file, source.find("shared_helper").unwrap() as u32 + 2)
+            .unwrap()
+            .iter()
+            .any(|target| target.file_id == shared)
+    );
+    assert!(native.file_id(&root.path().join("unloaded.inc")).is_err());
+    let explicit = projection::analyze(&request(
+        root.path(),
+        Some(&["lib.rs", "included.rs"]),
+        true,
+    ))
+    .unwrap();
+    let helper = explicit["graph"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["name"] == "included_helper")
+        .unwrap();
+    let run = explicit["graph"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["name"] == "run")
+        .unwrap();
+    assert!(
+        run["references"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|reference| reference["semantic"] == "code.calls"
+                && reference["target"]["id"] == helper["id"])
+    );
+    assert_eq!(
+        coverage(&explicit).keys().copied().collect::<Vec<_>>(),
+        ["included.rs", "lib.rs"]
+    );
+    for include_tests in [false, true] {
+        let result = projection::analyze(&request(root.path(), None, include_tests)).unwrap();
+        let files = coverage(&result);
+        assert_eq!(
+            files.keys().copied().collect::<Vec<_>>(),
+            [
+                "block.rs",
+                "checks.rs",
+                "deep_checks.rs",
+                "empty.md",
+                "file_checks.rs",
+                "file_helpers.rs",
+                "included.rs",
+                "lib.rs",
+                "nested.rs",
+                "shared.inc",
+            ]
+        );
+        for path in [
+            "block.rs",
+            "empty.md",
+            "included.rs",
+            "lib.rs",
+            "nested.rs",
+            "shared.inc",
+        ] {
+            assert_eq!(files[path], "analyzed", "{path}");
+        }
+        for path in [
+            "checks.rs",
+            "deep_checks.rs",
+            "file_helpers.rs",
+            "file_checks.rs",
+        ] {
+            assert_eq!(
+                files[path],
+                if include_tests {
+                    "analyzed"
+                } else {
+                    "excluded_test"
+                },
+                "{path}"
+            );
+            assert_eq!(
+                result["evidence"]["origins"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|origin| origin["selected_paths"] == json!([path])),
+                include_tests,
+                "{path}"
+            );
+        }
+        let nodes = result["graph"]["nodes"].as_array().unwrap();
+        for name in [
+            "included_helper",
+            "nested_helper",
+            "shared_helper",
+            "block_helper",
+        ] {
+            assert!(nodes.iter().any(|node| node["name"] == name), "{name}");
+        }
+        for name in ["test_helper", "deep_test_helper", "file_test_helper"] {
+            assert_eq!(
+                nodes.iter().any(|node| node["name"] == name),
+                include_tests,
+                "{name}"
+            );
+        }
+        let helper = nodes
+            .iter()
+            .find(|node| node["name"] == "included_helper")
+            .unwrap();
+        let run = nodes.iter().find(|node| node["name"] == "run").unwrap();
+        assert!(
+            run["references"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|reference| reference["semantic"] == "code.calls"
+                    && reference["target"]["id"] == helper["id"])
+        );
+    }
+    support::assert_unchanged(root.path(), &before);
+}
+
+/// 模块与 include 的生产归属相互补齐；共享文件内部的测试 include 和宏调用仍保持测试身份。
+#[test]
+fn discovery_joins_module_and_expansion_include_ownership() {
+    let root = include_project();
+    let mut source = fs::read_to_string(root.path().join("lib.rs")).unwrap();
+    source.push_str(
+        r#"
+#[cfg(test)] #[path="mixed.rs"] mod mixed_test;
+mod mixed_production { include!("mixed.rs"); }
+macro_rules! generate_tests { () => { include!("macro_checks.rs"); }; }
+#[cfg(test)] generate_tests!();
+"#,
+    );
+    write(root.path(), "lib.rs", &source);
+    write(root.path(), "mixed.rs", "pub fn mixed_helper() {}");
+    write(
+        root.path(),
+        "macro_checks.rs",
+        "pub fn macro_test_helper() {}",
+    );
+    write(
+        root.path(),
+        "shared.inc",
+        "pub fn shared_helper() {} #[cfg(test)] mod shared_tests { include!(\"shared_checks.rs\"); }",
+    );
+    write(
+        root.path(),
+        "shared_checks.rs",
+        "pub fn shared_test_helper() {}",
+    );
+    let before = support::snapshot(root.path());
+    for include_tests in [false, true] {
+        let result = projection::analyze(&request(root.path(), None, include_tests)).unwrap();
+        let files = coverage(&result);
+        let nodes = result["graph"]["nodes"].as_array().unwrap();
+        assert_eq!(files["mixed.rs"], "analyzed");
+        assert!(nodes.iter().any(|node| node["name"] == "mixed_helper"));
+        for (path, name) in [
+            ("macro_checks.rs", "macro_test_helper"),
+            ("shared_checks.rs", "shared_test_helper"),
+        ] {
+            assert_eq!(
+                files[path],
+                if include_tests {
+                    "analyzed"
+                } else {
+                    "excluded_test"
+                },
+                "{path}"
+            );
+            assert_eq!(
+                nodes.iter().any(|node| node["name"] == name),
+                include_tests,
+                "{name}"
+            );
+            assert_eq!(
+                result["evidence"]["origins"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|origin| origin["selected_paths"] == json!([path])),
+                include_tests,
+                "{path}"
+            );
+        }
+    }
+    support::assert_unchanged(root.path(), &before);
+}
+
+/// 已解析的 include 必须保留可读原文，不能把无效字节当作空文件返回覆盖成功。
+#[test]
+fn discovery_rejects_invalid_include_source_text() {
+    let root = include_project();
+    fs::write(root.path().join("included.rs"), [0xff, 0xfe]).unwrap();
+    let before = support::snapshot(root.path());
+    assert!(projection::analyze(&request(root.path(), None, true)).is_err());
+    support::assert_unchanged(root.path(), &before);
+}
+
+/// 已加载的 include 也验证符号链接的真实路径，配置可见不意味着可以越出仓库。
+#[cfg(unix)]
+#[test]
+fn discovery_rejects_include_symlinks_outside_repository() {
+    let root = include_project();
+    let outside = tempfile::tempdir().unwrap();
+    write(outside.path(), "shared.inc", "pub fn shared_helper() {}");
+    fs::remove_file(root.path().join("shared.inc")).unwrap();
+    std::os::unix::fs::symlink(
+        outside.path().join("shared.inc"),
+        root.path().join("shared.inc"),
+    )
+    .unwrap();
+    let error = projection::analyze(&request(root.path(), None, true)).unwrap_err();
+    assert!(format!("{error:#}").contains("源码越出仓库"), "{error:#}");
+}
+
 /// 缺少或损坏配置必须失败；明确空数组不读取配置，也不探测项目工具链。
 #[test]
 fn discovery_errors_do_not_become_empty_success() {
@@ -440,8 +768,8 @@ fn discovery_reads_the_loaded_module_snapshot() {
     write(root.path(), "src/lib.rs", "mod replaced;");
     let repository = root.path().canonicalize().unwrap();
     let selected = project.discover_sources(&repository).unwrap();
-    assert!(selected.contains(&repository.join("src/original.rs")));
-    assert!(!selected.contains(&repository.join("src/replaced.rs")));
+    assert!(selected.contains_key(&repository.join("src/original.rs")));
+    assert!(!selected.contains_key(&repository.join("src/replaced.rs")));
 }
 
 /// 祖先工作区中的其他成员保留为上下文；仓内清单直接声明的越界目标必须报错。

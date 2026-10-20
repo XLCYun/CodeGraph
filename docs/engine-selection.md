@@ -145,18 +145,30 @@ inside the requested repository. A target owned by an in-repository manifest
 cannot escape that boundary; sibling members of an ancestor workspace remain
 context. It includes root files and actual module files,
 including modules in function, associated-item, closure, constant and signature
-block scopes. It uses the same native module traversal as source completeness
+block scopes. It uses the same native scope traversal as source completeness
 validation. Declared targets must exist in the loaded crate graph; their absence
 cannot become an empty success. Modules that escape the repository are rejected.
 Valid empty Cargo workspaces may return configured-empty results.
+
+Executable `include!` sources resolved in those member scopes are also selected
+from the same database, with their original call locations. String/byte data,
+inactive or unresolved calls and dependency-only sources remain outside selection.
+This preserves the existing native loading boundary: project folders preload
+`.rs`, `.toml` and `.md`; other suffixes can participate when already loaded by
+configuration, such as a declared crate root. Discovery adds no suffix scan or
+new macro loading capability. Included sources use the same repository,
+readability, snapshot and file-count checks as modules.
 
 In discovery, Cargo `test` and `bench` targets retain their test-only roles even
 at custom paths. A file reused as both a target root and a module retains every
 parent role: only entirely test-owned files are excluded. A production module
 parent keeps the file, while a `cfg(test)` parent does not override test-only
-target ownership. Explicit selection preserves the existing declaration-level
-test filtering and parent query. Production graph nodes remain limited to the
-resolved selection; unselected repository and dependency declarations stay external.
+target ownership. Actual include call locations join those roles; production
+includes retain a shared file, while test-only nested includes remain excluded.
+Pure static projects use the same native role queries. Explicit selection
+preserves the existing declaration-level test filtering and parent query.
+Production graph nodes remain limited to the resolved selection; unselected
+repository and dependency declarations stay external.
 
 The three dependency scopes and explicit existing network policy are unchanged.
 Discovery adds no fetch/install step or network authorization and never executes

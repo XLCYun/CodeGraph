@@ -31,6 +31,20 @@ pub(super) struct MemberRoot {
     owners: BTreeSet<PathBuf>,
 }
 
+/// 物理模块与可执行 include 的归属分别保留，避免原生导航的调用文件代理丢失测试角色。
+#[derive(Default)]
+pub(crate) struct DiscoveredSource {
+    pub module: bool,
+    pub includes: BTreeSet<IncludeOrigin>,
+}
+
+/// 实际 include 调用在原始源码中的位置；同一文件可同时属于生产和测试调用。
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct IncludeOrigin {
+    pub path: PathBuf,
+    pub offset: syntax::TextSize,
+}
+
 /// 与现有 Rust 设置对应的三档语义依赖范围。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DependencyScope {
@@ -343,14 +357,14 @@ fn record_member(
     member.owners.insert(owner);
 }
 
-/// 从本次数据库的成员 crate 与块模块图发现源码，不枚举 VFS 或按扩展名扫描目录。
+/// 从成员 crate、块模块图及实际 include 展开发现源码，不枚举 VFS 或按扩展名扫描目录。
 pub(super) fn discover_sources(
     database: &RootDatabase,
     vfs: &Vfs,
     member_roots: &BTreeMap<PathBuf, MemberRoot>,
     repository: &Path,
-) -> Result<BTreeSet<PathBuf>> {
-    let mut files = BTreeSet::new();
+) -> Result<BTreeMap<PathBuf, DiscoveredSource>> {
+    let mut files: BTreeMap<PathBuf, DiscoveredSource> = BTreeMap::new();
     let mut crates = Vec::new();
     let mut expected = BTreeSet::new();
     for (path, member) in member_roots {
@@ -379,44 +393,101 @@ pub(super) fn discover_sources(
         }
     }
     ensure!(remaining.is_empty(), "声明的工作区成员目标未完整加载");
-    visit_module_maps(database, crates.into_iter(), |map| {
-        for (_, module) in map.modules() {
-            let Some(file) = module.origin.file_id() else {
-                continue;
-            };
-            let path = vfs.file_path(file.file_id(database));
-            let path = path.as_path().context("模块源码没有磁盘路径")?;
-            let path = dunce::canonicalize(path.as_str())?;
-            ensure!(
-                path.starts_with(repository) && path.is_file(),
-                "发现的模块源码越出仓库或不是普通文件"
-            );
-            ensure!(path.to_str().is_some(), "发现的源码路径必须为 UTF-8");
-            files.insert(path);
-            ensure!(
-                files.len() <= codegraph_engine_common::selection::MAX_FILES,
-                "发现文件超过数量上限"
-            );
+    let mut calls = HashSet::new();
+    visit_native_scopes(database, crates.into_iter(), |scope| {
+        match scope {
+            NativeScope::Module(map) => {
+                for (_, module) in map.modules() {
+                    if let Some(file) = module.origin.file_id() {
+                        let path = discovered_source_path(database, vfs, repository, file)?;
+                        files.entry(path).or_default().module = true;
+                        ensure!(
+                            files.len() <= codegraph_engine_common::selection::MAX_FILES,
+                            "发现文件超过数量上限"
+                        );
+                    }
+                    calls.extend(module.scope.all_macro_calls());
+                }
+            }
+            NativeScope::Expression(owner) => {
+                calls.extend(
+                    ExpressionStore::with_source_map(database, owner)
+                        .1
+                        .macro_calls()
+                        .map(|(_, call)| call),
+                );
+            }
         }
         Ok(())
     })?;
+    for call in calls {
+        let location = call.loc(database);
+        // 只有原生已解析的可执行 include 返回文件；字符串/字节数据和未解析调用没有此身份。
+        let Some(file) = location.include_file_id(database, call) else {
+            continue;
+        };
+        let path = discovered_source_path(database, vfs, repository, file)?;
+        let origin = location
+            .to_node(database)
+            .original_file_range_rooted(database);
+        let origin_path = discovered_source_path(database, vfs, repository, origin.file_id)?;
+        files
+            .entry(path)
+            .or_default()
+            .includes
+            .insert(IncludeOrigin {
+                path: origin_path,
+                offset: origin.range.start(),
+            });
+        ensure!(
+            files.len() <= codegraph_engine_common::selection::MAX_FILES,
+            "发现文件超过数量上限"
+        );
+    }
     Ok(files)
+}
+
+/// 模块和 include 使用相同的真实路径边界，原文可读性由随后同快照的 Document 校验。
+fn discovered_source_path(
+    database: &RootDatabase,
+    vfs: &Vfs,
+    repository: &Path,
+    file: base_db::EditionedFileId,
+) -> Result<PathBuf> {
+    let path = vfs.file_path(file.file_id(database));
+    let path = path.as_path().context("源码没有磁盘路径")?;
+    let path = dunce::canonicalize(path.as_str())?;
+    ensure!(
+        path.starts_with(repository) && path.is_file(),
+        "发现的源码越出仓库或不是普通文件"
+    );
+    ensure!(path.to_str().is_some(), "发现的源码路径必须为 UTF-8");
+    Ok(path)
 }
 
 /// 上游会丢弃读取错误；沿原生 crate 与 block 模块图检查活动声明的源码候选。
 fn ensure_sources_complete(database: &RootDatabase, vfs: &Vfs) -> Result<()> {
-    visit_module_maps(
+    visit_native_scopes(
         database,
         base_db::all_crates(database).iter().copied(),
-        |map| ensure_module_candidates_complete(database, vfs, map),
+        |scope| match scope {
+            NativeScope::Module(map) => ensure_module_candidates_complete(database, vfs, map),
+            NativeScope::Expression(_) => Ok(()),
+        },
     )
 }
 
-/// 共用原生模块遍历，涵盖函数、关联项、闭包、常量和签名中的块作用域。
-fn visit_module_maps(
+/// 遍历回调区分模块与表达式；完整性检查无需为 include 归属额外计算来源映射。
+enum NativeScope<'a> {
+    Module(&'a DefMap),
+    Expression(ExpressionStoreOwnerId),
+}
+
+/// 共用原生作用域遍历，涵盖函数、关联项、闭包、常量和签名中的块。
+fn visit_native_scopes(
     database: &RootDatabase,
     crates: impl Iterator<Item = base_db::Crate>,
-    mut visit: impl FnMut(&DefMap) -> Result<()>,
+    mut visit: impl FnMut(NativeScope<'_>) -> Result<()>,
 ) -> Result<()> {
     // 读取/遍历失败的文件不在 VFS 中，使用原生 cfg、#[path] 与嵌套目录解析结果定位。
     let mut maps: Vec<_> = crates.map(|krate| crate_def_map(database, krate)).collect();
@@ -426,7 +497,7 @@ fn visit_module_maps(
     let mut checked_blocks = HashSet::new();
     loop {
         if let Some(map) = maps.pop() {
-            visit(map)?;
+            visit(NativeScope::Module(map))?;
             for (_, module) in map.modules() {
                 definitions.extend(module.scope.declarations());
                 definitions.extend(module.scope.unnamed_consts().map(ModuleDefId::from));
@@ -445,6 +516,7 @@ fn visit_module_maps(
             queue_definition_stores(database, definition, &mut definitions, &mut stores);
         } else if let Some(owner) = stores.pop() {
             if checked_stores.insert(owner) {
+                visit(NativeScope::Expression(owner))?;
                 for (block, map) in ExpressionStore::of(database, owner).blocks(database) {
                     if checked_blocks.insert(block) {
                         maps.push(map);

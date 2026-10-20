@@ -63,8 +63,14 @@ pub fn analyze(request: &Request) -> Result<Value> {
         &policies,
         &selected.keys().cloned().collect::<Vec<_>>(),
     )?;
-    if request.input.files.is_none() {
-        for path in project.discover_sources(&repository)? {
+    let discovered = request
+        .input
+        .files
+        .is_none()
+        .then(|| project.discover_sources(&repository))
+        .transpose()?;
+    if let Some(discovered) = &discovered {
+        for path in discovered.keys() {
             let relative = path
                 .strip_prefix(&repository)?
                 .to_str()
@@ -74,7 +80,7 @@ pub fn analyze(request: &Request) -> Result<Value> {
             #[cfg(not(windows))]
             let relative = relative.to_owned();
             crate::protocol::relative_path(&relative)?;
-            selected.entry(path).or_default().push(relative);
+            selected.entry(path.clone()).or_default().push(relative);
         }
     }
     let options = model::AnalysisOptions {
@@ -89,7 +95,7 @@ pub fn analyze(request: &Request) -> Result<Value> {
         &repository,
         &documents,
         options,
-        request.input.files.is_none(),
+        discovered.as_ref(),
     )?;
     let mut origins = Vec::new();
     for node in &graph.nodes {

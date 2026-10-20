@@ -12,7 +12,7 @@ use ide::{
     NavigationTarget, RaFixtureConfig,
 };
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
 };
@@ -76,7 +76,10 @@ impl RustProject {
     }
 
     /// 发现与后续投影读取同一不可变快照；失败时调用方必须丢弃整个项目。
-    pub(crate) fn discover_sources(&self, repository: &Path) -> Result<BTreeSet<PathBuf>> {
+    pub(crate) fn discover_sources(
+        &self,
+        repository: &Path,
+    ) -> Result<BTreeMap<PathBuf, loading::DiscoveredSource>> {
         native_transaction("Rust 源码发现失败", || {
             loading::discover_sources(
                 self._host.raw_database(),

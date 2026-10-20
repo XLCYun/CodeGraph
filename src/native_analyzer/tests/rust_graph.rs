@@ -35,15 +35,32 @@ pub(super) fn analyzer() -> NativeLanguageAnalyzer {
     )
 }
 
-/// 真实 Rust 引擎在同次加载中发现模块；公共 Host 验证 coverage，显式选集仍不扩大。
+/// 真实 Rust 引擎在同次加载中发现模块和 include；公共 Host 验证 coverage，显式选集仍不扩大。
 #[test]
 #[ignore = "需要已构建 Rust helper 和项目工具链，单独串行运行"]
 fn rust_helper_discovers_modules_without_promoting_context_files() {
     let root = repository(
-        "mod nested; #[path=\"extra.md\"] mod extra; pub fn run() { nested::nested_call(); }",
+        r#"
+#[rustc_builtin_macro] macro_rules! include { ($file:expr) => {} }
+mod nested;
+#[path="extra.md"] mod extra;
+include!("included.md");
+#[cfg(test)] mod checks { include!("test_included.md"); }
+pub fn run() { nested::nested_call(); included_call(); }
+"#,
     );
     fs::write(root.path().join("src/nested.rs"), "pub fn nested_call() {}").unwrap();
     fs::write(root.path().join("src/extra.md"), "pub fn extra_call() {}").unwrap();
+    fs::write(
+        root.path().join("src/included.md"),
+        "pub fn included_call() {}",
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("src/test_included.md"),
+        "pub fn test_included_call() {}",
+    )
+    .unwrap();
     fs::write(
         root.path().join("src/unrelated.rs"),
         "pub fn unrelated() {}",
@@ -55,19 +72,37 @@ fn rust_helper_discovers_modules_without_promoting_context_files() {
         options: Default::default(),
     };
     let discovered = analyzer().analyze(&input).unwrap();
-    let names: Vec<_> = nodes(&discovered)
+    let discovered_nodes = nodes(&discovered);
+    let names: Vec<_> = discovered_nodes
         .values()
         .filter_map(|node| node.data().name.as_deref())
         .collect();
     assert!(names.contains(&"run"));
     assert!(names.contains(&"nested_call"));
     assert!(names.contains(&"extra_call"));
+    assert!(names.contains(&"included_call"));
+    assert!(!names.contains(&"test_included_call"));
     assert!(!names.contains(&"unrelated"));
+    let included = discovered_nodes
+        .values()
+        .find(|node| node.data().name.as_deref() == Some("included_call"))
+        .unwrap();
+    let run = discovered_nodes
+        .values()
+        .find(|node| node.data().name.as_deref() == Some("run"))
+        .unwrap();
+    assert!(run.data().references.iter().any(|reference| {
+        reference.semantic == "code.calls"
+            && reference.target == ReferenceTarget::Node(included.data().id.clone())
+    }));
     input.files = Some(vec!["src/lib.rs".into()]);
     let explicit = analyzer().analyze(&input).unwrap();
     assert!(!nodes(&explicit)
         .values()
         .any(|node| node.data().name.as_deref() == Some("nested_call")));
+    assert!(!nodes(&explicit)
+        .values()
+        .any(|node| node.data().name.as_deref() == Some("included_call")));
     assert!(explicit
         .external_symbols()
         .values()

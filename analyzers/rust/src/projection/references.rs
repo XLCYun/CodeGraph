@@ -2,7 +2,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use ::syntax::{AstNode, SyntaxKind, SyntaxNode, TextSize, WalkEvent, ast};
@@ -16,7 +16,7 @@ use super::{
     Result, failure,
     syntax::{self, Document, child, path_name, type_name},
 };
-use crate::{ModuleParent, RustProject};
+use crate::{ModuleParent, RustProject, loading::DiscoveredSource};
 
 /// 单次构图的临时解析材料；图外文件只用来确认身份，不扩大输出范围。
 struct Resolver<'a> {
@@ -29,7 +29,7 @@ struct Resolver<'a> {
     definitions: BTreeMap<(String, u32), Vec<Navigation>>,
     crate_roots: BTreeMap<NodeId, CodeNode>,
     options: AnalysisOptions,
-    discovered: bool,
+    discovered: Option<&'a BTreeMap<PathBuf, DiscoveredSource>>,
     test_files: BTreeMap<String, bool>,
     visiting_files: BTreeSet<String>,
 }
@@ -40,7 +40,7 @@ pub(super) fn analyze(
     repository: &Path,
     documents: &[Document],
     options: AnalysisOptions,
-    discovered: bool,
+    discovered: Option<&BTreeMap<PathBuf, DiscoveredSource>>,
 ) -> Result<(CodeGraph, BTreeMap<String, bool>)> {
     let mut resolver = Resolver {
         project,
@@ -305,21 +305,35 @@ impl Resolver<'_> {
         })
     }
 
-    /// 保留 crate 根与每个词法模块声明，不猜测文件名归属。
+    /// 发现时合并实际模块与 include 调用；include-only 源码不使用调用文件的模块代理。
     fn parents(&self, key: &str) -> Result<Vec<Option<Navigation>>> {
         let file = self.project.file_id(Path::new(key))?;
-        let parents = if self.discovered {
+        let source = self
+            .discovered
+            .and_then(|sources| sources.get(Path::new(key)));
+        let parents = if source.is_some_and(|source| !source.module) {
+            Vec::new()
+        } else if self.discovered.is_some() {
             self.project.discovery_parent_modules(file)?
         } else {
             self.project.parent_modules(file)?
         };
-        parents
+        let mut parents = parents
             .into_iter()
             .map(|parent| match parent {
                 ModuleParent::CrateRoot => Ok(None),
                 ModuleParent::Declaration(target) => self.navigation(target).map(Some),
             })
-            .collect()
+            .collect::<Result<Vec<_>>>()?;
+        if let Some(source) = source {
+            parents.extend(source.includes.iter().map(|origin| {
+                Some(Navigation {
+                    key: origin.path.to_string_lossy().into_owned(),
+                    offset: origin.offset,
+                })
+            }));
+        }
+        Ok(parents)
     }
 
     /// 多个模块复用同一文件时，只有所有已知归属都明确为测试专用才排除整个文件。
@@ -357,7 +371,7 @@ impl Resolver<'_> {
         for parent in parents {
             let Some(location) = parent else {
                 // 发现时按 target 角色判断 crate 根，其他生产模块归属仍能阻止整份源码被排除。
-                if self.discovered && self.project.test_target_root(Path::new(key)) {
+                if self.discovered.is_some() && self.project.test_target_root(Path::new(key)) {
                     continue;
                 }
                 return Ok(false);
