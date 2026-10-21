@@ -1,5 +1,6 @@
 use super::*;
 use crate::protocol::SOURCE_REVISION;
+use serde_json::{Value, json};
 use std::fs;
 
 /// 真实目录和运行中的测试可执行文件提供边界，直接覆盖生产投影入口。
@@ -11,7 +12,7 @@ fn fixture(contents: &[(&str, &str)]) -> (tempfile::TempDir, tempfile::TempDir, 
         fs::create_dir_all(file.parent().unwrap()).unwrap();
         fs::write(file, source).unwrap();
     }
-    let request = json!({"protocol":"codegraph.engine/1","type":"analyze","id":"discovery","input":{"repository_root":root.path(),"include_tests":false,"profile":"python-static-v1"},"environment":{"scratch_root":scratch.path(),"platforms":[{"id":"stdlib","kind":"python-embedded-stdlib","version":"0.0.84","root":std::env::current_exe().unwrap().parent().unwrap(),"metadata":{"source_revision":SOURCE_REVISION}}]},"limits":{"analysis_timeout_ms":30000,"max_result_bytes":32000000,"max_diagnostic_bytes":65536}});
+    let request = json!({"protocol":"codegraph.analyzer/1","type":"analyze","id":"discovery","input":{"repository_root":root.path(),"include_tests":false,"profile":"python-static-v1"},"environment":{"scratch_root":scratch.path(),"platforms":[{"id":"stdlib","kind":"python-embedded-stdlib","version":"0.0.84","root":std::env::current_exe().unwrap().parent().unwrap(),"metadata":{"source_revision":SOURCE_REVISION}}]},"limits":{"analysis_timeout_ms":30000,"max_result_bytes":32000000,"max_diagnostic_bytes":65536}});
     (root, scratch, request)
 }
 

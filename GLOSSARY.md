@@ -12,6 +12,14 @@ _Avoid_: Native Helper, 辅助程序, Narrant Helper
 可独立分发、具有明确版本的 Language Analyzer 及其所需组成部分。
 _Avoid_: Helper 包, 项目依赖包
 
+**Analyzer Runtime（分析器运行时）**:
+运行 Language Analyzer 自身所需的执行环境，与被分析项目的目标版本和平台相区分。
+_Avoid_: 项目目标 SDK
+
+**Project Target SDK（项目目标 SDK）**:
+被分析项目的目标版本和平台所对应的标准库、类型声明、平台头文件及必要工具链资源。
+_Avoid_: 分析器运行时, Analyzer Package
+
 **Code Graph（代码图）**:
 某个固定源码状态下、选定文件范围内的代码对象及其关系的表示。
 _Avoid_: CodeGraph 项目, 语法树, 图差异

@@ -33,7 +33,7 @@ libc = "0.2"
 [workspace]
 
 [[bin]]
-name = "codegraph-rust-engine"
+name = "codegraph-rust"
 path = "src/main.rs"
 
 [[test]]

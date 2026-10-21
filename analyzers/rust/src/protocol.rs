@@ -1,4 +1,4 @@
-//! 一次一侧的严格 NDJSON 请求；runtime 政策只来自固定 profile 和批准的平台。
+//! Rust 原生组件的进程内加载上下文；公共线格式在 common::public_protocol。
 use anyhow::{Result, ensure};
 use serde::Deserialize;
 use std::{collections::BTreeSet, path::PathBuf};
@@ -80,7 +80,7 @@ impl Request {
         );
         ensure!(
             self.environment.platforms.len()
-                == usize::from(self.input.profile != "rust-repository-v1"),
+                <= usize::from(self.input.profile != "rust-repository-v1"),
             "Rust profile 的平台数量不匹配"
         );
         ensure!(
@@ -133,8 +133,6 @@ pub(crate) fn relative_path(path: &str) -> Result<()> {
     );
     Ok(())
 }
-
-pub use codegraph_engine_common::one_shot::validate_cancel;
 
 #[cfg(test)]
 #[path = "tests/protocol.rs"]

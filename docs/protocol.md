@@ -1,180 +1,75 @@
 # CodeGraph analyzer protocol 1
 
-Each language package provides its own fixed public analysis entry:
+This is the direct language-program contract confirmed on 2026-10-22. It supersedes the unreleased ready/cancel transport. The protocol remains `codegraph.analyzer/1`, with engine/package version `0.1.0`; no released version or legacy mode exists.
 
-```text
-<package-root>/bin/codegraph-<id>[.exe] analyze
-```
+## Entry and ownership
 
-IDs: `rust`, `typescript-javascript`, `python`, `java`, `go`, `csharp`, `c-cpp`.
-`--help`, `analyze --help`, and `--version` print text and exit without starting a
-protocol session. Unknown/repeated CLI options, including the old `--pack` and `--pack-root` selectors, exit 2.
-The caller chooses and verifies a trusted immutable package. The entry locates its
-package from the canonical executable location, independent of cwd or its file name,
-and verifies its compiled identity against the [descriptor and private runtime layout](pack-layout.md). A request cannot select
-commands, execution environment, compiler flags, or SDK roots.
+Each trusted package exposes `bin/codegraph-<id>[.exe] analyze`, with fixed IDs `rust`, `typescript-javascript`, `python`, `java`, `go`, `csharp`, `c-cpp`. `--help`, `analyze --help` and `--version` print text and exit; unknown or repeated CLI arguments, including old pack selectors and `__worker`, exit 2.
 
-## Transport and lifecycle
+The language program itself parses the public request, discovers target SDKs, analyzes and emits the final Code Graph. There is no cross-language Rust protocol host, private engine message hop or analysis worker. TS/Java launchers only locate bundled runtimes, inherit standard handles and propagate exit status; they do not inspect JSON or perform analysis.
 
-Stdin and stdout carry UTF-8 NDJSON: exactly one JSON object per newline-terminated
-line. Strings escape embedded newlines. Stdout contains protocol only; stderr is
-reserved for bounded diagnostics. One process handles one analyze request. The
-protocol is `codegraph.analyzer/1`; engine and initial package versions are `0.1.0`.
-The private `codegraph.engine/1` protocol is an implementation detail.
+The caller verifies and installs the immutable package, chooses the language, preserves the source state and owns process-tree termination for cancellation, deadlines and transport failures. Runtime dependencies travel with the package. Target SDK discovery does not install or upgrade tools or run project build scripts; Rust retains its explicit all-dependencies network policy and disables project build scripts/procedural macros.
 
-The CLI first writes:
+## One input, one final output
 
-```json
-{"protocol":"codegraph.analyzer/1","type":"ready","engine_version":"0.1.0","pack_id":"rust"}
-```
+Stdin contains exactly one UTF-8 JSON object, followed by EOF. A trailing newline is optional; ordinary JSON whitespace is allowed. A second JSON value or trailing non-whitespace is invalid. The caller writes the request, flushes and closes stdin. EOF after a complete request is normal input completion, never cancellation.
 
-`ready` identifies the compiled analyzer and its fixed pack ID; package loading
-and descriptor validation complete inside the supervised worker.
-Consumers verify all three identities before trusting a result. They then send one
-request (the root below is illustrative; the executable example creates real paths):
+Stdout contains exactly one final JSON object followed by a newline, then the program exits. There are no ready, cancel, progress or cancelled messages. Stderr is diagnostic only. The caller must read/drain stdout and stderr and enforce resource/deadline limits without pipe deadlocks.
 
 ```json
 {"protocol":"codegraph.analyzer/1","type":"analyze","id":"example-1","repository_root":"/absolute/source","files":[],"options":{"include_tests":false,"rust_dependency_scope":"repository-only"}}
 ```
 
-Every field except `files` is required. Omitted `files` discovers source files from
-the language's loaded project configuration. An explicit `[]` returns an empty
-graph without project or SDK discovery; a nonempty array is an exact selection.
-`null` and malformed selections are invalid. IDs are non-blank UTF-8 strings of at most 1,024 bytes,
-without NUL. `repository_root` is an existing absolute directory. `files` are unique,
-non-empty repository-relative POSIX paths; absolute paths, backslashes, colons,
-empty components, `.` and `..` are rejected. Canonical file provenance is checked
-by the Host; links cannot escape the repository. The source directory and package
-must not overlap. The caller must keep the source state consistent during analysis.
+All fields except `files` are required. Unknown and duplicate fields are invalid; duplicate object keys are rejected recursively. Requests have bounded nesting. IDs are nonblank strings of at most 1,024 UTF-8 bytes without NUL. `repository_root` is an existing absolute directory without NUL. Selection paths are unique, nonempty repository-relative POSIX paths; absolute paths, backslashes, colons, NUL, empty components, `.` and `..` are invalid. Canonical paths cannot escape the source root; source and analyzer installation must not overlap.
 
-`include_tests` is boolean. `rust_dependency_scope` is one of `repository-only`,
-`standard-library`, `all-dependencies`, and is required for every pack; non-Rust
-packs ignore this Rust-only option. Rust preserves its existing offline / standard
-library / explicit all-dependencies policies. SDK discovery never installs or
-upgrades a target toolchain. The existing explicit Rust all-dependencies policy
-retains the caller's network policy; it does not enable project build scripts or
-procedural macros.
+`include_tests` is boolean. `rust_dependency_scope` is `repository-only`, `standard-library` or `all-dependencies`; non-Rust analyzers ignore this required Rust-only option. Requests cannot inject commands, execution environment, compiler flags, SDK roots or internal catalogs.
 
-The caller may close stdin after the complete request line. EOF before any request,
-EOF with an unterminated line, malformed JSON, wrong protocol, unexpected messages,
-unknown fields, and duplicate fields are errors. Duplicate keys are rejected
-recursively, including nested options and internal graph extensions. The JSON
-decoder's bounded nesting limit remains enabled. No second analyze is accepted.
+- Omitted `files`: use the language's configured project source discovery.
+- `files: []`: valid empty graph, without project configuration or SDK discovery.
+- Nonempty `files`: exact graph membership; other source may provide context or external symbols.
+- `null`, duplicates and malformed paths are invalid.
 
-While the request runs, the caller may send:
+Discovery uses native project configuration and existing read-only policy, not a recursive extension scan. Valid configured zero-source projects may succeed empty; missing or invalid required configuration fails. C/C++ retains its compilation-database requirements. See [selection policies](engine-selection.md).
+
+## Final identity and result
+
+Every final result carries compiled identity: `protocol`, `engine_version`, `pack_id`. This replaces the removed ready message. The caller checks all three against its fixed package before using the result. An invalid request cannot choose or overwrite this identity.
 
 ```json
-{"protocol":"codegraph.analyzer/1","type":"cancel","id":"example-1"}
+{"protocol":"codegraph.analyzer/1","engine_version":"0.1.0","pack_id":"rust","type":"completed","id":"example-1","outcome":"ok","graph":{"root_contains":[],"nodes":[],"external_symbols":[]}}
 ```
 
-Unknown IDs, cancellation before analyze, and repeated cancel messages fail.
-Cancellation applies to SDK discovery, factory loading, helper analysis, and cleanup.
-An observed analysis/protocol failure is not turned into successful cancellation.
-The CLI exits after one `completed`. Exit codes: 0 for `ok`, 130 for `cancelled`,
-1 for protocol/analysis/transport failures, 2 for CLI usage. A transport failure may
-prevent the terminal line from being delivered; EOF or exit alone is never success.
-
-## Completed and graph
-
-A valid empty selection returns:
+Success exits 0. A handled failure has no graph and exits 1:
 
 ```json
-{"protocol":"codegraph.analyzer/1","type":"completed","id":"example-1","outcome":"ok","graph":{"root_contains":[],"nodes":[],"external_symbols":[]}}
+{"protocol":"codegraph.analyzer/1","engine_version":"0.1.0","pack_id":"rust","type":"completed","id":"example-1","outcome":"error","error":{"code":"analysis_failed","message":"源码分析失败"}}
 ```
 
-An empty selection validates the public package identity and repository boundary,
-but does not prepare SDKs or launch a helper. It is distinct from an analysis error.
-For discovered or explicit non-empty selections the complete factory, input, source-evidence, graph, and
-process-tree exit checks all precede successful output.
-Valid configured zero-source discovery is also successful, after validating the
-language's project configuration. Missing or invalid required configuration is an
-analysis error. C/C++ requires a nonempty compilation database even for an empty
-translation unit. Configuration-free TS/JS and Python projects retain their native
-defaults; see [discovery policies](engine-selection.md).
+When no valid request ID was accepted, `id` is null. Stable error codes remain `invalid_request`, `incompatible_protocol`, `invalid_input`, `invalid_pack`, `analysis_failed`, `resource_limit`, `timeout`, `io_failure`, `cleanup_failed`, `internal_failure`; messages may evolve. No graph is attached to errors. Normal unresolved symbols are valid graph data, not whole-analysis failure.
 
-`graph` has exactly `root_contains`, `nodes`, and `external_symbols`. Nodes retain
-the helper graph fields:
+Startup/transport failure, crash or forced termination may produce no final JSON. EOF alone, a result without successful exit, or successful exit without one complete matching result is never success. CLI usage exits 2; cancellation by killing the process has platform-specific status and does not promise an error JSON.
 
-| Field | Value |
+## Graph
+
+`graph` has exactly `root_contains`, `nodes`, `external_symbols`. Existing graph semantics remain unchanged:
+
+| Field | Contract |
 | --- | --- |
-| `category` | `container`, `type`, `callable`, `value`, `execution_region`, `extension` |
-| `id`, `language`, `native_kind` | Strings; stable ID with language namespace |
-| `name`, `signature`, `code`, `source` | Required fields, string or null |
-| `contains` | Array of immediate child IDs |
-| `references` | Array of `{ "semantic": "code.calls", "target": ... }` |
-| `extensions` | Object of namespaced semantic keys and arbitrary JSON values |
+| category | container, type, callable, value, execution_region, extension |
+| id, language, native_kind | Strings; stable language-namespaced identity independent of checkout absolute location |
+| name, signature, code, source | Required, string or null; preserve normalized self-content and display source |
+| contains | Immediate child IDs |
+| references | Objects with semantic and exclusive tagged target |
+| extensions | Namespaced semantic keys and arbitrary bounded JSON values |
 
-Targets are exclusive tagged objects: `{ "kind":"node", "id":"..." }`,
-`{ "kind":"external", "symbol":"..." }`, or
-`{ "kind":"unresolved", "name":"..." }`. External descriptors are
-`{ "symbol":"...", "name":"...", "scope":"repository" | "dependency" }`.
-Containment has one parent per node and no cycles; every node is reachable from the
-virtual root; local references target existing nodes; referenced external symbols
-have one matching descriptor. Unknown semantic extension values remain preserved.
-`source` is the original display source; `signature` and `code` retain normalized
-self-content. No graph diff is exposed.
+Targets are `{ "kind":"node", "id":"..." }`, `{ "kind":"external", "symbol":"..." }`, or `{ "kind":"unresolved", "name":"..." }`. External descriptors are `{ "symbol":"...", "name":"...", "scope":"repository" | "dependency" }`.
 
-Private coverage/origin evidence, scratch paths and SDK catalogs are not serialized.
-The same source and semantic extensions remain intact. Consumers must still strictly
-deserialize the returned graph and validate their own constructed graph at this
-process boundary; a successful subprocess is not a substitute for boundary validation.
+The producer ensures necessary graph invariants: unique IDs, valid containment/reachability, local reference targets and matching external descriptors; complete nodes belong to the selection. Check these once at the natural construction/output boundary, not through an extra validation process or automatic repair layer. Private source evidence, catalogs and scratch paths are not emitted. Consumers still safely decode and validate data they use across the process boundary.
 
-Errors have no graph:
+## Limits and cancellation
 
-```json
-{"protocol":"codegraph.analyzer/1","type":"completed","id":"example-1","outcome":"error","error":{"code":"invalid_pack","message":"支持包 ID、版本或协议与 CodeGraph 不匹配"}}
-```
+Request and result are each at most 128 MiB; selection is at most 100,000 files; public control files remain at most 1 MiB. The caller bounds/drains stderr (256 KiB), enforces its analysis deadline (Narrant default 30 minutes), closes stdin after input and terminates the entire process tree on cancel/timeout/transport failure. Language-internal file/read limits and required native resource constraints remain in force.
 
-Codes are stable: `invalid_request`, `incompatible_protocol`, `invalid_input`,
-`invalid_pack`, `analysis_failed`, `resource_limit`, `timeout`, `io_failure`,
-`cleanup_failed`, `internal_failure`. Text may evolve. Analysis messages deliberately
-summarize the failing stage rather than expose internal compiler paths. When no
-accepted analyze ID exists, error `id` is null. Cancellation has no error or graph:
+Do not restore a dedicated supervisor, parent control pipe, cooperative cancel thread or extra analysis worker to implement these limits. Tools actually needed for analysis, including Rust Cargo/rustc queries, remain allowed; owned children and pipes must finish before caller leases are released. Killing only a root PID does not guarantee tree cleanup. A thin launcher can exec on macOS or spawn/wait on Windows; neither changes the JSON contract.
 
-```json
-{"protocol":"codegraph.analyzer/1","type":"completed","id":"example-1","outcome":"cancelled"}
-```
-
-## Limits and ownership
-
-| Resource or stage | Limit |
-| --- | --- |
-| Request / result line (excluding final newline) | 128 MiB each |
-| Helper stderr | 256 KiB total |
-| Public package control file | 1 MiB |
-| Explicit or discovered selection | 100,000 files |
-| Wait for initial request / helper ready | 60 seconds each |
-| Complete analysis, including factory / SDK work | 30 minutes total |
-| Cooperative cancellation | 2 seconds |
-| Cleanup / process exit / blocked output | 5 seconds |
-
-Bounded queues and interruptible pipe workers prevent stdin/stdout backpressure from
-holding the main lifecycle loop. A private worker isolates factory/SDK work so its
-threads can be terminated when cooperation fails. The public process retains the
-worker control pipe after consumer EOF; loss of that pipe means the public parent
-died and triggers cancellation/cleanup. Normal cancellation gives the helper two
-seconds, then up to five seconds for cleanup; the public owner can forcibly reclaim
-the worker domain when necessary.
-
-Windows uses nested kill-on-close Jobs and retained process handles. macOS uses
-separate owned process groups plus observed descendant PID/birth-time snapshots,
-including descendants that later change groups. Parent-kill tests cover public CLI
-group termination, nested helper groups and an observed detached descendant. This
-is ownership for trusted helpers, not a sandbox against arbitrary malicious
-instantaneous double-fork/daemonization. Consumers retain their own process-tree
-owner and must forcibly reclaim it if the deadline or transport fails.
-
-Run the checked example with:
-
-```sh
-python3 scripts/examples/empty-selection.py target/debug/codegraph-rust
-python3 scripts/examples/analyze-directory.py /verified/pack/bin/codegraph-rust /absolute/project
-```
-
-The first example creates only an empty-selection fixture. The second requires a
-complete, previously verified package and a real project; it exercises directory
-discovery without private runtime arguments and permits normal stdin EOF.
-
-The distribution pipeline now includes real seven-pack public CLI acceptance on
-both supported CI targets. No published artifacts or successful remote CI runs are
-claimed by this local implementation; see [distribution.md](distribution.md).
+Examples and real seven-package acceptance must use this one-shot contract and final identity on both supported platforms. Legacy helper component fixtures may remain in tests, but production entries must not accept the old private protocol or catalogs.

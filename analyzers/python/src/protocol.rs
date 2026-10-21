@@ -1,4 +1,4 @@
-//! Python 的严格单次请求；平台仅证明 helper 内嵌标准声明，不能导入解释器环境。
+//! Python 原生组件的进程内加载上下文；内嵌标准声明不导入解释器环境。
 use anyhow::{Result, ensure};
 pub use codegraph_engine_common::PROTOCOL;
 use serde::Deserialize;

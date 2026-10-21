@@ -283,3 +283,6 @@ mod projection_tests;
 #[cfg(test)]
 #[path = "tests/core.rs"]
 mod tests;
+
+/// 公共入口使用的固定语言装配，不提供另起进程的私有协议。
+pub mod runtime;

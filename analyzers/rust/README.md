@@ -1,11 +1,11 @@
-# Rust 原生分析 helper
+# Rust 语言分析器
 
 此独立 crate 将 rust-analyzer `9074e9b4c6bc31d7986ccf4e22d18af70e5508da`
 的 `project-model`、`load-cargo`、`ide`、`syntax`、`vfs`、`base-db` 和 `hir-def` 直接链接到同一个程序。
-提供只读项目核心、完整 Rust 图投影和 `codegraph-rust-engine` 单请求 NDJSON 可执行程序。
-应用工厂从 1.1.0 未发布候选加载该程序，经公共 Native Host 构图；旧 Rust LSP 与服务器分发已退役。
-本地 macOS ARM64 与最终 GitHub-hosted macOS ARM64 / Windows x64 验收均已完成，
-包含 helper、公共图、实际安装和 Review；见[迁移证据](../../docs/research/existing-native-helper-migration-validation.md)。
+提供只读项目核心、完整 Rust 图投影和固定入口 `codegraph-rust analyze`。程序直接实现
+`codegraph.analyzer/1`，进程内调用原生核心、准备项目工具链并检查来源和图。
+原结构的[迁移证据](../../docs/research/existing-native-helper-migration-validation.md)仅作历史记录，
+不构成本次直接入口或新包的双平台验收。
 
 ## 构建与验证
 
@@ -21,13 +21,13 @@ scripts/cargo-agent.sh +1.98.0 build --manifest-path analyzers/rust/Cargo.toml -
 scripts/cargo-agent.sh +1.98.0 test --manifest-path analyzers/rust/Cargo.toml --lib --locked --no-run
 ```
 
-使用项目支持的 Node 版本运行 wrapper。构建后运行输出的测试可执行文件，清除 Cargo
-构建时注入的 `RUSTUP_TOOLCHAIN`，或显式设为测试项目工具链；生产 helper 保留 Host
-提供的运行时覆盖。公共 Host 图测试位于 `native_analyzer/tests/rust_graph.rs`，设置
-`CODEGRAPH_RUST_HELPER` 为本地二进制的绝对路径，再筛选并运行这些 ignored 集成测试。
-正常支持包入口为 `node scripts/language-packs/build-language-support-packs.mjs --id rust --native`；
-`node scripts/language-packs/verify-native-analyzers.mjs <产物目录> --language rust` 包含真实工厂、安装和 Review。
-工厂测试的 `CODEGRAPH_RUST_PACK` 指向完整安装目录，不能仅复制可执行文件。
+使用项目支持的 Node 版本运行 wrapper。测试二进制经
+`node scripts/language-packs/run-rust-helper-test.mjs <测试二进制> ...`
+执行，清除 Cargo 构建时注入的工具链选择，使夹具的项目工具链配置继续生效。
+公共入口与调用方生命周期测试可用
+`test --manifest-path analyzers/rust/Cargo.toml --test initial_protocol --test lifecycle`。
+不要给整个语义套件强制离线，网络政策用例需要它自己的环回服务；限制档位仍自行强制离线。
+旧根 Host、旧工厂和正常支持包构建仍由后续迁移处理，不能把本轮新二进制当作旧私有引擎。
 完整 Rust 门禁必须显式设置 `CODEGRAPH_PROJECT_RUST_TOOLCHAIN` 和绝对 `CARGO_HOME`，
 并已安装项目测试工具链的 rust-src。`node scripts/language-packs/prepare-rust-native-tests.mjs --prepare`
 仅在测试准备阶段补齐标准库 metadata 依赖并验证离线解析；门禁本身只检查已有前提。
@@ -81,9 +81,10 @@ VFS 文件身份也可以属于合法二进制资源，不保证存在可查询�
 
 ## 图与协议边界
 
-`projection::analyze` 迁入既有 syntax、test_code、symbols、引用与身份规则，所有原文、
+`projection::build` 迁入既有 syntax、test_code、symbols、引用与身份规则，所有原文、
 AST、字节位置和导航使用同一不可变数据库。没有 LSP、独立语法重解析或第二图构造器。
-helper 发送候选 DTO 与配置/选集/节点出处 evidence，最终校验由公共 Host 完成。
+投影使用类型化 DTO 与内部配置/选集/节点出处，程序在同一进程的输出边界完成校验；
+内部来源记录不写入公共响应。
 真实物理别名归并为一组节点，所有词法选中路径均保留 coverage 与 origin。
 
 显式 `rust-project.json` / `.rust-project.json` 优先，随后查找祖先 Cargo 清单或直接
@@ -93,14 +94,15 @@ helper 发送候选 DTO 与配置/选集/节点出处 evidence，最终校验由
 升级固定 rust-analyzer revision 时须复核多项目装载、`EditionedFileId` 解析和旧 Cargo
 metadata 补偿点，不复制上游 loader 或配置合并器。
 
-stdout 正常终结仅包含 ready 与唯一 completed 消息。helper 在 ready 前复用共享
-进程设施建立自身专属域（Unix 保留/建立自己的进程组，Windows 使用自身嵌套 Job），
-独立控制线程持续等待严格 cancel 或 stdin EOF。阻塞的原生加载不能协作取消时，
-helper 主动终止自身及全部后代；不增加 worker 或脱离 Host 的隔离域。此分支不发送
-cancelled 帧，公共 Host 在已记录取消且没有已观察的真实失败时映射为取消，并保留
-既有整树退出屏障。正常 error/ok 仍发送唯一 completed 并 exit 0，不等待 stdin EOF。
-helper 不维持后台会话、watcher、构建脚本或宏进程。`scratch_root`
-仅为 Host 协议授权字段，临时锁使用系统 tempfile 生命周期并在正常退出时清理；强制终止
-与既有临时目录一样可能留下无项目副作用的系统临时文件。真实支持包优化构建、耗时和峰值内存样本、
-安装/Review 接入已完成本地 macOS ARM64 验收；七套 helper 的 macOS/Windows
-联合语言验收也已通过，支持包尚未发布。局部性能样本不代表性能提升承诺。
+stdin 接收一个 UTF-8 公共 JSON 对象后 EOF，尾换行可选；stdout 只输出一个带
+`protocol`、`engine_version`、`pack_id` 的最终 JSON 后退出。正常错误退出 1，CLI 用法错误
+退出 2。没有 ready/cancel、私有协议入口、控制线程或分析 worker。调用方负责期限、管道
+排空和整棵进程树终止；完整请求后的 EOF 是正常输入结束。
+
+显式 `files: []` 在公共源码/安装边界检查后直接返回空图，不读取项目配置或发现工具链。
+非空选集与配置发现保持既有同快照、来源、测试开关和只读政策。公共输入不接受命令、
+环境、SDK 路径或内部平台目录；Rust 工具环境沿用固定白名单，自动安装、编译器包装器
+和注入参数均被禁止。标准库及全部依赖所需 sysroot/rust-src 在实际项目目录自行发现。
+
+公开入口使用 `--help`、`analyze --help` 和 `--version`。版本仍为未发布的 `0.1.0`。
+包布局及七语言联合验收由后续打包迁移完成；旧 Host 不能直接消费该新入口。

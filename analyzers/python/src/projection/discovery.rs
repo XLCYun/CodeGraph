@@ -58,7 +58,7 @@ fn source_options(configuration: &toml::Value) -> Result<toml::Value> {
 /// 按祖先政策接纳并冻结项目，成员仅来自同一数据库的原生索引。
 pub(super) fn load(repository: &Path, deadline: Instant, request_id: &str) -> Result<Discovery> {
     let observation = codegraph_engine_common::observation::Observation::from_environment(
-        "codegraph-python-engine",
+        "codegraph-python",
         request_id,
     );
     let mut scopes = BTreeMap::new();

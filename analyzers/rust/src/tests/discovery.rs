@@ -12,7 +12,7 @@ fn write(root: &Path, path: &str, source: &str) {
 /// 构造一个请求；None 真正省略字段，不能借 null 测试另一条宽松入口。
 fn request(root: &Path, files: Option<&[&str]>, include_tests: bool) -> Request {
     let mut value = json!({
-        "protocol":"codegraph.engine/1","type":"analyze","id":"analysis-1",
+        "protocol":"codegraph.analyzer/1","type":"analyze","id":"analysis-1",
         "input":{"repository_root":root.canonicalize().unwrap(),"include_tests":include_tests,"profile":"rust-repository-v1"},
         "environment":{"scratch_root":std::env::temp_dir(),"platforms":[]},
         "limits":{"analysis_timeout_ms":30000,"max_result_bytes":10000000,"max_diagnostic_bytes":65536}

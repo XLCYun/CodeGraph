@@ -1,4 +1,4 @@
-//! 公开入口与私有引擎共用的选集边界；字段缺省和 JSON null 具有不同含义。
+//! 公共入口与进程内语言组件共用的选集边界；字段缺省和 JSON null 具有不同含义。
 
 use serde::{Deserialize, Deserializer};
 

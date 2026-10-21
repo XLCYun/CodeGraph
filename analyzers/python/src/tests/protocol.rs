@@ -35,5 +35,4 @@ fn typed_request_rejects_unapproved_data() {
     let mut platform_request = request;
     platform_request["environment"]["platforms"] = serde_json::json!([{"id":"stdlib","kind":"python-embedded-stdlib","version":"0.0.84","root":"/helper","metadata":{"source_revision":SOURCE_REVISION,"python":"/venv"}}]);
     assert!(serde_json::from_value::<Request>(platform_request).is_err());
-    let _: fn(&str, &str) -> Result<()> = codegraph_engine_common::one_shot::validate_cancel;
 }

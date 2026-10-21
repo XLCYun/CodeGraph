@@ -9,8 +9,10 @@ mod syntax;
 
 use crate::{ProjectInput, protocol::Request};
 use anyhow::{Context, Result, ensure};
+use codegraph_engine_common::graph::{
+    Configuration, Disposition, Evidence, FileEvidence, Origin, Projection,
+};
 use codegraph_engine_common::model::{CodeGraph, NodeId, ReferenceTarget};
-use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
@@ -36,7 +38,7 @@ fn is_test(relative: &Path) -> bool {
 }
 
 /// 每侧按原有配置/PEP723/版本组合加载独立数据库；上下文不自动变成图成员。
-pub fn analyze(request: &Request) -> Result<Value> {
+pub fn build(request: &Request) -> Result<Projection> {
     request.validate()?;
     let repository = request.input.repository_root.canonicalize()?;
     let deadline = Instant::now()
@@ -73,7 +75,11 @@ pub fn analyze(request: &Request) -> Result<Value> {
         if !request.input.include_tests
             && (is_test(Path::new(relative)) || is_test(actual.strip_prefix(&repository)?))
         {
-            files.push(json!({"path":relative,"disposition":"excluded_test","configuration_ids":["python-excluded"]}));
+            files.push(FileEvidence {
+                path: relative.clone(),
+                disposition: Disposition::ExcludedTest,
+                configuration_ids: vec!["python-excluded".into()],
+            });
             continue;
         }
         let source = if let Some(discovered) = &discovered {
@@ -95,9 +101,13 @@ pub fn analyze(request: &Request) -> Result<Value> {
     }
     if files
         .iter()
-        .any(|file| file["disposition"] == "excluded_test")
+        .any(|file| file.disposition == Disposition::ExcludedTest)
     {
-        configurations.push(json!({"id":"python-excluded","source_paths":[],"platform_ids":[]}));
+        configurations.push(Configuration {
+            id: "python-excluded".into(),
+            source_paths: vec![],
+            platform_ids: vec![],
+        });
     }
     let mut root_contains = Vec::new();
     let mut nodes = Vec::new();
@@ -124,7 +134,11 @@ pub fn analyze(request: &Request) -> Result<Value> {
                 );
             }
         }
-        configurations.push(json!({"id":configuration_id,"source_paths":source_paths,"platform_ids":[request.environment.platforms[0].id]}));
+        configurations.push(Configuration {
+            id: configuration_id.clone(),
+            source_paths,
+            platform_ids: vec![request.environment.platforms[0].id.clone()],
+        });
         let native = if let Some(discovered) = &discovered {
             discovered
                 .projects
@@ -161,7 +175,11 @@ pub fn analyze(request: &Request) -> Result<Value> {
                 .with_context(|| format!("{}：Python 语法提取失败", relative.display()))?;
             let document =
                 syntax::Document::from_ast(relative, &source, ast.syntax().body.clone())?;
-            files.push(json!({"path":relative.to_string_lossy().replace('\\', "/"),"disposition":"analyzed","configuration_ids":[configuration_id]}));
+            files.push(FileEvidence {
+                path: relative.to_string_lossy().replace('\\', "/"),
+                disposition: Disposition::Analyzed,
+                configuration_ids: vec![configuration_id.clone()],
+            });
             parsed.insert(path, document);
         }
         let selected_roots: BTreeMap<_, _> = parsed
@@ -189,12 +207,10 @@ pub fn analyze(request: &Request) -> Result<Value> {
         for document in documents {
             if let Some(root) = &document.root {
                 let path = &selected_roots[root];
-                origins.extend(
-                    document
-                        .nodes
-                        .iter()
-                        .map(|node| json!({"node_id":node.data().id.0,"selected_paths":[path]})),
-                );
+                origins.extend(document.nodes.iter().map(|node| Origin {
+                    node_id: node.data().id.0.clone(),
+                    selected_paths: vec![path.clone()],
+                }));
             }
             root_contains.extend(document.root);
             nodes.extend(document.nodes);
@@ -233,7 +249,11 @@ pub fn analyze(request: &Request) -> Result<Value> {
                         .replace('\\', "/")
                 })
                 .collect();
-            configurations.push(json!({"id":format!("python-empty-{}",configurations.len()),"source_paths":source_paths,"platform_ids":[request.environment.platforms[0].id]}));
+            configurations.push(Configuration {
+                id: format!("python-empty-{}", configurations.len()),
+                source_paths,
+                platform_ids: vec![request.environment.platforms[0].id.clone()],
+            });
         }
     }
     for (path, source) in snapshots {
@@ -243,9 +263,18 @@ pub fn analyze(request: &Request) -> Result<Value> {
             path.display()
         );
     }
-    Ok(
-        json!({"graph":CodeGraph {root_contains, nodes, external_symbols:externals.into_values().collect()},"evidence":{"configurations":configurations,"files":files,"origins":origins}}),
-    )
+    Ok(Projection {
+        graph: CodeGraph {
+            root_contains,
+            nodes,
+            external_symbols: externals.into_values().collect(),
+        },
+        evidence: Evidence {
+            configurations,
+            files,
+            origins,
+        },
+    })
 }
 
 #[cfg(test)]
@@ -255,3 +284,9 @@ mod tests;
 #[cfg(test)]
 #[path = "tests/discovery.rs"]
 mod discovery_tests;
+
+/// 既有语义 fixture 保持 JSON 断言；生产构图与检查不经过 JSON 往返。
+#[cfg(test)]
+pub fn analyze(request: &Request) -> Result<serde_json::Value> {
+    Ok(serde_json::to_value(build(request)?)?)
+}

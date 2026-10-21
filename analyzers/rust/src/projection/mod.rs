@@ -1,4 +1,4 @@
-//! 从同源原生 AST/导航迁移完整 Rust 对象规则，只输出统一 DTO，Host 负责最终构图。
+//! 从同源原生 AST/导航构造完整 Rust 图与内部来源，输出前由本进程校验。
 
 mod model;
 mod references;
@@ -8,7 +8,9 @@ pub(crate) mod test_code;
 
 use crate::{DependencyScope, RustProject, protocol::Request};
 use anyhow::{Context, Result, ensure};
-use serde_json::{Value, json};
+use codegraph_engine_common::graph::{
+    Configuration, Disposition, Evidence, FileEvidence, Origin, Projection,
+};
 use std::{collections::BTreeMap, path::PathBuf};
 
 /// 图投影只保存精确的物理文件与字节位置，不保留 LSP 传输位置。
@@ -24,7 +26,7 @@ fn failure(message: impl std::fmt::Display) -> anyhow::Error {
 }
 
 /// 每个请求独立加载并输出全图，任何查询错误立即丢弃项目和全部候选数据。
-pub fn analyze(request: &Request) -> Result<Value> {
+pub fn build(request: &Request) -> Result<Projection> {
     request.validate()?;
     let repository = dunce::canonicalize(&request.input.repository_root)?;
     ensure!(repository.is_dir(), "仓库根必须为目录");
@@ -41,9 +43,10 @@ pub fn analyze(request: &Request) -> Result<Value> {
         selected.entry(path).or_default().push(relative.clone());
     }
     if request.input.files.as_ref().is_some_and(Vec::is_empty) {
-        return Ok(
-            json!({"graph":{"root_contains":[],"nodes":[],"external_symbols":[]},"evidence":{"configurations":[],"files":[],"origins":[]}}),
-        );
+        return Ok(Projection {
+            graph: codegraph_engine_common::model::CodeGraph::empty(),
+            evidence: Evidence::default(),
+        });
     }
     let manifests = crate::discovery::manifests(&repository)?;
     ensure!(
@@ -64,7 +67,7 @@ pub fn analyze(request: &Request) -> Result<Value> {
         .is_none()
         .then(|| {
             codegraph_engine_common::observation::Observation::from_environment(
-                "codegraph-rust-engine",
+                "codegraph-rust",
                 &request.id,
             )
         })
@@ -123,12 +126,28 @@ pub fn analyze(request: &Request) -> Result<Value> {
                         .is_some_and(|scope| id.0 == format!("{scope}::crate"))
             })
             .context("输出节点缺少选集出处")?;
-        origins.push(json!({"node_id":id.0,"selected_paths":selected[&document.path]}));
+        origins.push(Origin {
+            node_id: id.0.clone(),
+            selected_paths: selected[&document.path].clone(),
+        });
     }
-    let files: Vec<_> = documents.iter().flat_map(|document| {
-        let analyzed = !test_files.get(&document.key).copied().unwrap_or(false);
-        selected[&document.path].iter().map(move |path| json!({"path":path,"disposition":if analyzed {"analyzed"} else {"excluded_test"},"configuration_ids":["rust-projects"]}))
-    }).collect();
+    let files: Vec<_> = documents
+        .iter()
+        .flat_map(|document| {
+            let analyzed = !test_files.get(&document.key).copied().unwrap_or(false);
+            selected[&document.path]
+                .iter()
+                .map(move |path| FileEvidence {
+                    path: path.clone(),
+                    disposition: if analyzed {
+                        Disposition::Analyzed
+                    } else {
+                        Disposition::ExcludedTest
+                    },
+                    configuration_ids: vec!["rust-projects".into()],
+                })
+        })
+        .collect();
     // selected 源码固定到一次请求结束；变化不能被误报成同一侧成功结果。
     for document in &documents {
         ensure!(
@@ -146,13 +165,28 @@ pub fn analyze(request: &Request) -> Result<Value> {
         .environment
         .platforms
         .iter()
-        .map(|platform| &platform.id)
+        .map(|platform| platform.id.clone())
         .collect();
-    Ok(
-        json!({"graph":graph,"evidence":{"configurations":[{"id":"rust-projects","source_paths":source_paths,"platform_ids":platform_ids}],"files":files,"origins":origins}}),
-    )
+    Ok(Projection {
+        graph,
+        evidence: Evidence {
+            configurations: vec![Configuration {
+                id: "rust-projects".into(),
+                source_paths,
+                platform_ids,
+            }],
+            files,
+            origins,
+        },
+    })
 }
 
 #[cfg(test)]
 #[path = "tests/syntax.rs"]
 mod syntax_tests;
+
+/// 历史语义测试读取同一投影的 JSON 视图；生产入口始终使用类型化图。
+#[cfg(test)]
+pub fn analyze(request: &Request) -> Result<serde_json::Value> {
+    Ok(serde_json::to_value(build(request)?)?)
+}

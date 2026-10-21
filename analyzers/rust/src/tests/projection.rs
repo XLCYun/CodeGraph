@@ -4,7 +4,7 @@ use std::{fs, path::Path};
 
 /// 构造严格公共请求，所有源码来自临时目录。
 fn request(root: &Path, files: &[&str], include_tests: bool) -> Request {
-    serde_json::from_value(json!({"protocol":"codegraph.engine/1","type":"analyze","id":"analysis-1","input":{"repository_root":root.canonicalize().unwrap(),"files":files,"include_tests":include_tests,"profile":"rust-repository-v1"},"environment":{"scratch_root":std::env::temp_dir(),"platforms":[]},"limits":{"analysis_timeout_ms":30000,"max_result_bytes":10000000,"max_diagnostic_bytes":65536}})).unwrap()
+    serde_json::from_value(json!({"protocol":"codegraph.analyzer/1","type":"analyze","id":"analysis-1","input":{"repository_root":root.canonicalize().unwrap(),"files":files,"include_tests":include_tests,"profile":"rust-repository-v1"},"environment":{"scratch_root":std::env::temp_dir(),"platforms":[]},"limits":{"analysis_timeout_ms":30000,"max_result_bytes":10000000,"max_diagnostic_bytes":65536}})).unwrap()
 }
 
 /// 真实完整图的别名来源、未激活 cfg 源码和测试排除均生成明确 evidence。

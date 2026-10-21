@@ -1,14 +1,13 @@
-//! Rust/Python 已迁移调用者共用的序列化 DTO 与单次控制循环；不包含分析引擎或图校验。
+//! Rust/Python 进程内复用公共 DTO、输入边界和构图检查，不承担跨语言宿主职责。
+pub mod graph;
 pub mod model;
-#[allow(dead_code)]
-#[path = "../../../src/native_analyzer/observation.rs"]
 pub mod observation;
 pub mod one_shot;
+pub mod public_protocol;
 pub mod selection;
-pub const PROTOCOL: &str = "codegraph.engine/1";
+mod strict_json;
+pub use public_protocol::PROTOCOL;
 
-// 仅复用已有进程所有权原语，保持宿主源码自身的格式边界。
-#[allow(dead_code)]
-#[rustfmt::skip]
-#[path = "../../../src/child_process.rs"]
-mod child_process;
+#[cfg(test)]
+#[path = "tests/public_protocol.rs"]
+mod public_protocol_tests;

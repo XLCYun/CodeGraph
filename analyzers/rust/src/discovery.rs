@@ -56,18 +56,25 @@ pub(crate) fn policies(
                 "此仓库的多个 Rust 项目使用不同工具链；当前标准库分析不支持这种组合"
             );
             previous = Some(sysroot.clone());
-            let platform = platform.context("标准库分析缺少批准的项目工具链平台")?;
+            let rust_src = sysroot.join("lib/rustlib/src/rust/library");
             ensure!(
-                platform.kind == "rust-standard-library"
-                    && dunce::canonicalize(&platform.root)? == sysroot,
-                "批准的平台与实际项目 sysroot 不一致"
+                rust_src.join("core/src/lib.rs").is_file()
+                    && rust_src.join("std/src/lib.rs").is_file(),
+                "项目工具链缺少 rust-src；不会自动安装组件"
             );
-            let rust_src = platform.root.join(&platform.metadata.rust_src);
-            ensure!(
-                dunce::canonicalize(&rust_src)?
-                    == dunce::canonicalize(sysroot.join("lib/rustlib/src/rust/library"))?,
-                "平台 rust_src 与实际项目工具链不一致"
-            );
+            if let Some(platform) = platform {
+                ensure!(
+                    platform.kind == "rust-standard-library"
+                        && dunce::canonicalize(&platform.root)? == sysroot,
+                    "批准的平台与实际项目 sysroot 不一致"
+                );
+                let rust_src = platform.root.join(&platform.metadata.rust_src);
+                ensure!(
+                    dunce::canonicalize(&rust_src)?
+                        == dunce::canonicalize(sysroot.join("lib/rustlib/src/rust/library"))?,
+                    "平台 rust_src 与实际项目工具链不一致"
+                );
+            }
             Some(ProjectToolchain { sysroot, rust_src })
         };
         policies.push(LoadPolicy {

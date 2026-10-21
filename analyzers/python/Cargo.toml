@@ -33,7 +33,7 @@ tempfile = "3.27"
 [workspace]
 
 [[bin]]
-name = "codegraph-python-engine"
+name = "codegraph-python"
 path = "src/main.rs"
 
 [[test]]

@@ -128,7 +128,7 @@ pub struct AnalysisOptions {
     pub include_tests: bool,
 }
 
-/// 仅序列化统一协议的候选数据，公共 Host 负责唯一的最终构图与校验。
+/// 同进程构造并在输出前校验的公共图，不包含私有来源记录。
 #[derive(serde::Serialize)]
 pub struct CodeGraph {
     pub root_contains: Vec<NodeId>,
@@ -153,4 +153,15 @@ pub struct ExternalSymbol {
 pub enum SymbolScope {
     Repository,
     Dependency,
+}
+
+impl CodeGraph {
+    /// 显式空集的合法空图无需配置或目标 SDK。
+    pub fn empty() -> Self {
+        Self {
+            root_contains: vec![],
+            nodes: vec![],
+            external_symbols: vec![],
+        }
+    }
 }

@@ -1,4 +1,4 @@
-# Python native helper
+# Python 语言分析器
 
 独立 Rust 库固定 ty `0.0.84` 对应的 Ruff revision
 `11aaa39f84c0c44bdfb4c9cc21e4038c6f74c00a`。生产依赖的数据库、AST 和 codegen
@@ -27,31 +27,28 @@
 
 导航可能同时包含已知目标和缺依赖重绑定，多个 overload 可以映射到相同的标准符号。
 这些候选不删除、不合并，也不表示确定的运行时目标。projection 沿用既有绑定反证、
-装饰器证明、字段归属和外部身份规则，再交公共 Host 构建/校验最终 CodeGraph。
+装饰器证明、字段归属和外部身份规则，再在同一进程的输出边界检查来源和最终 Code Graph。
 
-`codegraph-python-engine` 仅接受 `codegraph.engine/1` 的单次严格请求与运行中同请求 cancel。
-`python-static-v1` 要求一个 `python-embedded-stdlib` 平台，version 为 `0.0.84`，
-metadata 仅含上述固定 `source_revision`；平台 root 必须包含当前 executable。
-标准 AST 来自同一数据库的 vendored 文件，不启动额外 parser，不读取磁盘 stdlib。
-Rust/Python 通过 `analyzers/common` 共用序列化 DTO 和已审查的控制/退出循环，
-进程所有权仍复用宿主 `child_process::CurrentProcessDomain`。
+`codegraph-python analyze` 直接接受公共 `codegraph.analyzer/1`。stdin 是一个 UTF-8 JSON
+后 EOF，尾换行可选；stdout 只输出一个带固定协议、版本 `0.1.0` 和 `pack_id: python`
+的最终 JSON。可处理失败退出 1，CLI 用法错误退出 2。`--help`、`analyze --help` 与
+`--version` 输出文本。不存在 ready/cancel、私有协议模式、控制线程或分析 worker。
 
-Python `1.1.0` 原生候选已通过正常优化打包、macOS ARM64 隔离安装、生产工厂、
-Review 到 DTO、错误与取消验收；旧应用内 Python/ty LSP 链及宿主 Ruff 依赖已退役。
-最终 GitHub-hosted macOS ARM64 / Windows x64 语言 CI 已通过，catalog 保持未发布；
-实际命令与范围见[迁移证据](../../docs/research/existing-native-helper-migration-validation.md)。
+显式 `files: []` 不读取项目配置或发现 SDK。其他请求在同进程自行装配固定
+`python-embedded-stdlib` 声明，版本 `0.0.84` 与上述 revision 绑定。标准 AST 来自
+同一数据库的 vendored 文件，不读取磁盘 stdlib、不发现或启动 Python 解释器。
+Rust/Python 只共用进程内 DTO、公共输入与必要图检查，内部来源记录不进入公共结果。
 
-正常构建入口复用共享 helper 构建器及 Rust Cargo 许可闭包收集器，使用 Rust 1.98.0。
-包内 `bin/codegraph-python-engine`、`control/native.json` 和嵌入 stdlib 的身份共同校验；工厂唯一信任根
-为 `bin`，平台 root 同样为 `bin`。按实际目标收集的许可附带原始通知与固定来源；少数确切
-版本的 MIT 声明附上明确标注的标准条款。seahash 上游通知取回失败的边界见 `licenses/sources.json`，
-不能据此推断上游仓库没有通知。语言验收通过不消除该来源限制，发布前仍需复核许可材料。
+调用方负责源码状态一致、EOF 后读完结果、期限及整棵进程树取消。
+[既有迁移证据](../../docs/research/existing-native-helper-migration-validation.md)记录旧结构，
+不证明本次直接入口和新包完成双平台验收。包布局及七语言联合验收随后迁移，许可材料
+与固定上游来源保持不变。
 
 在仓库根执行（所有 Cargo 命令经全局锁与 sccache wrapper）：
 
 ```sh
 scripts/cargo-agent.sh +1.98.0 check --manifest-path analyzers/python/Cargo.toml --lib --locked
-scripts/cargo-agent.sh +1.98.0 build --manifest-path analyzers/python/Cargo.toml --bin codegraph-python-engine --locked
+scripts/cargo-agent.sh +1.98.0 build --manifest-path analyzers/python/Cargo.toml --bin codegraph-python --locked
 scripts/cargo-agent.sh +1.98.0 test --manifest-path analyzers/python/Cargo.toml --locked --test initial_protocol --test lifecycle -- --test-threads=1
 scripts/cargo-agent.sh +1.98.0 clippy --manifest-path analyzers/python/Cargo.toml --all-targets --locked -- -D warnings
 scripts/cargo-agent.sh +1.98.0 fmt --manifest-path analyzers/python/Cargo.toml -- --check
