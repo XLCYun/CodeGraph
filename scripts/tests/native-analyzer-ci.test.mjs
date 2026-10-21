@@ -6,12 +6,46 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { validateToolchainManifest, verifyArchive } from '../language-packs/provision-native-toolchains.mjs';
+import { finalizeToolchainEnvironment, validateToolchainManifest, verifyArchive } from '../language-packs/provision-native-toolchains.mjs';
 import { runVerificationCommands, validateNativeConfiguration, verificationCommands } from '../language-packs/verify-native-analyzers.mjs';
+import { publicEnvironment } from '../language-packs/public-cli-session.mjs';
 
 const manifest = JSON.parse(await fs.readFile(new URL('../../resources/native-toolchains.json', import.meta.url), 'utf8'));
 const workflowSource = (await fs.readFile(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const publishingWorkflow = (await fs.readFile(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+
+/** 真正的环境收尾结果经过序列化及公开清理后，仍能发现两个目标 JDK 和匹配的 Go SDK。 */
+test('provisioned target SDKs survive public sanitization on both path conventions', () => {
+  for (const [platform, paths, output] of [['darwin', path.posix, '/isolated tools'], ['win32', path.win32, 'D:\\isolated tools']]) {
+    const installed = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'DOTNET_SDK', 'CMAKE_ROOT']
+      .map(name => [`CODEGRAPH_${name}`, paths.join(output, name)]));
+    const environment = JSON.parse(JSON.stringify(finalizeToolchainEnvironment({ ...installed }, output, platform)));
+    const publicEnv = publicEnvironment(environment);
+    assert.equal(publicEnv.GOROOT, installed.CODEGRAPH_GO_TARGET_SDK);
+    assert.equal(publicEnv.JAVA_HOME, installed.CODEGRAPH_JAVA_TARGET_8);
+    assert.equal(publicEnv.JDK_HOME, installed.CODEGRAPH_JAVA_TARGET_JDK);
+    assert.equal(publicEnv.DOTNET_ROOT, installed.CODEGRAPH_DOTNET_SDK);
+    assert.equal(publicEnv.DOTNET_CLI_HOME, paths.join(output, 'dotnet-home'));
+    assert.ok(Object.keys(publicEnv).every(name => !name.startsWith('CODEGRAPH_')));
+    const goTest = verificationCommands(environment, platform, 'go', { paths })[0];
+    assert.equal(goTest.environment.GOROOT, installed.CODEGRAPH_GO_SDK);
+    assert.equal(goTest.executable, paths.join(installed.CODEGRAPH_GO_SDK, `bin/go${platform === 'win32' ? '.exe' : ''}`));
+  }
+});
+
+/** 没有安装目标时不能把构建 SDK 当成目标，也不伪造标准发现路径。 */
+test('environment finalization does not invent missing target SDKs', () => {
+  const environment = finalizeToolchainEnvironment({ CODEGRAPH_GO_SDK: '/build/go', CODEGRAPH_JAVA_RUNTIME: '/build/jdk' }, '/tools');
+  assert.equal(environment.GOROOT, undefined);
+  assert.equal(environment.JAVA_HOME, undefined);
+  assert.equal(environment.JDK_HOME, undefined);
+  assert.equal(environment.CODEGRAPH_GO_SDK, '/build/go');
+  assert.equal(environment.CODEGRAPH_JAVA_RUNTIME, '/build/jdk');
+  const existing = finalizeToolchainEnvironment({ GOROOT: '/existing/go', JAVA_HOME: '/existing/jdk8', JDK_HOME: '/existing/jdk17' }, '/tools');
+  assert.equal(existing.GOROOT, '/existing/go');
+  assert.equal(existing.JAVA_HOME, '/existing/jdk8');
+  assert.equal(existing.JDK_HOME, '/existing/jdk17');
+});
 
 // 用真实 Cargo 解析生产命令生成的 runner 配置，覆盖 Node → Git Bash → 缓存入口边界。
 test('Rust helper runner configuration survives the complete Cargo agent chain', async () => {

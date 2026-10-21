@@ -166,9 +166,16 @@ void B(){}
         renamed = self.root.with_name("repo space # percent% 项目")
         self.root.rename(renamed)
         self.root = renamed
-        self.write("Sample.csproj", '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>')
-        self.write("Sample.cs", "public static class Sample { public static int Target()=>1; public static int Caller()=>Target(); }")
-        before = {p.name: p.read_bytes() for p in self.root.iterdir()}
+        self.write("App/Sample.csproj", '''<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup>
+<Compile Remove="source/Drop.cs"/><Compile Include="../Shared/Included.cs" Condition="'$(Configuration)' == 'Release'"/>
+<ProjectReference Include="../Lib/Lib.csproj"/></ItemGroup></Project>''')
+        self.write("App/source/Sample.cs", "public static class Sample { public static int Caller()=>Api.Target(); }")
+        self.write("App/source/Drop.cs", "invalid removed source")
+        self.write("Lib/Lib.csproj", '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>')
+        self.write("Lib/source/Api.cs", "public static class Api { public static int Target()=>1; }")
+        self.write("Shared/Included.cs", "public class Included {}")
+        selected = ["App/source/Sample.cs", "Lib/source/Api.cs", "Shared/Included.cs"]
+        before = {p.relative_to(self.root).as_posix(): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
         ordinary = str(self.root.resolve())
         roots = [ordinary]
         if os.name == "nt":
@@ -177,12 +184,14 @@ void B(){}
         graph = None
         for root, discovery in [(path, mode) for path in roots for mode in (False, True)]:
             with self.subTest(root=root, discovery=discovery):
-                request = self.request(["Sample.cs"])
+                request = self.request(selected)
                 if discovery:
                     del request["input"]["files"]
                 request["input"]["repository_root"] = root
                 result = self.run_helper(request)
                 self.assertEqual(result["outcome"], "ok", result.get("error"))
+                self.assertEqual({item["path"] for item in result["evidence"]["files"]}, set(selected))
+                self.assertTrue(all(item["disposition"] == "analyzed" for item in result["evidence"]["files"]))
                 nodes = {n["name"]: n for n in result["graph"]["nodes"] if "name" in n}
                 self.assertIn("Target()", nodes["Caller"]["source"])
                 self.assertTrue(any(r["semantic"] == "code.calls" and r["target"] == {"kind": "node", "id": nodes["Target"]["id"]}
@@ -190,7 +199,7 @@ void B(){}
                 if graph is not None:
                     self.assertEqual(result["graph"], graph)
                 graph = result["graph"]
-        self.assertEqual({p.name: p.read_bytes() for p in self.root.iterdir()}, before)
+        self.assertEqual({p.relative_to(self.root).as_posix(): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}, before)
 
     def test_malformed_project_xml_remains_an_explicit_error(self):
         """读取方式改变后，非法 XML 仍必须失败且不能生成空图。"""

@@ -33,6 +33,53 @@ fn query(project: &PythonProject, path: &str, token: &str) -> DefinitionQuery {
         .unwrap()
 }
 
+/// 原生 include 在遍历入口与已存储文件上使用同一虚拟路径，发现后仍读取冻结源码。
+#[test]
+fn explicit_include_uses_native_snapshot_paths() {
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir_all(root.path().join("nested/src")).unwrap();
+    let source = "def selected(): pass\n";
+    fs::write(root.path().join("nested/src/main.py"), source).unwrap();
+    fs::write(
+        root.path().join("nested/context.py"),
+        "def context(): pass\n",
+    )
+    .unwrap();
+    let mut project = loading::load_configured(
+        ProjectInput {
+            repository: root.path().into(),
+            project_root: "nested".into(),
+            source_roots: vec!["nested/src".into()],
+            python_minor: 14,
+        },
+        Some(toml::from_str("include=['src']").unwrap()),
+        None,
+    )
+    .unwrap();
+    let relative = PathBuf::from("nested/src/main.py");
+    let requested = loading::system_path(&relative).unwrap();
+    let expected = format!(
+        "{0}{1}",
+        std::path::MAIN_SEPARATOR_STR,
+        ["narrant", "repository", "nested", "src", "main.py"].join(std::path::MAIN_SEPARATOR_STR)
+    );
+    assert_eq!(requested.as_str(), expected);
+    let file = project.file(&relative).unwrap();
+    assert_eq!(
+        file.path(&project.db).as_system_path().unwrap().as_str(),
+        requested.as_str()
+    );
+    let selected = project
+        .discover(
+            &["nested/src".into()],
+            std::time::Instant::now() + std::time::Duration::from_secs(30),
+        )
+        .unwrap();
+    assert_eq!(selected, vec![relative.clone()]);
+    fs::write(root.path().join(&relative), "def changed(): pass\n").unwrap();
+    assert_eq!(project.source(&relative).unwrap(), source);
+}
+
 /// 候选在同一冻结数据库按自身版本校验，不改变调用方版本或绕过普通语法错误。
 #[test]
 fn candidate_ast_uses_target_minor_without_changing_caller_policy() {

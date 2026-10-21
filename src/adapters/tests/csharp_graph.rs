@@ -14,15 +14,16 @@ fn factory_preserves_source_and_local_calls() {
         .unwrap();
     let source = "public static class Sample { public static int target() { return 1; } public static int caller() { return target(); } }\n";
     let project = "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>\n";
-    fs::write(directory.path().join("Sample.cs"), source).unwrap();
-    fs::write(directory.path().join("Sample.csproj"), project).unwrap();
+    fs::create_dir(directory.path().join("App")).unwrap();
+    fs::write(directory.path().join("App/Sample.cs"), source).unwrap();
+    fs::write(directory.path().join("App/Sample.csproj"), project).unwrap();
     let analyzer = CSharp
         .engine(&pack)
         .unwrap_or_else(|error| panic!("C# factory preparation failed: {error}"));
     let graph = analyzer
         .analyze(&AnalysisInput {
             repository_root: directory.path().canonicalize().unwrap(),
-            files: Some(vec!["Sample.cs".into()]),
+            files: Some(vec!["App/Sample.cs".into()]),
             options: Default::default(),
         })
         // 内部验收保留宿主诊断；公共 CLI 仍只输出脱敏的 analysis_failed。
@@ -48,12 +49,16 @@ fn factory_preserves_source_and_local_calls() {
             && reference.target == ReferenceTarget::Node(target.id.clone())
     }));
     assert_eq!(
-        fs::read_to_string(directory.path().join("Sample.cs")).unwrap(),
+        fs::read_to_string(directory.path().join("App/Sample.cs")).unwrap(),
         source
     );
     assert_eq!(
-        fs::read_to_string(directory.path().join("Sample.csproj")).unwrap(),
+        fs::read_to_string(directory.path().join("App/Sample.csproj")).unwrap(),
         project
     );
-    assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 2);
+    assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+    assert_eq!(
+        fs::read_dir(directory.path().join("App")).unwrap().count(),
+        2
+    );
 }

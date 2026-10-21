@@ -1,7 +1,9 @@
 //! 固定侧输入先做边界校验，再冻结到独立的只读 System；不发现环境或执行项目。
 use crate::{ProjectInput, PythonProject, system::SnapshotSystem};
 use anyhow::{Context, Result, ensure};
-use ruff_db::system::{InMemorySystem, MemoryFileSystem, SystemPathBuf, WritableSystem};
+use ruff_db::system::{
+    InMemorySystem, MemoryFileSystem, SystemPath, SystemPathBuf, WritableSystem,
+};
 use ruff_ranged_value::ValueSource;
 use std::{
     collections::BTreeSet,
@@ -11,8 +13,15 @@ use std::{
 };
 use ty_project::{Db, ProjectDatabase, ProjectMetadata, UseUv, metadata::options::Options};
 
-pub(crate) const SNAPSHOT_ROOT: &str = "/narrant/repository";
-const PREFIX: &str = "/narrant/environment";
+/// 固定虚拟命名空间按原生组件归一化，Windows include 匹配不能收到混合分隔符。
+pub(crate) fn snapshot_root() -> SystemPathBuf {
+    SystemPath::absolute("/narrant/repository", "/")
+}
+
+/// 空解释器环境使用同一原生路径约定，不引入宿主驱动器或实际安装目录。
+fn environment_root() -> SystemPathBuf {
+    SystemPath::absolute("/narrant/environment", "/")
+}
 
 /// 源码路径只允许干净的仓库相对路径；空路径表示项目/源码根。
 pub(crate) fn relative(path: &Path) -> Result<()> {
@@ -29,7 +38,7 @@ pub(crate) fn relative(path: &Path) -> Result<()> {
 /// 用固定内存根承载词法相对路径，避免临时 checkout 与平台绝对路径污染身份。
 pub(crate) fn system_path(path: &Path) -> Result<SystemPathBuf> {
     relative(path)?;
-    let mut output = SystemPathBuf::from(SNAPSHOT_ROOT);
+    let mut output = snapshot_root();
     for component in path.components() {
         output.push(component.as_os_str().to_str().unwrap());
     }
@@ -175,12 +184,16 @@ pub(crate) fn load_configured(
         }
     }
     // 显式空 prefix 阻止 PythonEnvironment 进入解释器或 .venv 发现分支。
+    let prefix = environment_root();
     for minor in 7..=14 {
-        memory.create_directory_all(&SystemPathBuf::from(format!(
-            "{PREFIX}/lib/python3.{minor}/site-packages"
-        )))?;
+        memory.create_directory_all(
+            &prefix
+                .join("lib")
+                .join(format!("python3.{minor}"))
+                .join("site-packages"),
+        )?;
     }
-    memory.create_directory_all(&SystemPathBuf::from(format!("{PREFIX}/Lib/site-packages")))?;
+    memory.create_directory_all(&prefix.join("Lib").join("site-packages"))?;
     from_snapshot(input, SnapshotSystem(memory), files, source_options)
 }
 
@@ -203,7 +216,10 @@ fn from_snapshot(
                 .collect::<Result<Vec<_>>>()?,
         ),
     );
-    environment.insert("python".into(), toml::Value::String(PREFIX.into()));
+    environment.insert(
+        "python".into(),
+        toml::Value::String(environment_root().to_string()),
+    );
     environment.insert(
         "python-version".into(),
         toml::Value::String(format!("3.{}", input.python_minor)),
@@ -302,7 +318,7 @@ impl PythonProject {
                 .path(&self.db)
                 .as_system_path()
                 .context("Python 成员不是仓库源码")?;
-            let relative = path.strip_prefix(SNAPSHOT_ROOT)?.as_std_path().to_owned();
+            let relative = path.strip_prefix(snapshot_root())?.as_std_path().to_owned();
             ensure!(self.files.contains(&relative), "Python 索引引入快照外源码");
             output.push(relative);
             ensure!(

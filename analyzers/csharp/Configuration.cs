@@ -90,7 +90,7 @@ internal static class Configuration
             {
                 if (output.Any(candidate => candidate.SourcePaths[0] == dependency &&
                     candidate.Tfm == caller.Tfm && candidate.ConfigurationName == caller.ConfigurationName)) continue;
-                var propagated = ReadProject(root, Path.Combine(root, dependency), cancellation, documents, sourceInventories, caller.ConfigurationName)
+                var propagated = ReadProject(root, ResolvePath(root, dependency), cancellation, documents, sourceInventories, caller.ConfigurationName)
                     .SingleOrDefault(candidate => candidate.Tfm == caller.Tfm &&
                         candidate.ConfigurationName == caller.ConfigurationName);
                 if (propagated is null)
@@ -207,11 +207,12 @@ internal static class Configuration
                     {
                         if (include.Value.Contains('*') || include.Value.Contains('$'))
                             throw new HelperException("unsupported_configuration", "Dynamic ProjectReference is unsupported", relative);
-                        var dependency = Path.GetRelativePath(root, Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, include.Value))).Replace('\\', '/');
-                        if (dependency.StartsWith("../", StringComparison.Ordinal) || !dependency.EndsWith(".csproj", StringComparison.Ordinal) ||
-                            !File.Exists(Path.Combine(root, dependency)))
+                        var dependencyPath = ResolvePath(Path.GetDirectoryName(path)!, include.Value);
+                        var dependency = Path.GetRelativePath(root, dependencyPath).Replace('\\', '/');
+                        if (!dependencyPath.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
+                            !dependency.EndsWith(".csproj", StringComparison.Ordinal) || !File.Exists(dependencyPath))
                             throw new HelperException("unsupported_configuration", "ProjectReference is outside repository or missing", relative);
-                        CheckRepositoryPath(root, Path.Combine(root, dependency));
+                        CheckRepositoryPath(root, dependencyPath);
                         projectReferences.Add((dependency, groupCondition, item.Attribute("Condition")?.Value));
                         continue;
                     }
@@ -299,7 +300,7 @@ internal static class Configuration
                     cancellation.ThrowIfCancellationRequested();
                     if (part.Contains('*') || part.Contains('?') || part.Contains("$(", StringComparison.Ordinal))
                         throw new HelperException("unsupported_configuration", "Compile glob or property expansion is unsupported", relative);
-                    var file = Path.GetRelativePath(root, Path.GetFullPath(Path.Combine(projectDir, part))).Replace('\\', '/');
+                    var file = Path.GetRelativePath(root, ResolvePath(projectDir, part)).Replace('\\', '/');
                     CheckFile(root, file);
                     if (item.operation == "Include") conditionalCandidates.Add(file);
                     if (!applies) continue;
@@ -371,12 +372,16 @@ internal static class Configuration
         if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative) || relative.Contains('\\') ||
             relative.Split('/').Any(part => part is "" or "." or "..") || !relative.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
             throw new HelperException("invalid_input", "Invalid C# source path", relative);
-        var file = Path.GetFullPath(Path.Combine(root, relative));
+        var file = ResolvePath(root, relative);
         if (!file.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal) || !File.Exists(file))
             throw new HelperException("invalid_input", "C# source missing or outside repository", relative);
         CheckRepositoryPath(root, file);
         return file;
     }
+
+    /// <summary>仅在磁盘访问边界转换分隔符；显式基目录重载也会归一化 Windows 扩展路径的相对段。</summary>
+    private static string ResolvePath(string directory, string path)
+        => Path.GetFullPath(path.Replace('/', Path.DirectorySeparatorChar), directory);
 
     /// <summary>以不跟随目录链接的方式枚举受控源码或项目文件。</summary>
     private static IEnumerable<string> SafeFiles(string root, string? extension, CancellationToken cancellation, bool excludeHiddenDirectories = false)

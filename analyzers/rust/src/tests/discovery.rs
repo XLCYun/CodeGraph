@@ -908,7 +908,7 @@ fn discovery_reads_the_loaded_module_snapshot() {
     )
     .unwrap();
     write(root.path(), "src/lib.rs", "mod replaced;");
-    let repository = root.path().canonicalize().unwrap();
+    let repository = dunce::canonicalize(root.path()).unwrap();
     let selected = project.discover_sources(&repository).unwrap();
     assert!(selected.contains_key(&repository.join("src/original.rs")));
     assert!(!selected.contains_key(&repository.join("src/replaced.rs")));

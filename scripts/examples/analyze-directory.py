@@ -18,16 +18,18 @@ def main():
                "repository_root": str(root),
                "options": {"include_tests": False, "rust_dependency_scope": "repository-only"}}
     # communicate 发送完整一行后关闭 stdin；正常 EOF 不取消已接受的分析。
-    result = subprocess.run([str(executable), "analyze"], input=json.dumps(request) + "\n",
-                            text=True, capture_output=True, check=True)
+    result = subprocess.run([str(executable), "analyze"],
+                            input=(json.dumps(request, ensure_ascii=False) + "\n").encode("utf-8"),
+                            capture_output=True, check=True)
     messages = [json.loads(line) for line in result.stdout.splitlines()]
-    assert result.stdout.endswith("\n") and len(messages) == 2
+    assert result.stdout.endswith(b"\n") and len(messages) == 2
     assert messages[0] == {"protocol": "codegraph.analyzer/1", "type": "ready",
                            "engine_version": "0.1.0", "pack_id": pack_id}
     assert messages[1]["id"] == request["id"] and messages[1]["type"] == "completed"
     assert messages[1]["protocol"] == request["protocol"] and messages[1]["outcome"] == "ok"
     assert set(messages[1]["graph"]) == {"root_contains", "nodes", "external_symbols"}
-    print(result.stdout, end="")
+    # 原样转发 UTF-8 协议字节，重定向 stdout 的本地代码页不能改写结果。
+    sys.stdout.buffer.write(result.stdout)
 
 
 if __name__ == "__main__":

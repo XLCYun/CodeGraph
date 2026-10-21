@@ -258,7 +258,7 @@ impl PythonProject {
             ));
         }
         if let Some(path) = path.as_system_path() {
-            let relative = path.strip_prefix(loading::SNAPSHOT_ROOT)?;
+            let relative = path.strip_prefix(loading::snapshot_root())?;
             let relative = PathBuf::from(relative.as_str());
             ensure!(
                 self.files.contains(&relative),

@@ -18,7 +18,7 @@ REPO = HELPER.parents[1]
 RUNTIME = pathlib.Path(os.environ.get("CODEGRAPH_JAVA_RUNTIME", REPO / ".tools/java-native/jdk-25.0.4.1+1/Contents/Home"))
 TARGET = pathlib.Path(os.environ.get("CODEGRAPH_JAVA_TARGET", REPO / ".tools/java-native/jdk-17.0.20.1+1/Contents/Home"))
 LIB = pathlib.Path(os.environ.get("CODEGRAPH_JAVA_LIB", REPO / ".tools/java-native/lib"))
-CP = subprocess.check_output([sys.executable, str(HELPER / "tools/classpath.py"), str(LIB)], text=True).strip()
+CP = subprocess.check_output([sys.executable, "-X", "utf8", str(HELPER / "tools/classpath.py"), str(LIB)], text=True, encoding="utf-8").strip()
 COMMAND = [str(RUNTIME / "bin" / ("java.exe" if sys.platform == "win32" else "java")),
            "-cp", str(HELPER / "build/classes") + os.pathsep + CP,
            "dev.codegraph.java.Main"]
@@ -54,7 +54,7 @@ def run(message, cancel=False):
         environment.pop(key, None)
     # 真实 Host 在终结帧前保持输入管道打开；EOF 另设断连回归。
     with subprocess.Popen(COMMAND, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE, text=True, env=environment) as proc:
+                          stderr=subprocess.PIPE, text=True, encoding="utf-8", env=environment) as proc:
         expired = threading.Event()
         output = []
         problem = None
@@ -557,6 +557,27 @@ class Shapes {
 
 class DriverDeadlineTests(unittest.TestCase):
     """用短暂阻塞的假进程验证测试驱动自身的超时与回收。"""
+
+    def test_unicode_transport_does_not_use_locale_encoding(self):
+        """实际子进程的请求、响应和诊断均按 UTF-8 传输，不依赖 Windows 代码页。"""
+        for status in (0, 7):
+            with self.subTest(status=status):
+                command = [sys.executable, "-c",
+                           "import json,sys; "
+                           "message=json.loads(sys.stdin.buffer.readline().decode('utf-8')); "
+                           "rows=[{'type':'ready'}, {'type':'completed', 'echo':message}]; "
+                           "sys.stdout.buffer.write((''.join(json.dumps(row, ensure_ascii=False)+'\\n' for row in rows)).encode('utf-8')); "
+                           "sys.stdout.buffer.flush(); sys.stderr.buffer.write('诊断丁\\n'.encode('utf-8')); "
+                           f"sys.exit({status})"]
+                with mock.patch.dict(run.__globals__, COMMAND=command), \
+                     mock.patch.object(subprocess, "_text_encoding", return_value="cp1252"):
+                    if status:
+                        with self.assertRaises(AssertionError) as raised:
+                            run({"path": "目录/丁.java"})
+                        self.assertEqual(raised.exception.args[0][0], status)
+                        self.assertEqual(raised.exception.args[0][1], "诊断丁\n")
+                    else:
+                        self.assertEqual(run({"path": "目录/丁.java"})["echo"], {"path": "目录/丁.java"})
 
     def test_stalled_ready_and_completed_are_bounded_and_reaped(self):
         """ready 与 completed 都受会话总期限约束，保留诊断且不遗留子进程。"""

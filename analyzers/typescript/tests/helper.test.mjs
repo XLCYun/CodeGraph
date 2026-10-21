@@ -54,7 +54,10 @@ test('discovery admits only configured JSON roots with native source and origin 
     const result = analyze(ts, request(root, undefined));
     const selected = selectedJson ? ['src/data.json', 'src/main.ts'] : ['src/main.ts'];
     assert.deepEqual(result.evidence.files.map(file => file.path), selected);
-    assert.ok(result.evidence.files.every(file => file.configuration_ids.length === 1 && file.configuration_ids[0] === path.join(root, 'tsconfig.json')));
+    const configuration = fs.realpathSync.native(path.join(root, 'tsconfig.json'));
+    for (const file of result.evidence.files) {
+      assert.deepEqual(file.configuration_ids, [configuration], `selectedJson=${selectedJson}; file=${file.path}; expected=${configuration}; actual=${JSON.stringify(file.configuration_ids)}`);
+    }
     const jsonFile = result.graph.nodes.find(node => node.name === 'src/data.json');
     assert.equal(Boolean(jsonFile), selectedJson);
     if (jsonFile) {
@@ -167,7 +170,7 @@ test('discovery respects workspace package membership and standalone named confi
 
 /** 每个案例在独立真实目录中提供输入，生产读取政策必须生效。 */
 function fixture(t, files) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'native-ts-test-')));
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'native-ts-test-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   for (const [name, content] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true }); fs.writeFileSync(path.join(root, name), content); }
   return root;

@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 import subprocess
 import unittest
 
@@ -81,6 +82,60 @@ class DiscoveryTests(unittest.TestCase):
                          {name + ".cs" for name in ("Base", "Eight", "Ten", "Debug", "Release")})
         self.assertEqual(len(result["evidence"]["configurations"]), 4)
         self.assertTrue(all(item["disposition"] == "analyzed" for item in result["evidence"]["files"]))
+
+    def test_native_paths_keep_input_and_project_boundaries(self):
+        """普通与扩展根下仍拒绝非法协议路径、缺失源码和越界项目引用。"""
+        self.write("nested/Main.cs", "class Main {}")
+        self.source_set([self.config("main", ["nested/Main.cs"])])
+        outside = self.root.parent / "outside"
+        outside.mkdir()
+        (outside / "Outside.csproj").write_text('<Project Sdk="Microsoft.NET.Sdk"/>', encoding="utf-8")
+        (outside / "Outside.cs").write_text("class Outside {}", encoding="utf-8")
+        ordinary = str(self.root.resolve())
+        roots = [ordinary, "\\\\?\\" + ordinary] if os.name == "nt" else [ordinary]
+        for root in roots:
+            for relative in ("../outside/Outside.cs", "nested/Missing.cs", "nested/../Main.cs", "nested//Main.cs", r"nested\Main.cs", str(outside / "Outside.cs")):
+                with self.subTest(root=root, relative=relative):
+                    request = self.request([relative])
+                    request["input"]["repository_root"] = root
+                    result = self.run_helper(request)
+                    self.assertEqual(result["error"]["code"], "invalid_input", result)
+                    self.assertNotIn("graph", result)
+        (self.root / "narrant.csharp.json").unlink()
+        self.write("App/App.csproj", '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup><ProjectReference Include="../../outside/Outside.csproj"/></ItemGroup></Project>')
+        for root in roots:
+            with self.subTest(root=root, project_reference=True):
+                request = self.discovery()
+                request["input"]["repository_root"] = root
+                result = self.run_helper(request)
+                self.assertEqual(result["error"]["code"], "unsupported_configuration", result)
+                self.assertNotIn("graph", result)
+        self.assertEqual((outside / "Outside.cs").read_text(encoding="utf-8"), "class Outside {}")
+
+    def test_native_paths_reject_directory_links(self):
+        """路径归一化不能使符号链接或 Windows junction 成为可发现的源码。"""
+        outside = self.root.parent / "outside"
+        outside.mkdir()
+        (outside / "Outside.cs").write_text("class Outside {}", encoding="utf-8")
+        linked = self.root / "linked"
+        if os.name == "nt":
+            subprocess.run(["cmd", "/c", "mklink", "/J", str(linked), str(outside)], check=True, capture_output=True)
+            self.addCleanup(linked.rmdir)
+        else:
+            linked.symlink_to(outside, target_is_directory=True)
+            self.addCleanup(linked.unlink)
+        self.source_set([self.config("main", ["linked/Outside.cs"])])
+        ordinary = str(self.root.resolve())
+        roots = [ordinary, "\\\\?\\" + ordinary] if os.name == "nt" else [ordinary]
+        for root in roots:
+            for discovery in (False, True):
+                with self.subTest(root=root, discovery=discovery):
+                    request = self.discovery() if discovery else self.request(["linked/Outside.cs"])
+                    request["input"]["repository_root"] = root
+                    result = self.run_helper(request)
+                    self.assertEqual(result["error"]["code"], "unsupported_configuration" if discovery else "invalid_input", result)
+                    self.assertNotIn("graph", result)
+        self.assertEqual((outside / "Outside.cs").read_text(encoding="utf-8"), "class Outside {}")
 
     def test_empty_missing_and_invalid_configuration(self):
         """明确空选集不需要配置或引用；有效空配置必须返回其来源。"""

@@ -70,6 +70,25 @@ export async function prepareDotnetFixtureReferences(environment) {
   }
 }
 
+/** 将已安装目标暴露到标准发现入口；构建与原生测试仍显式选择各自的固定 SDK。 */
+export function finalizeToolchainEnvironment(environment, output, platform = process.platform) {
+  const paths = platform === 'win32' ? path.win32 : path.posix;
+  // CMake 只用于构建和测试；目标 SDK 则必须在公开验收移除私有变量后仍可发现。
+  if (environment.CODEGRAPH_CMAKE_ROOT) environment.CODEGRAPH_CMAKE = paths.join(environment.CODEGRAPH_CMAKE_ROOT, `bin/cmake${platform === 'win32' ? '.exe' : ''}`);
+  if (environment.CODEGRAPH_JAVA_TARGET_8) environment.JAVA_HOME = environment.CODEGRAPH_JAVA_TARGET_8;
+  if (environment.CODEGRAPH_JAVA_TARGET_JDK) environment.JDK_HOME = environment.CODEGRAPH_JAVA_TARGET_JDK;
+  if (environment.CODEGRAPH_GO_TARGET_SDK) environment.GOROOT = environment.CODEGRAPH_GO_TARGET_SDK;
+  if (environment.CODEGRAPH_DOTNET_SDK) environment.DOTNET_ROOT = environment.CODEGRAPH_DOTNET_SDK;
+  environment.DOTNET_CLI_HOME = paths.join(output, 'dotnet-home');
+  environment.DOTNET_CLI_TELEMETRY_OPTOUT = '1';
+  environment.DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1';
+  environment.DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false';
+  environment.GOTOOLCHAIN = 'local';
+  environment.GOPROXY = 'off';
+  environment.GOSUMDB = 'off';
+  return environment;
+}
+
 /** 安装到调用者指定的私有目录，失败时清理临时解包结果，绝不运行系统安装器。 */
 export async function provisionToolchains(output, target = nativeTargets[`${process.platform}-${process.arch}`], language = 'all') {
   const selected = selectedToolchainNames(language);
@@ -117,18 +136,7 @@ export async function provisionToolchains(output, target = nativeTargets[`${proc
     } finally { if (!preserveTemporary) await fs.rm(temporary, { recursive: true, force: true }); }
   }
   await prepareDotnetFixtureReferences(environment);
-  // CMake 属于构建/测试工具，不随支持包分发；两平台共用私有安装，避免依赖 runner 镜像。
-  if (environment.CODEGRAPH_CMAKE_ROOT) environment.CODEGRAPH_CMAKE = path.join(environment.CODEGRAPH_CMAKE_ROOT, `bin/cmake${process.platform === 'win32' ? '.exe' : ''}`);
-  // 旧 JDK 只作为声明样本；Host 的通用 JAVA_HOME 发现路径必须在真实安装中被验证。
-  if (environment.CODEGRAPH_JAVA_TARGET_8) environment.JAVA_HOME = environment.CODEGRAPH_JAVA_TARGET_8;
-  if (environment.CODEGRAPH_DOTNET_SDK) environment.DOTNET_ROOT = environment.CODEGRAPH_DOTNET_SDK;
-  environment.DOTNET_CLI_HOME = path.join(output, 'dotnet-home');
-  environment.DOTNET_CLI_TELEMETRY_OPTOUT = '1';
-  environment.DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1';
-  environment.DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false';
-  environment.GOTOOLCHAIN = 'local';
-  environment.GOPROXY = 'off';
-  environment.GOSUMDB = 'off';
+  finalizeToolchainEnvironment(environment, output);
   await fs.writeFile(path.join(output, 'environment.json'), `${JSON.stringify(environment, null, 2)}\n`);
   if (process.env.GITHUB_ENV) await fs.appendFile(process.env.GITHUB_ENV, Object.entries(environment).map(([name, value]) => `${name}=${value}\n`).join(''));
   return environment;
