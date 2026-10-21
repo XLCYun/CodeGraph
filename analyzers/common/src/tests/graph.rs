@@ -155,3 +155,55 @@ fn selection_coverage_and_origins_remain_required_before_output() {
     }));
     assert!(finish(invalid, &input, "rust", &[]).is_err());
 }
+
+/// 显式选集允许覆盖顺序不同，但不能用等量的仓内未选文件替代成员或省略覆盖。
+#[test]
+fn explicit_coverage_requires_exact_members_independently_of_order() {
+    use crate::public_protocol::{check, decode};
+    let repository = tempfile::tempdir().unwrap();
+    let package = tempfile::tempdir().unwrap();
+    for path in ["first.rs", "middle.rs", "last.rs", "unselected.rs"] {
+        std::fs::write(repository.path().join(path), "").unwrap();
+    }
+    std::fs::create_dir(package.path().join("bin")).unwrap();
+    let executable = package.path().join("bin/codegraph-rust");
+    std::fs::write(&executable, "fixture").unwrap();
+    let request = serde_json::json!({"protocol":"codegraph.analyzer/1","type":"analyze","id":"exact-coverage","repository_root":repository.path(),"files":["middle.rs","last.rs","first.rs"],"options":{"include_tests":false,"rust_dependency_scope":"repository-only"}});
+    let input = check(decode(request.to_string().as_bytes()).unwrap(), &executable).unwrap();
+    let make = |paths: &[&str]| Projection {
+        graph: CodeGraph::empty(),
+        evidence: Evidence {
+            configurations: vec![Configuration {
+                id: "project".into(),
+                source_paths: vec![],
+                platform_ids: vec![],
+            }],
+            files: paths
+                .iter()
+                .map(|path| FileEvidence {
+                    path: (*path).into(),
+                    disposition: Disposition::Analyzed,
+                    configuration_ids: vec!["project".into()],
+                })
+                .collect(),
+            origins: vec![],
+        },
+    };
+    finish(
+        make(&["last.rs", "first.rs", "middle.rs"]),
+        &input,
+        "rust",
+        &[],
+    )
+    .unwrap();
+    for invalid in [
+        vec!["first.rs", "middle.rs", "unselected.rs"],
+        vec!["first.rs", "middle.rs", "middle.rs"],
+        vec!["first.rs", "middle.rs"],
+    ] {
+        assert!(
+            finish(make(&invalid), &input, "rust", &[]).is_err(),
+            "错误覆盖被接受：{invalid:?}"
+        );
+    }
+}

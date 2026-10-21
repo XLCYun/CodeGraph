@@ -84,9 +84,11 @@ pub fn finish(
 ) -> Result<CodeGraph> {
     let Projection { graph, evidence } = projection;
     ensure!(evidence.files.len() <= MAX_FILES, "文件覆盖超过数量上限");
+    // 显式选集只建立一次成员索引，后续覆盖查询不再重复扫描原始列表。
+    let selected = input.request.files.as_ref().map(unique).transpose()?;
     let configurations = unique(evidence.configurations.iter().map(|c| &c.id))?;
     ensure!(
-        input.request.files.is_some() || !configurations.is_empty(),
+        selected.is_some() || !configurations.is_empty(),
         "发现结果缺少实际项目配置"
     );
     let platforms = unique(platforms)?;
@@ -102,11 +104,9 @@ pub fn finish(
     let mut files = BTreeMap::new();
     for file in &evidence.files {
         ensure!(
-            input
-                .request
-                .files
+            selected
                 .as_ref()
-                .is_none_or(|selected| selected.contains(&file.path))
+                .is_none_or(|selected| selected.contains(file.path.as_str()))
                 && files.insert(file.path.as_str(), file.disposition).is_none(),
             "文件覆盖出现未请求或重复路径"
         );
@@ -123,9 +123,7 @@ pub fn finish(
         );
     }
     ensure!(
-        input
-            .request
-            .files
+        selected
             .as_ref()
             .is_none_or(|selected| selected.len() == files.len()),
         "成功结果遗漏选中文件"
