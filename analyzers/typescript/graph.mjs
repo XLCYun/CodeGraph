@@ -83,7 +83,9 @@ export function validateProjection(result, input, platforms) {
   while (pending.length) {
     const id = pending.pop();
     if (reachable.has(id)) throw new Error('包含关系形成环');
-    reachable.add(id); pending.push(...nodes.get(id).contains);
+    reachable.add(id);
+    // 逐项入栈，避免合法的大扇出触发运行时调用参数上限。
+    for (const child of nodes.get(id).contains) pending.push(child);
   }
   if (reachable.size !== ids.size) throw new Error('图包含未连接到根的节点');
   const descriptors = unique(graph.external_symbols.map(symbol => symbol.symbol), '图外描述');

@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { analyze } from '../analyze.mjs';
+import { project } from '../projection.mjs';
 import { validateProjection } from '../graph.mjs';
 import { runtimeContext } from '../runtime.mjs';
 import { runtime, ts } from './support.mjs';
@@ -36,4 +37,45 @@ test('natural output boundary rejects broken identities, coverage and graph endp
     assert.throws(() => validateProjection(value, input, platforms));
     assert.equal(JSON.stringify(value), before, 'validation cannot silently repair graph data');
   }
+});
+
+/** 合法源码可产生超过 V8 调用参数上限的子节点，图校验不能因此截断或失败。 */
+test('a valid native graph with 140000 children remains complete and reachable', { timeout: 60000 }, t => {
+  const count = 140000;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codegraph TS 大扇出-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const source = `export interface Big {${Array.from({ length: count }, (_, index) => `p${index}:number;`).join('')}}`;
+  const file = path.join(root, 'main.ts');
+  fs.writeFileSync(file, source);
+  const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  assert.equal(sf.parseDiagnostics.length, 0);
+  const nodes = project(ts, sf, root).declarations.map(declaration => declaration.node);
+  const rootIds = nodes.filter(node => node.native_kind === 'file').map(node => node.id);
+  const children = nodes.find(node => node.name === 'Big').contains;
+  assert.equal(nodes.length, count + 2);
+  assert.equal(new Set(nodes.map(node => node.id)).size, count + 2);
+  assert.equal(children.length, count);
+  assert.equal(new Set(children).size, count);
+  const result = {
+    graph: { root_contains: rootIds, nodes, external_symbols: [] },
+    evidence: {
+      configurations: [{ id: 'large-interface', source_paths: [], platform_ids: [] }],
+      files: [{ path: 'main.ts', disposition: 'analyzed', configuration_ids: ['large-interface'] }],
+      origins: nodes.map(node => ({ node_id: node.id, selected_paths: ['main.ts'] })),
+    },
+  };
+  const output = { protocol: 'codegraph.analyzer/1', engine_version: '0.1.0', pack_id: 'typescript-javascript',
+    type: 'completed', id: 'review-high-fanout', outcome: 'ok', graph: result.graph };
+  const bytes = Buffer.byteLength(JSON.stringify(output)) + 1;
+  assert.ok(bytes < 128 * 1024 * 1024);
+  t.diagnostic(JSON.stringify({ node: process.version, typescript: ts.version, source_bytes: Buffer.byteLength(source),
+    node_count: nodes.length, children: children.length, public_result_bytes: bytes }));
+  const childIds = [...children], nodeIds = nodes.map(node => node.id);
+  const input = { repository_root: root, files: ['main.ts'], include_tests: false, profile: 'typescript-static-v1' };
+  assert.equal(validateProjection(result, input, []), result);
+  assert.equal(result.graph.nodes.length, count + 2);
+  assert.equal(children.length, count);
+  assert.deepEqual(children, childIds);
+  assert.deepEqual(result.graph.nodes.map(node => node.id), nodeIds);
+  assert.equal(fs.readFileSync(file, 'utf8'), source);
 });
