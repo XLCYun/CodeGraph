@@ -19,9 +19,11 @@ RUNTIME = pathlib.Path(os.environ.get("CODEGRAPH_JAVA_RUNTIME", REPO / ".tools/j
 TARGET = pathlib.Path(os.environ.get("CODEGRAPH_JAVA_TARGET", REPO / ".tools/java-native/jdk-17.0.20.1+1/Contents/Home"))
 LIB = pathlib.Path(os.environ.get("CODEGRAPH_JAVA_LIB", REPO / ".tools/java-native/lib"))
 CP = subprocess.check_output([sys.executable, "-X", "utf8", str(HELPER / "tools/classpath.py"), str(LIB)], text=True, encoding="utf-8").strip()
-COMMAND = [str(RUNTIME / "bin" / ("java.exe" if sys.platform == "win32" else "java")),
+PUBLIC_COMMAND = [str(RUNTIME / "bin" / ("java.exe" if sys.platform == "win32" else "java")),
            "-cp", str(HELPER / "build/classes") + os.pathsep + CP,
            "dev.codegraph.java.Main"]
+COMMAND = [*PUBLIC_COMMAND[:-3], "-cp", str(HELPER / "build/test-classes") + os.pathsep +
+           str(HELPER / "build/classes") + os.pathsep + CP, "dev.codegraph.java.ComponentDriver"]
 RUN_TIMEOUT = 40
 
 
@@ -44,60 +46,25 @@ def request(root, files, include_tests=False, target=TARGET, timeout=30000, plat
                        "max_diagnostic_bytes": 262144}}
 
 
-def run(message, cancel=False):
-    """在总会话期限内读取终结帧；超时杀死并回收进程，保留 stderr。"""
+def run(message):
+    """历史语义 fixture 通过非随包驱动调用同进程核心；输入 EOF 后只读一个结果。"""
     payload = json.dumps(message, ensure_ascii=False) + "\n"
-    if cancel:
-        payload += json.dumps({"protocol": "codegraph.engine/1", "type": "cancel", "id": "fixture"}) + "\n"
     environment = dict(os.environ)
     for key in ("CLASSPATH", "JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS"):
         environment.pop(key, None)
-    # 真实 Host 在终结帧前保持输入管道打开；EOF 另设断连回归。
     with subprocess.Popen(COMMAND, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE, text=True, encoding="utf-8", env=environment) as proc:
-        expired = threading.Event()
-        output = []
-        problem = None
-
-        def expire():
-            """统一计时覆盖写入、两次帧读取和退出等待，终止阻塞管道的生产者。"""
-            expired.set()
-            try:
-                proc.kill()
-            except ProcessLookupError:
-                pass
-
-        deadline = threading.Timer(RUN_TIMEOUT, expire)
-        deadline.start()
         try:
-            proc.stdin.write(payload)
-            proc.stdin.flush()
-            for _ in range(2):
-                output.append(proc.stdout.readline())
-            rows = [json.loads(line) for line in output]
-            proc.stdin.close()
-            proc.wait()
-            extra = proc.stdout.read()
-            output.append(extra)
-            assert extra == ""
-        except BaseException as error:
-            problem = error
-        finally:
-            if proc.poll() is None:
-                proc.kill()
-            proc.wait()
-            diagnostics = proc.stderr.read()
-            deadline.cancel()
-            deadline.join()
-        if expired.is_set():
-            raise subprocess.TimeoutExpired(COMMAND, RUN_TIMEOUT, output="".join(output),
-                                            stderr=diagnostics)
-        if problem is not None:
-            raise problem
+            output, diagnostics = proc.communicate(payload, timeout=RUN_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            output, diagnostics = proc.communicate()
+            raise subprocess.TimeoutExpired(COMMAND, RUN_TIMEOUT, output=output, stderr=diagnostics)
         if proc.returncode:
             raise AssertionError((proc.returncode, diagnostics, output))
-    assert len(rows) == 2 and rows[0]["type"] == "ready" and rows[1]["type"] == "completed", rows
-    return rows[1]
+    rows = [json.loads(line) for line in output.splitlines()]
+    assert len(rows) == 1 and rows[0]["type"] == "completed", rows
+    return rows[0]
 
 
 def write(root, path, source):
@@ -337,13 +304,12 @@ class JavaHelperTests(unittest.TestCase):
         self.assertEqual(completed["error"]["code"], "unsupported_configuration")
         self.assertFalse((self.root / "MUST_NOT_EXECUTE").exists())
 
-    def test_maven_literal_model_and_cancel(self):
-        """Literal POM requires no Maven process; cancel ends with one cancelled frame."""
+    def test_maven_literal_model_after_eof(self):
+        """Literal POM requires no Maven process and finishes after EOF."""
         write(self.root, "pom.xml", "<project><modelVersion>4.0.0</modelVersion><groupId>p</groupId><artifactId>a</artifactId><version>1</version><properties><maven.compiler.release>17</maven.compiler.release></properties></project>")
         path = "src/main/java/p/Main.java"
         write(self.root, path, "package p; class Main { void run() {} }")
         self.assertEqual(run(request(self.root, [path]))["outcome"], "ok")
-        self.assertEqual(run(request(self.root, [path]), cancel=True)["outcome"], "cancelled")
 
     def test_invalid_input_and_timeout(self):
         """Path escape and expired analysis return bounded errors."""
@@ -371,6 +337,7 @@ class Shapes {
 """)
         completed = run(request(self.root, [path]))
         self.assertEqual(completed["outcome"], "ok", completed)
+        self.assertTrue(all(symbol["name"] for symbol in completed["graph"]["external_symbols"]))
         kinds = {entry["native_kind"] for entry in completed["graph"]["nodes"]}
         self.assertTrue({"annotation", "annotation-member", "record", "record-component", "enum",
                          "enum-constant", "field", "static-initializer", "anonymous"}.issubset(kinds), kinds)
@@ -472,13 +439,13 @@ class Shapes {
         self.assertEqual(constructor[0]["scope"], "repository")
         self.assertFalse(any(entry["native_kind"] == "constructor" for entry in result["graph"]["nodes"]))
 
-    def test_real_error_wins_racing_cancel(self):
-        """配置错误即使和有效 cancel 同时到达，也保持 error。"""
+    def test_real_configuration_error_after_eof(self):
+        """完整输入后的配置错误保留明确失败，不返回图。"""
         path = "src/main/java/p/Foo.java"
         write(self.root, path, "package p; class Foo {}")
         write(self.root, "build.gradle", "throw new Error('never run')")
         for _ in range(5):
-            result = run(request(self.root, [path]), cancel=True)
+            result = run(request(self.root, [path]))
             self.assertEqual(result["outcome"], "error", result)
             self.assertEqual(result["error"]["code"], "unsupported_configuration")
 
@@ -493,17 +460,22 @@ class Shapes {
         self.assertIn('"{"', node(result["graph"], "/method:run()")["signature"])
 
 
-    def test_host_eof_cancels_real_entrypoint(self):
-        """请求后提前 EOF 必须停止真实 Java 分析，不能发送普通成功。"""
+    def test_normal_eof_completes_real_public_entrypoint(self):
+        """正常 EOF 后直接公共入口完成真实分析，不把输入结束解释为取消。"""
         metadata(self.root)
         path = "src/main/java/A.java"
         write(self.root, path, "class A { void run(){} }")
-        result = subprocess.run(COMMAND, input=json.dumps(request(self.root, [path])) + "\n",
-                                text=True, capture_output=True, timeout=10)
+        message = {"protocol": "codegraph.analyzer/1", "type": "analyze", "id": "normal-eof",
+                   "repository_root": str(self.root), "files": [path],
+                   "options": {"include_tests": False, "rust_dependency_scope": "repository-only"}}
+        result = subprocess.run([*PUBLIC_COMMAND, "analyze"], input=json.dumps(message), text=True,
+                                encoding="utf-8", capture_output=True, timeout=15,
+                                env=dict(os.environ, CODEGRAPH_JAVA_TARGET_JDK=str(TARGET)))
         self.assertEqual(result.returncode, 0, result.stderr)
-        terminal = json.loads(result.stdout.splitlines()[-1])
-        self.assertEqual(terminal["outcome"], "cancelled", terminal)
-        self.assertNotIn("graph", terminal)
+        terminal = json.loads(result.stdout)
+        self.assertEqual(terminal["outcome"], "ok", terminal)
+        self.assertTrue(terminal["graph"]["nodes"])
+        self.assertNotIn("evidence", terminal)
 
     def test_inherited_maven_source_roots(self):
         """父 POM 的主测试目录在子模块继承，默认目录不再属于该模块。"""
@@ -565,7 +537,7 @@ class DriverDeadlineTests(unittest.TestCase):
                 command = [sys.executable, "-c",
                            "import json,sys; "
                            "message=json.loads(sys.stdin.buffer.readline().decode('utf-8')); "
-                           "rows=[{'type':'ready'}, {'type':'completed', 'echo':message}]; "
+                           "rows=[{'type':'completed', 'echo':message}]; "
                            "sys.stdout.buffer.write((''.join(json.dumps(row, ensure_ascii=False)+'\\n' for row in rows)).encode('utf-8')); "
                            "sys.stdout.buffer.flush(); sys.stderr.buffer.write('诊断丁\\n'.encode('utf-8')); "
                            f"sys.exit({status})"]
@@ -579,14 +551,14 @@ class DriverDeadlineTests(unittest.TestCase):
                     else:
                         self.assertEqual(run({"path": "目录/丁.java"})["echo"], {"path": "目录/丁.java"})
 
-    def test_stalled_ready_and_completed_are_bounded_and_reaped(self):
-        """ready 与 completed 都受会话总期限约束，保留诊断且不遗留子进程。"""
-        for phase in ["ready", "completed"]:
+    def test_stalled_input_and_result_are_bounded_and_reaped(self):
+        """输入与结果等待都受调用方期限约束，保留诊断且不遗留子进程。"""
+        for phase in ["input", "result"]:
             with self.subTest(phase=phase):
                 command = [sys.executable, "-u", "-c",
                            "import json,sys,threading; "
                            f"sys.stderr.write('stall-{phase}\\n'); sys.stderr.flush(); "
-                           + ("print(json.dumps({'type':'ready'}), flush=True); " if phase == "completed" else "")
+                           + ("sys.stdin.read(); " if phase == "result" else "")
                            + "threading.Event().wait()"]
                 children = []
                 popen = subprocess.Popen

@@ -6,7 +6,7 @@ export function createObservation(requestId) {
   let recorded = false;
   return () => {
     if (!destination || recorded) return;
-    const bytes = JSON.stringify({ schema_version: 1, helper_id: 'codegraph-typescript-engine', request_id: requestId, pid: process.pid, milestone: 'repository-snapshot-read' });
+    const bytes = JSON.stringify({ schema_version: 1, helper_id: 'codegraph-typescript-javascript', request_id: requestId, pid: process.pid, milestone: 'repository-snapshot-read' });
     if (Buffer.byteLength(bytes) > 4096) throw new Error('验收观察超过限额');
     const pending = destination.replace(/\.json$/, '.pending');
     fs.mkdirSync(pending);

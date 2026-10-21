@@ -1,21 +1,34 @@
-# Java 静态分析 helper
+# Java 语言分析器
 
-该 helper 使用 `dependencies.lock.json` 锁定的 Eclipse JDT 解析源码。helper 自身的运行 JDK、JDT 工具版本与被分析项目的目标 Java release 相互独立。分析不执行 Maven、Gradle、项目脚本、注解处理器或目标 JDK，也不下载项目依赖。
+该分析器使用 `dependencies.lock.json` 锁定的 Eclipse JDT 解析源码。分析器自身的运行 JDK、JDT 工具版本与被分析项目的目标 Java release 相互独立。分析不执行 Maven、Gradle、项目脚本、注解处理器或目标 JDK，也不下载项目依赖。
+
+公开入口为 `bin/codegraph-java analyze`，由 Java 主线程直接实现 `codegraph.analyzer/1`，
+固定版本 `0.1.0`。stdin 接收一个 UTF-8 JSON 对象后 EOF，尾换行可选；stdout 只有一个
+带固定身份的最终结果。成功退出 0，可处理失败退出 1，用法错误退出 2。
+`--help`、`analyze --help` 和 `--version` 输出文本后退出。详见 [公共协议](../../docs/protocol.md)。
+
+薄入口只定位 `runtime/jdk/bin/java`、`runtime/analyzer/classes` 和 `runtime/analyzer/lib`，
+固定参数与必要环境、继承标准句柄并传播退出；macOS exec，Windows spawn/wait。
+程序没有 ready、cancel、监听线程或分析 worker。正常 EOF 表示完整输入；取消、期限与
+整棵进程树终止由调用方负责。请求和结果限制为 128 MiB，选集最多 100,000 项；
+显式空集先检查源码边界，随后直接返回空图，不发现配置或目标 JDK。
 
 ## release 与目标 JDK
 
 `java-static-v1` 接受规范整数 release，例如 `8`、`17`、`25`。支持范围直接由固定 JDT 的公开 API `JavaCore.isJavaSourceVersionSupportedByCompiler` 判定；`8` 在调用 JDT 时映射为其历史名称 `1.8`。不维护产品版本白名单，也不把未知版本降级到最高已知版本。`1.8`、带空格、前导零、属性表达式和预览版本后缀均不是合法的配置 release。
 
-每份配置单独匹配 `environment.platforms` 中的 `java-jdk`：
+每份配置单独匹配本语言发现器提供的同 major 目标 JDK：
 
-- `metadata.release` 必须与该配置完全相同，同一 release 只能有一个候选平台。
+- major 必须与配置 release 完全相同，同一 major 使用发现到的最高稳定补丁。
 - `version` 必须等于该 JDK `release` 文件中的真实 `JAVA_VERSION`。经典的 `1.8.0_XXX` 对应 release `8`；现代版本从稳定版本号读取 major。EA 版本不可用。
 - Java 8 使用目标 JDK `jre/lib` 中的 `rt.jar` 及存在的 `resources.jar`、`jsse.jar`、`jce.jar`、`charsets.jar`。必须有 `rt.jar`；不扫描 `ext`，不自动加载其他 JAR。其他厂商的非经典目录布局尚不支持。
-- Java 9 及以后使用目标 JDK 的 `lib/jrt-fs.jar` 与 `lib/modules`，不加入运行 helper 的 JVM 标准库。
+- Java 9 及以后使用目标 JDK 的 `lib/jrt-fs.jar` 与 `lib/modules`，不加入运行分析器的 JVM 标准库。
 
-因此，Java 25 运行时不能代替缺失的 Java 17 目标。较旧目标不存在的 API 保持未知关系；高版本语法、禁用的预览特性或畸形语法导致完整提取失败。预览始终禁用。缺少精确目标返回 `target_unavailable`，不被当前 JDT 支持的 release 返回 `unsupported_configuration`，不会附带部分图或证据。
+因此，Java 25 运行时不能代替缺失的 Java 17 目标。较旧目标不存在的 API 保持未知关系；高版本语法、禁用的预览特性或畸形语法导致完整提取失败。预览始终禁用。缺少精确目标或不被当前 JDT 支持的 release 都明确失败，公共结果使用 `analysis_failed`，不会附带部分图或证据。进程内组件测试保留原有细分错误断言。
 
-JDK 发现与同 major 的稳定补丁版本选择由 Host 完成；helper 只验证并读取协议指定的本地 JDK。
+`SdkDiscovery` 直接读取既有 `CODEGRAPH_JAVA_TARGET_JDK`、`JAVA_HOME`、`JDK_HOME` 提示，
+常见安装目录、用户 SDK 目录、PATH 中真实 java 路径及随包 JDK。只读 release 与标准库布局，
+不执行探测命令，不安装 JDK。EA/preview 候选不参与选择；请求不能注入 SDK、环境或 catalog。
 
 ## 多配置
 
@@ -38,10 +51,10 @@ standalone 声明可为不同源码根指定不同 release：
 
 ## 编译与验证
 
-以下命令仅编译 helper 自身。运行 JDK 和锁定 JAR 必须已在本地准备完成：
+以下命令仅编译分析器自身和不随包交付的组件测试驱动。运行 JDK 和锁定 JAR 必须已在本地准备完成：
 
 ```sh
-python3 analyzers/java/build.py "$CODEGRAPH_JAVA_RUNTIME" "$CODEGRAPH_JAVA_LIB"
+python3 analyzers/java/build.py "$CODEGRAPH_JAVA_RUNTIME" "$CODEGRAPH_JAVA_LIB" --tests
 python3 -m unittest discover -s analyzers/java/tests -v
 ```
 
@@ -49,8 +62,8 @@ python3 -m unittest discover -s analyzers/java/tests -v
 
 | 变量 | 用途 |
 | --- | --- |
-| `CODEGRAPH_JAVA_RUNTIME` | 运行与编译 helper 的固定工具 JDK |
-| `CODEGRAPH_JAVA_LIB` | 与锁文件一致的 helper JAR 目录 |
+| `CODEGRAPH_JAVA_RUNTIME` | 运行与编译分析器的固定工具 JDK |
+| `CODEGRAPH_JAVA_LIB` | 与锁文件一致的 分析器 JAR 目录 |
 | `CODEGRAPH_JAVA_TARGET` | Java 17 目标 JDK，兼容原测试入口 |
 | `CODEGRAPH_JAVA_TARGET_8` | Java 8 目标 JDK；只读取标准库，允许与运行机器架构不同 |
 | `CODEGRAPH_JAVA_TARGET_25` | Java 25 目标 JDK，默认使用固定运行 JDK 的真实 Java 25 标准库 |
@@ -61,7 +74,13 @@ Java 8 夹具未配置且未在 `.tools` 中找到时，对应测试会明确跳
 
 ## 目录发现
 
-私有 `input.files` 省略时，由本语言配置加载器确定完整选集；`[]` 是明确空选集，
+公共 `files` 省略时，由本语言配置加载器确定完整选集；`[]` 是明确空选集，
 `null` 无效。显式数组保持精确选择。具体成员、排除规则、测试角色与限制见
 [引擎选集政策](../../docs/engine-selection.md)。新增目录发现测试由现有原生验收命令运行，
-Host 来源校验另由 `src/native_analyzer/tests/directory/` 的真实引擎用例覆盖。
+来源和图不变量由 Java 自身的 `GraphChecks` 在自然输出边界检查；内部证据不随公共结果输出。
+
+
+`build.py --tests` 把历史配置、来源、只读、图与目标 SDK 用例的驱动编译到
+`build/test-classes`；正式包只复制 `build/classes`。驱动没有生产兼容入口。
+公共协议、EOF、调用方终止、背压与管道错误使用真实 JVM 的公开 Main 验证。
+旧 Host 与打包脚本由后续任务迁移；本机 macOS 结果不代替 Windows 或正式包 CI。

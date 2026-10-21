@@ -1,120 +1,118 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { test } from 'node:test';
-import { typescriptConfiguration } from '../../../scripts/language-packs/typescript-native-smoke.mjs';
+import { spawnSync } from 'node:child_process';
+import { after, test } from 'node:test';
+import { directConfiguration } from './support.mjs';
 
-const protocol = 'codegraph.engine/1';
-const config = await typescriptConfiguration(path.resolve(process.env.CODEGRAPH_TYPESCRIPT_PACK));
+const configuration = directConfiguration({ after });
+const protocol = 'codegraph.analyzer/1';
+const vectors = JSON.parse(fs.readFileSync(new URL('../../common/src/tests/public-conformance.json', import.meta.url)));
 
-/** 真正执行支持包入口；stdin 保持打开直到 helper 自己退出，不伪造生命周期。 */
-async function exchange(t, lines) {
-  const child = spawn(config.executable, config.args, { env: process.platform === 'win32' ? { SystemRoot: process.env.SystemRoot } : {}, stdio: ['pipe', 'pipe', 'pipe'] });
-  let stdout = '', stderr = '';
-  child.stdout.on('data', bytes => { stdout += bytes; });
-  child.stderr.on('data', bytes => { stderr += bytes; });
-  child.stdin.on('error', () => {});
-  const timer = setTimeout(() => child.kill('SIGKILL'), 10000);
-  t.after(() => clearTimeout(timer));
-  const exit = new Promise((resolve, reject) => { child.once('error', reject); child.once('close', (code, signal) => resolve({ code, signal })); });
-  child.stdin.write(`${lines.join('\n')}\n`);
-  const result = await exit;
-  clearTimeout(timer);
-  return { ...result, stderr, messages: stdout.trim().split('\n').map(line => JSON.parse(line)) };
+/** 实际包布局的唯一公开请求；不提供声明 catalog 或运行命令。 */
+function fixture(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codegraph TS 协议-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  return { protocol, type: 'analyze', id: 'review', repository_root: root, files: [],
+    options: { include_tests: false, rust_dependency_scope: 'repository-only' } };
 }
 
-/** 完整输入使用真实固定声明及临时仓库；空选集仍是有效 analyze。 */
-async function input(t) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ts-protocol-'));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
-  return { protocol, type: 'analyze', id: 'review', input: { repository_root: root, files: [], include_tests: false, profile: 'typescript-static-v1' }, environment: { scratch_root: root, platforms: config.platforms }, limits: { analysis_timeout_ms: 30000, max_result_bytes: 16777216, max_diagnostic_bytes: 262144 } };
+/** 一次请求完整写入后 EOF，stdin、stdout、stderr 都由真实运行时处理。 */
+function exchange(payload, args = configuration.args) {
+  const result = spawnSync(configuration.executable, args, { input: payload, encoding: 'utf8', timeout: 15000, cwd: os.tmpdir() });
+  assert.equal(result.error, undefined);
+  return { ...result, message: result.stdout && JSON.parse(result.stdout) };
 }
 
-for (const control of [false, true]) test(`real protocol accepts valid ${control ? 'cancel' : 'analyze'}`, async t => {
-  const request = await input(t);
-  const lines = [JSON.stringify(request)];
-  if (control) lines.push(JSON.stringify({ protocol, type: 'cancel', id: request.id }));
-  const result = await exchange(t, lines);
-  assert.equal(result.code, 0, result.stderr);
-  assert.equal(result.signal, null);
-  assert.equal(result.stderr, '');
-  assert.equal(result.messages.length, 2);
-  assert.equal(result.messages[1].id, 'review');
-  assert.equal(result.messages[1].outcome, control ? 'cancelled' : 'ok');
-});
-
-// 每层 required/unknown/type/enum 都经真实入口拒绝，包含审查报告的全部触发输入。
-const mutations = [
-  ['unknown envelope', r => { r.extra = true; }],
-  ['missing protocol', r => { delete r.protocol; }], ['missing type', r => { delete r.type; }],
-  ['numeric boolean', r => { r.input.include_tests = 0; }], ['wrong package type', r => { r.environment.platforms[0].metadata.package = 1; }],
-  ['missing id', r => { delete r.id; }], ['wrong id', r => { r.id = 1; }], ['empty id', r => { r.id = ''; }],
-  ['wrong protocol', r => { r.protocol = 'other'; }], ['unknown type', r => { r.type = 'batch'; }],
-  ['missing input', r => { delete r.input; }], ['null input', r => { r.input = null; }],
-  ['string boolean', r => { r.input.include_tests = 'false'; }], ['unknown profile', r => { r.input.profile = 'other'; }],
-  ['wrong repository', r => { r.input.repository_root = 1; }], ['wrong files', r => { r.input.files = ''; }], ['null files', r => { r.input.files = null; }], ['wrong file member', r => { r.input.files = [1]; }],
-  ['missing environment', r => { delete r.environment; }], ['array environment', r => { r.environment = []; }],
-  ['wrong scratch', r => { r.environment.scratch_root = false; }], ['wrong platforms', r => { r.environment.platforms = {}; }],
-  ['null platform', r => { r.environment.platforms = [null]; }], ['unknown platform kind', r => { r.environment.platforms[0].kind = 'sdk'; }],
-  ['wrong platform id', r => { r.environment.platforms[0].id = 1; }], ['wrong platform version', r => { r.environment.platforms[0].version = 1; }],
-  ['wrong platform root', r => { r.environment.platforms[0].root = false; }], ['array metadata', r => { r.environment.platforms[0].metadata = []; }],
-  ['unknown package', r => { r.environment.platforms[0].metadata.package = 'business'; }],
-  ['missing limits', r => { delete r.limits; }], ['array limits', r => { r.limits = []; }],
-];
-for (const [object, keys] of [['input', ['repository_root', 'include_tests', 'profile']], ['environment', ['scratch_root', 'platforms']], ['limits', ['analysis_timeout_ms', 'max_result_bytes', 'max_diagnostic_bytes']]]) {
-  mutations.push([`unknown ${object}`, r => { r[object].extra = true; }]);
-  for (const key of keys) mutations.push([`missing ${object}.${key}`, r => { delete r[object][key]; }]);
-}
-for (const key of ['id', 'kind', 'version', 'root', 'metadata']) mutations.push([`missing platform.${key}`, r => { delete r.environment.platforms[0][key]; }]);
-mutations.push(['unknown platform', r => { r.environment.platforms[0].extra = 1; }], ['missing package', r => { delete r.environment.platforms[0].metadata.package; }], ['unknown metadata', r => { r.environment.platforms[0].metadata.extra = 1; }]);
-for (const key of ['analysis_timeout_ms', 'max_result_bytes', 'max_diagnostic_bytes']) for (const value of ['1', 0, -1, 1.5, null]) mutations.push([`wrong limit ${key}=${value}`, r => { r.limits[key] = value; }]);
-for (const [name, mutate] of mutations) test(`real protocol rejects ${name}`, async t => {
-  const request = structuredClone(await input(t));
-  mutate(request);
-  const result = await exchange(t, [JSON.stringify(request)]);
-  assert.equal(result.code, 1, result.stderr);
-  assert.equal(result.signal, null);
-  assert.equal(result.messages.length, 1, 'invalid analyze cannot fabricate completed');
-  assert.ok(result.stderr.length > 0);
-});
-
-/** 包内真实协议允许省略选集，并返回配置发现的完整覆盖。 */
-test('real protocol discovers omitted selection', async t => {
-  const request = await input(t);
-  delete request.input.files;
-  await fs.writeFile(path.join(request.input.repository_root, 'main.ts'), 'export function discovered(){}');
-  const result = await exchange(t, [JSON.stringify(request)]);
-  assert.equal(result.code, 0, result.stderr);
-  assert.equal(result.messages[1].outcome, 'ok', result.stderr);
-  assert.deepEqual(result.messages[1].evidence.files.map(file => file.path), ['main.ts']);
+for (const vector of vectors) test(`shared public conformance: ${vector.name}`, t => {
+  const request = { ...fixture(t), ...vector.patch };
+  const result = exchange(JSON.stringify(request) + vector.suffix);
+  assert.equal(result.status, vector.outcome === 'ok' ? 0 : 1, result.stderr);
+  assert.equal(result.message.protocol, protocol);
+  assert.equal(result.message.engine_version, '0.1.0');
+  assert.equal(result.message.pack_id, 'typescript-javascript');
+  assert.equal(result.message.type, 'completed');
+  assert.equal(result.message.outcome, vector.outcome);
+  if (vector.error_code) { assert.equal(result.message.error.code, vector.error_code); assert.ok(!Object.hasOwn(result.message, 'graph')); }
+  assert.ok(!Object.hasOwn(result.message, 'evidence'));
 });
 
 for (const [name, replace] of [
-  ['id', s => s.replace('"id":"review"', '"id":"discarded","id":"review"')],
-  ['escaped id', s => s.replace('"id":"review"', '"i\\u0064":"discarded","id":"review"')],
-  ['input', s => s.replace('"include_tests":false', '"include_tests":true,"include_tests":false')],
-  ['environment', s => s.replace('"platforms":', '"platforms":[],"platforms":')],
-  ['platform', s => s.replace('"kind":"typescript-declarations"', '"kind":"other","kind":"typescript-declarations"')],
-  ['metadata', s => s.replace('"package":"typescript"', '"package":"business","package":"typescript"')],
-  ['limits', s => s.replace('"max_result_bytes":16777216', '"max_result_bytes":1,"max_result_bytes":16777216')],
-]) test(`real protocol rejects duplicate ${name}`, async t => {
-  const result = await exchange(t, [replace(JSON.stringify(await input(t)))]);
-  assert.equal(result.code, 1);
-  assert.equal(result.messages.length, 1);
-  assert.match(result.stderr, /重复 JSON 键/);
+  ['id', text => text.replace('"id":"review"', '"id":"discarded","id":"review"')],
+  ['escaped id', text => text.replace('"id":"review"', '"i\\u0064":"discarded","id":"review"')],
+  ['options', text => text.replace('"include_tests":false', '"include_tests":true,"include_tests":false')],
+  ['nested unknown', text => text.replace('"files":[]', '"files":[],"extra":{"key":1,"key":2}')],
+]) test(`duplicate JSON keys are rejected recursively: ${name}`, t => {
+  const result = exchange(replace(JSON.stringify(fixture(t))));
+  assert.equal(result.status, 1);
+  assert.equal(result.message.id, null);
+  assert.equal(result.message.error.code, 'invalid_request');
 });
 
-for (const [name, control] of [
-  ['unknown field', JSON.stringify({ protocol, type: 'cancel', id: 'review', extra: true })],
-  ['missing id', JSON.stringify({ protocol, type: 'cancel' })],
-  ['wrong id type', JSON.stringify({ protocol, type: 'cancel', id: 1 })],
-  ['duplicate id', `{"protocol":"${protocol}","type":"cancel","id":"wrong","id":"review"}`],
-  ['wrong protocol', JSON.stringify({ protocol: 'other', type: 'cancel', id: 'review' })],
-]) test(`real protocol rejects cancel ${name}`, async t => {
-  const result = await exchange(t, [JSON.stringify(await input(t)), control]);
-  assert.equal(result.code, 1, result.stderr);
-  assert.equal(result.signal, null);
-  assert.equal(result.messages.length, 1, 'invalid cancel cannot become successful or cancelled');
+for (const value of ['', '[]', '{}', '{broken', Buffer.from([0xff]), '{"a":'.repeat(70) + '0' + '}'.repeat(70)]) test(`malformed whole input is a handled failure: ${String(value).slice(0, 24)}`, () => {
+  const result = exchange(value);
+  assert.equal(result.status, 1);
+  assert.equal(result.message.id, null);
+  assert.equal(result.message.error.code, 'invalid_request');
+});
+
+test('public discovery, exact selection, external context and test policy use the real compiler', t => {
+  const request = fixture(t);
+  const root = request.repository_root;
+  const contents = {
+    'tsconfig.json': JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'Preserve', moduleResolution: 'Bundler', types: [] }, include: ['src'] }),
+    'src/主程序.ts': "import {target} from './target'; export function caller(){target(); Promise.resolve(1)}",
+    'src/target.ts': 'export function target(){return 1}',
+    'src/main.test.ts': 'export function testOnly(){}', 'stray.ts': 'export function stray(){}',
+  };
+  for (const [name, text] of Object.entries(contents)) { fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true }); fs.writeFileSync(path.join(root, name), text); }
+  delete request.files;
+  const discovered = exchange(JSON.stringify(request));
+  assert.equal(discovered.status, 0, discovered.stdout);
+  assert.ok(discovered.message.graph.nodes.some(node => node.name === 'target'));
+  assert.ok(!discovered.message.graph.nodes.some(node => ['stray', 'testOnly'].includes(node.name)));
+  request.files = ['src/主程序.ts'];
+  const selected = exchange(JSON.stringify(request));
+  assert.equal(selected.status, 0, selected.stdout);
+  assert.ok(!selected.message.graph.nodes.some(node => node.name === 'target'));
+  assert.ok(selected.message.graph.external_symbols.some(symbol => symbol.name === 'target' && symbol.scope === 'repository'));
+  assert.ok(selected.message.graph.external_symbols.some(symbol => symbol.scope === 'dependency'));
+  request.files = ['src/main.test.ts'];
+  request.options.include_tests = true;
+  assert.ok(exchange(JSON.stringify(request)).message.graph.nodes.some(node => node.name === 'testOnly'));
+  for (const [name, text] of Object.entries(contents)) assert.equal(fs.readFileSync(path.join(root, name), 'utf8'), text);
+});
+
+for (const args of [[], ['analyze', 'analyze'], ['--version', '--version'], ['__worker'], ['analyze', '--pack-id', 'java']]) test(`invalid CLI exits two: ${JSON.stringify(args)}`, () => {
+  const result = exchange('', [...configuration.args.slice(0, -1), ...args]);
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, '');
+});
+for (const args of [['--help'], ['analyze', '--help'], ['--version']]) test(`CLI text is forwarded by the program: ${args.join(' ')}`, () => {
+  const result = spawnSync(configuration.executable, [...configuration.args.slice(0, -1), ...args], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /codegraph-typescript-javascript/);
+  assert.equal(result.stderr, '');
+});
+
+for (const [name, mutate] of [
+  ['private envelope', request => ({ protocol, type: 'analyze', id: request.id, input: {}, environment: {}, limits: {} })],
+  ['oversized UTF-8 id', request => ({ ...request, id: '源'.repeat(400) })],
+  ['unpaired surrogate', request => ({ ...request, id: '\uD800' })],
+  ['too many files', request => ({ ...request, files: Array.from({ length: 100001 }, (_, index) => `f${index}.ts`) })],
+]) test(`public boundary rejects ${name}`, t => {
+  const result = exchange(JSON.stringify(mutate(fixture(t))));
+  assert.equal(result.status, 1);
+  assert.equal(result.message.id, null);
+  assert.equal(result.message.error.code, 'invalid_request');
+});
+
+test('installation cannot overlap selected source even for explicit empty selection', t => {
+  const request = fixture(t);
+  request.repository_root = configuration.root;
+  const result = exchange(JSON.stringify(request));
+  assert.equal(result.status, 1);
+  assert.equal(result.message.id, request.id);
+  assert.equal(result.message.error.code, 'invalid_input');
 });

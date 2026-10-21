@@ -2,13 +2,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { exchangeTypeScript, typescriptConfiguration } from '../../../scripts/language-packs/typescript-native-smoke.mjs';
+import { spawnSync } from 'node:child_process';
+import { directConfiguration } from './support.mjs';
 
-// 可复现的一次性 helper 样本；macOS time 同时提供完整子进程的墙钟与峰值 RSS。
+// 可复现的一次性公开分析样本；macOS time 同时提供完整子进程的墙钟与峰值 RSS。
 if (process.platform !== 'darwin') throw new Error('此性能样本使用 macOS /usr/bin/time -l');
 const pack = process.env.CODEGRAPH_TYPESCRIPT_PACK;
 if (!pack) throw new Error('CODEGRAPH_TYPESCRIPT_PACK required');
-const config = await typescriptConfiguration(path.resolve(pack));
+const cleanups = [];
+const config = directConfiguration({ after: cleanup => cleanups.push(cleanup) });
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'narrant-ts-benchmark-'));
 try {
   const files = Array.from({ length: 40 }, (_, i) => `part${i}.ts`);
@@ -17,15 +19,17 @@ try {
     const functions = Array.from({ length: 10 }, (_, j) => `export function f${i}_${j}() { return ${j ? `f${i}_${j - 1}()` : 'previous()'}; }`).join('\n');
     await fs.writeFile(path.join(root, files[i]), `import { f${(i + 39) % 40}_9 as previous } from './part${(i + 39) % 40}';\n${functions}`);
   }
-  const request = { protocol: 'codegraph.engine/1', type: 'analyze', id: 'analysis-1', input: { repository_root: root, files, include_tests: false, profile: 'typescript-static-v1' }, environment: { scratch_root: root, platforms: config.platforms }, limits: { analysis_timeout_ms: 30000, max_result_bytes: 16777216, max_diagnostic_bytes: 262144 } };
+  const request = { protocol: 'codegraph.analyzer/1', type: 'analyze', id: 'analysis-1', repository_root: root, files,
+    options: { include_tests: false, rust_dependency_scope: 'repository-only' } };
   for (let run = 1; run <= 3; run++) {
     const started = performance.now();
-    const result = await exchangeTypeScript({ executable: '/usr/bin/time', args: ['-l', config.executable, ...config.args] }, request);
-    const completed = result.messages[1];
+    const result = spawnSync('/usr/bin/time', ['-l', config.executable, ...config.args], { input: JSON.stringify(request), encoding: 'utf8', timeout: 30000, maxBuffer: 128 * 1024 * 1024 });
+    assert.equal(result.status, 0, result.stderr);
+    const completed = JSON.parse(result.stdout);
     assert.equal(completed.outcome, 'ok');
     assert.equal(completed.graph.nodes.length, 440);
     assert.equal(completed.graph.nodes.flatMap(n => n.references).filter(r => r.target.kind === 'node').length, 400);
-    assert.equal(completed.evidence.files.length, 40);
+    assert.equal(completed.graph.root_contains.length, 40);
     console.log(JSON.stringify({ run, files: 40, nodes: 440, resolved_relations: 400, wall_ms: Math.round(performance.now() - started), peak_rss_bytes: Number(result.stderr.match(/(\d+)\s+maximum resident set size/)[1]) }));
   }
-} finally { await fs.rm(root, { recursive: true, force: true }); }
+} finally { await fs.rm(root, { recursive: true, force: true }); cleanups.forEach(cleanup => cleanup()); }

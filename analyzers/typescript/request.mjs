@@ -1,4 +1,14 @@
+import fs from 'node:fs';
 import path from 'node:path';
+import { within } from './workspace.mjs';
+
+export const MAX_BYTES = 128 * 1024 * 1024;
+
+/** 保留公共错误类别，语言内部异常统一由入口归为分析失败。 */
+export class AnalysisFailure extends Error {
+  /** 建立不携带私有路径清单的公开错误。 */
+  constructor(code, message) { super(message); this.code = code; }
+}
 
 /** 在整体 JSON.parse 之前逐层检查键；转义拼写不同的同名键也不能被覆盖。 */
 function rejectDuplicateKeys(text) {
@@ -49,59 +59,62 @@ function rejectDuplicateKeys(text) {
   if (text.slice(offset).trim()) throw new SyntaxError('JSON 尾部内容');
 }
 
-/** 所有字段都必须出现且不得扩展；数组和 null 不能冒充对象。 */
+/** 对象采用闭合字段集；可选选集只允许省略，不接受 null。 */
 function fields(object, names) {
   if (!object || typeof object !== 'object' || Array.isArray(object)
-    || Object.keys(object).length !== names.length || !names.every(name => Object.hasOwn(object, name))) throw new Error(`无效协议字段：${names.join(',')}`);
-}
-/** 协议字符串必须能无损表达路径和身份，拒绝 NUL。 */
-function string(value) {
-  if (typeof value !== 'string' || !value || value.includes('\0')) throw new Error('无效协议字符串');
-}
-/** 目录使用宿主绝对路径；真实来源和链接仍交由已有读取政策校验。 */
-function directory(value) {
-  string(value);
-  if (!path.isAbsolute(value)) throw new Error('协议目录必须为绝对路径');
+    || Object.keys(object).length !== names.length || !names.every(name => Object.hasOwn(object, name))) throw new Error('无效协议字段');
 }
 
-/** 单次 analyze/cancel 的严格解码，仅验证输入契约，不重复 Host 的图验证。 */
-export function decodeRequest(line, activeId) {
-  rejectDuplicateKeys(line);
-  const message = JSON.parse(line);
-  if (!message || message.protocol !== 'codegraph.engine/1') throw new Error('无效分析协议');
-  if (activeId !== undefined) {
-    if (message.type !== 'cancel' || message.id !== activeId) throw new Error('无效或重复分析控制');
-    fields(message, ['protocol', 'type', 'id']);
+/** 字符串不能含 NUL 或无法无损编码为 UTF-8 的代理项。 */
+function string(value) {
+  if (typeof value !== 'string' || !value || value.includes('\0') || !value.isWellFormed()) throw new Error('无效协议字符串');
+}
+
+/** 所有选集及来源路径共用规范 POSIX 相对路径规则。 */
+export function relativePath(value) {
+  string(value);
+  if (value.includes('\\') || value.includes(':') || value.startsWith('/')
+    || value.split('/').some(part => !part || part === '.' || part === '..')) throw new Error('无效仓库相对路径');
+}
+
+/** 直接解码一次公共请求，不接受内部目录、SDK、命令或控制消息。 */
+export function decodeRequest(text) {
+  try {
+    rejectDuplicateKeys(text);
+    const message = JSON.parse(text);
+    if (message && typeof message === 'object' && typeof message.protocol === 'string'
+      && message.protocol !== 'codegraph.analyzer/1') throw new AnalysisFailure('incompatible_protocol', '不兼容的分析协议');
+    fields(message, ['protocol', 'type', 'id', 'repository_root', 'options', ...(Object.hasOwn(message ?? {}, 'files') ? ['files'] : [])]);
+    if (message.protocol !== 'codegraph.analyzer/1' || message.type !== 'analyze') throw new Error('无效分析请求');
     string(message.id);
+    if (!message.id.trim() || Buffer.byteLength(message.id) > 1024) throw new Error('无效请求 ID');
+    string(message.repository_root);
+    if (!path.isAbsolute(message.repository_root)) throw new Error('项目根必须为绝对路径');
+    fields(message.options, ['include_tests', 'rust_dependency_scope']);
+    if (typeof message.options.include_tests !== 'boolean'
+      || !['repository-only', 'standard-library', 'all-dependencies'].includes(message.options.rust_dependency_scope)) throw new Error('无效分析选项');
+    if (Object.hasOwn(message, 'files')) {
+      if (!Array.isArray(message.files) || message.files.length > 100000) throw new Error('无效文件选集');
+      message.files.forEach(relativePath);
+      if (new Set(message.files).size !== message.files.length) throw new Error('重复选集路径');
+    }
     return message;
+  } catch (error) {
+    if (error instanceof AnalysisFailure) throw error;
+    throw new AnalysisFailure('invalid_request', error.message);
   }
-  if (message.type !== 'analyze') throw new Error('无效分析请求');
-  fields(message, ['protocol', 'type', 'id', 'input', 'environment', 'limits']);
-  string(message.id);
-  fields(message.input, ['repository_root', 'include_tests', 'profile', ...(Object.hasOwn(message.input ?? {}, 'files') ? ['files'] : [])]);
-  directory(message.input.repository_root);
-  if (typeof message.input.include_tests !== 'boolean' || message.input.profile !== 'typescript-static-v1') throw new Error('无效 TypeScript 输入政策');
-  if (Object.hasOwn(message.input, 'files') && !Array.isArray(message.input.files)) throw new Error('无效协议文件数组');
-  const files = message.input.files ?? [];
-  if (files.length > 100000) throw new Error('文件选集超过数量上限');
-  for (const file of files) {
-    string(file);
-    if (file.includes('\\') || path.posix.isAbsolute(file) || path.win32.isAbsolute(file) || file.split('/').some(part => !part || part === '..' || part === '.')) throw new Error('无效协议相对文件路径');
-  }
-  if (new Set(files).size !== files.length) throw new Error('重复协议文件路径');
-  fields(message.environment, ['scratch_root', 'platforms']);
-  directory(message.environment.scratch_root);
-  if (!Array.isArray(message.environment.platforms)) throw new Error('无效协议平台数组');
-  const ids = new Set();
-  for (const platform of message.environment.platforms) {
-    fields(platform, ['id', 'kind', 'version', 'root', 'metadata']);
-    string(platform.id); string(platform.version); directory(platform.root);
-    if (ids.has(platform.id)) throw new Error('重复平台 ID');
-    ids.add(platform.id);
-    fields(platform.metadata, ['package']);
-    if (platform.kind !== 'typescript-declarations' || !['typescript', '@types/node', 'undici-types'].includes(platform.metadata.package)) throw new Error('无效 TypeScript 声明平台');
-  }
-  fields(message.limits, ['analysis_timeout_ms', 'max_result_bytes', 'max_diagnostic_bytes']);
-  if (!Object.values(message.limits).every(value => Number.isSafeInteger(value) && value > 0)) throw new Error('协议限制必须为正整数');
-  return message;
+}
+
+/** 根和每个选中文件必须真实存在；安装与源码不能相互包含。 */
+export function validateInput(request, installation) {
+  try {
+    const root = fs.realpathSync.native(request.repository_root);
+    const installed = fs.realpathSync.native(installation);
+    if (!fs.statSync(root).isDirectory() || within(root, installed) || within(installed, root)) throw new Error('源码与分析器安装重叠或根不是目录');
+    for (const relative of request.files ?? []) {
+      const file = fs.realpathSync.native(path.join(root, relative));
+      if (!within(root, file) || !fs.statSync(file).isFile()) throw new Error('选中文件越界或不是普通文件');
+    }
+    return { ...request, repository_root: root };
+  } catch (error) { throw new AnalysisFailure('invalid_input', `无效源码输入：${error.code ?? error.message}`); }
 }

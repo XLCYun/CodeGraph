@@ -95,13 +95,11 @@ class DiscoveryTests(unittest.TestCase):
         write(self.root, "pom.xml", "<invalid")
         self.assertEqual(run(discover(self.root))["error"]["code"], "unsupported_configuration")
 
-    def test_discovery_cancel_and_timeout(self):
-        """省略选集时仍遵守取消与加载阶段期限，进程不等待 stdin 结束。"""
+    def test_discovery_timeout(self):
+        """省略选集时仍遵守加载阶段内部期限，取消由公开入口生命周期测试覆盖。"""
         metadata(self.root)
         for index in range(1200):
             write(self.root, f"src/main/java/C{index}.java", f"class C{index} {{}}")
-        result = run(discover(self.root), cancel=True)
-        self.assertEqual(result["outcome"], "cancelled", result)
         result = run(discover(self.root, timeout=1))
         self.assertEqual(result["error"]["code"], "resource_limit", result)
 

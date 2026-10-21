@@ -1,52 +1,45 @@
-# TypeScript / JavaScript Native Helper
+# TypeScript / JavaScript 语言分析器
+
+公开入口为 `bin/codegraph-typescript-javascript analyze`。JS 程序直接实现
+`codegraph.analyzer/1`，固定版本 `0.1.0`。stdin 接收一个 UTF-8 JSON 对象后 EOF，
+尾换行可选；stdout 只有一条带固定语言、版本和协议身份的最终结果。成功退出 0，
+可处理失败退出 1，CLI 用法错误退出 2。`--help`、`analyze --help` 和 `--version`
+输出文本后退出。完整契约见 [公共协议](../../docs/protocol.md)。
 
 固定 Node 24.18.0、TypeScript 6.0.3、@types/node 22.20.1、undici-types 6.21.0。
-通过 `codegraph.engine/1` 和 `typescript-static-v1` 一侧接收一次请求。
-不运行项目代码、插件、构建、tsserver 或语言服务器。
+Rust 薄入口只定位 `bin/node` 与 `runtime/analyzer/main.mjs`，设置固定参数与运行环境，
+继承标准句柄并传播退出；macOS 使用 exec，Windows spawn/wait。公共 JSON、声明发现、
+源码加载及构图均在 JS 主线程内完成，没有 ready、cancel、控制线程或分析 Worker。
+调用方在写完输入后关闭 stdin，并负责取消、外部期限和整棵进程树终止。
 
-- `workspace.mjs` 只允许固定侧的第一方源码/JSON 元数据和三套固定声明。
-  workspace 包与 Node 声明通过内存文件接口解析，不创建 node_modules 链接。
-- `config.mjs` 使用原生 JSONC 配置解析，保留 extends/references/configDir/paths、
-  package imports/exports 与无 dist 的项目引用重定向。缺失业务配置沿用旧政策。
-- `analyze.mjs` 为每个实际配置创建进程内 LanguageService；同一请求共享原生
-  DocumentRegistry。语法树、诊断、`getDefinitionAtPosition` 均来自这些对象。
-  checker 仅验证 type-only 路由，不能替换定义导航的 union 选择。
-- `projection.mjs` 从原生 AST 收集声明；规范打印只裁剪声明成员列表，保留完整
-  参数、初始化器和函数体。token 来自正确语法上下文的重新解析，保留 JSX、
-  模板、正则、ASI、稀疏数组；不维护 Oxc 式的第二套 AST。
-- 原生分析运行于当前 helper 进程内的单次 worker thread；主线程处理 cancel 和
-  提前 stdin EOF，等待线程回收后 flush 唯一终结并退出。公共 Host 的 ProcessTree
-  继续拥有整个进程树与超时清理；取消不能变成成功空图。
-- Windows 的 stdout/stderr 使用公开回调式 `fs.write`，按字节补齐短写，避免标准
-  stream 的同步管道写入阻塞控制。POSIX 保留 stream 背压处理。正常结果、错误与取消
-  均等完整输出后 exit 0；提前 EOF 才允许丢弃余量。Windows 给已完成写入的回调
-  100ms 收尾窗口，仍未 flush 才在分析线程回收后仅终止当前进程（exit 1），避免
-  `process.exit()` 等待阻塞中的 libuv 写线程。诊断先于终结，正常 Host 可随终结关闭 stdin。
+- `request.mjs` 拒绝重复 JSON 键、未知字段、非法路径及安装与源码重叠，保留
+  128 MiB 请求/结果和 100,000 文件上限。显式 `files: []` 不读取配置或加载声明。
+- `runtime.mjs` 只从随包固定位置读取三套声明及编译器，不执行项目插件、代码、
+  构建、类型获取或目标 SDK 安装。公共输入不能传入 SDK 或 catalog。
+- `workspace.mjs` 只允许原有第一方源码/JSON 元数据和固定声明。workspace 包与
+  Node 声明通过内存接口解析，不创建 node_modules 链接；完成前校验快照未变化。
+- `config.mjs` 保留原生 JSONC、extends/references/configDir/paths、package imports/exports
+  及无 dist 的项目引用重定向。省略选集使用原有配置发现；精确选集之外仅提供上下文。
+- `analyze.mjs` 保留每配置的 LanguageService 和共享 DocumentRegistry，定义导航、
+  诊断、type-only 路由和关系 union 语义不变。`graph.mjs` 在输出边界一次检查来源、
+  六类节点身份、唯一包含、根可达性、关系端点和完整图外描述；私有证据不输出。
+- `projection.mjs` 保留原生 AST、自身内容、历史稳定身份、JSX、模板、正则、ASI
+  及稀疏数组等断言。别名按真实路径合并节点，来源保留词法选集；测试排除同时检查
+  词法路径与真实相对路径，越界链接仍失败。
+- Windows 输出保留经过短写测试的异步 `fs.write`，按 UTF-8 字节完整写出。
+  stdout 背压由调用方持续排空；取消和输送故障由调用方终止进程，不恢复控制通道。
 
-支持包构建与真实图 smoke：
+原生语义与公共入口测试复用已有固定声明包，不修改旧包字节：
 
 ```sh
-node scripts/language-packs/build-language-support-packs.mjs --id typescript-javascript --target aarch64-apple-darwin --output native-language-support-packs
-node scripts/language-packs/verify-native-analyzers.mjs native-language-support-packs --language typescript-javascript
+CODEGRAPH_TYPESCRIPT_PACK=/absolute/extracted/pack node --test analyzers/typescript/tests/*.test.mjs
 ```
 
-Windows 使用 `x86_64-pc-windows-msvc`，在对应平台本机构建和验证。
-聚焦验收包含 helper 自身、旧语言图断言、公共 Host/进程、真实安装、Review DTO、
-真实取消与公开图/diff。所有 Cargo 命令由 `scripts/cargo-agent.sh` 串行执行。
-单独运行 Node 测试需设置 `CODEGRAPH_TYPESCRIPT_PACK` 为真实已解压包目录。
-
-1.1.0 为迁移候选包，`published=false`；最终 GitHub-hosted macOS ARM64 / Windows x64
-语言 Actions 已通过，见[迁移证据](../../docs/research/existing-native-helper-migration-validation.md)。
-测试通过不会自动发布支持包。
-旧 TypeScript 子树、TLS 开发安装链和 Oxc 宿主依赖已在本地 macOS 验收后退役；
-身份、原文和包含树由固定历史断言继续验证，生产入口使用 Native Host。
-
-别名选择沿用旧 TS 行为：按真实文件路径合并图节点，coverage 保留每个词法选集路径，
-origins 聚合未被测试规则排除的来源。测试规则同时检查选中路径和真实仓库相对路径。
-内部目录链接不扩大读取边界；越界链接、重复词法路径仍由公共 Host 拒绝。
-
-macOS 性能样本（40 文件、400 函数/解析关系、三次独立进程，输出墙钟和 RSS）：
+性能样本使用新的公共入口和一次性包布局：
 
 ```sh
 CODEGRAPH_TYPESCRIPT_PACK=/absolute/extracted/pack node analyzers/typescript/tests/benchmark.mjs
 ```
+
+旧 Host 和打包脚本仍在后续迁移范围。旧结构的历史验收仅证明当时的实现，不能作为
+当前直接入口的双平台打包证据；Windows 和正式包由最终自动 CI 验证。

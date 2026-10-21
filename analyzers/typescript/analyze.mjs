@@ -5,13 +5,14 @@ import { prepareConfigurations, inferredOptions, discoverFiles } from './config.
 import { project, normalize, unwrap, isTest } from './projection.mjs';
 import { hasSyntaxErrors } from './syntax.mjs';
 import { createObservation } from './observation.mjs';
+import { validateProjection } from './graph.mjs';
 
 /** 一侧一次固定请求：同一个 LanguageService 同时提供语法树、类型诊断和定义导航。 */
 export function analyze(ts, request) {
   const input = request.input;
   const discovery = input.files === undefined;
   const deadline = performance.now() + (request.limits?.analysis_timeout_ms ?? 1800000);
-  /** 同步原生遍历检查期限，活动取消仍由主线程回收整个 Worker。 */
+  /** 同步原生遍历保留内部期限；取消与外部期限由调用方终止进程。 */
   function checkpoint() { if (performance.now() > deadline) throw new Error('TypeScript 分析超过期限'); }
   if (input.profile !== 'typescript-static-v1') throw new Error('不支持的 TypeScript profile');
   const platforms = request.environment.platforms;
@@ -31,14 +32,14 @@ export function analyze(ts, request) {
   // 旧入口先校验路径，再短路空选集/全词法测试选集；不读取无关坏配置。
   if (!discovery && (!selected.length || !input.include_tests && paths.every(isTest))) {
     const id = 'excluded:typescript-tests';
-    return {
+    return validateProjection({
       graph: { root_contains: [], nodes: [], external_symbols: [] },
       evidence: {
         configurations: selected.length ? [{ id, source_paths: [], platform_ids: [] }] : [],
         files: paths.map(file => ({ path: file, disposition: 'excluded_test', configuration_ids: [id] })),
         origins: [],
       },
-    };
+    }, input, platforms);
   }
   const context = createWorkspace({ root, runtime, checkpoint, observeSnapshot: discovery ? createObservation(request.id) : undefined });
   const prepared = prepareConfigurations(context, ts, [...context.sources], discovery);
@@ -246,10 +247,10 @@ export function analyze(ts, request) {
   }
   services.forEach(s => s.ls.dispose());
   context.unchanged();
-  return {
+  return validateProjection({
     graph: { root_contains: output.filter(n => n.native_kind === 'file').map(n => n.id), nodes: output, external_symbols: [...external.values()].filter(s => used.has(s.symbol)) },
     evidence: { configurations: [...new Set(files.length ? files.flatMap(f => f.configuration_ids) : discovery ? projects.map(p => p.name).concat(projects.length ? [] : ['inferred:default']) : [])].map(id => ({ id, source_paths: id.startsWith('inferred:') ? [] : configFiles.map(f => path.relative(context.root, f).split(path.sep).join('/')), platform_ids: platforms.map(p => p.id) })), files, origins },
-  };
+  }, input, platforms);
 }
 
 /** 从原生 AST 收集候选意图；匿名回调内的调用属于最内层已建模声明。 */

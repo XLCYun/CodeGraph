@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.ToolFactory;
 import org.eclipse.jdt.core.compiler.IScanner;
@@ -30,8 +29,6 @@ import static dev.codegraph.java.Main.Failure;
 
 /** 使用固定 JDT Core 解析一侧源码并生成完整 Code Graph。 */
 final class Analyzer {
-    private final JsonObject request;
-    private final AtomicBoolean cancelled;
     private final long deadline;
     private final long resultLimit;
     private final ProjectModel model;
@@ -137,28 +134,14 @@ final class Analyzer {
     }
 
     /** 验证期限和目标模型，进程不运行项目工具。 */
-    Analyzer(JsonObject request, AtomicBoolean cancelled) throws Failure {
-        this.request = request;
-        this.cancelled = cancelled;
-        JsonObject limits = Main.object(request, "limits");
-        Main.fields(limits, Set.of("analysis_timeout_ms", "max_result_bytes", "max_diagnostic_bytes"));
-        long timeout = positive(limits, "analysis_timeout_ms");
-        this.resultLimit = positive(limits, "max_result_bytes");
-        positive(limits, "max_diagnostic_bytes");
-        this.deadline = System.nanoTime() + timeout * 1_000_000L;
-        this.model = ProjectModel.discover(request, this::checkpoint);
+    Analyzer(AnalysisInput input, SdkDiscovery.Provider targets) throws Failure {
+        if (input.timeoutMillis() <= 0 || input.maxResultBytes() <= 0) throw new Failure("invalid_input", "invalid analysis limit");
+        this.resultLimit = input.maxResultBytes();
+        this.deadline = System.nanoTime() + input.timeoutMillis() * 1_000_000L;
+        this.model = ProjectModel.discover(input, targets, this::checkpoint);
     }
 
-    /** 解析正整数限制。 */
-    private static long positive(JsonObject object, String key) throws Failure {
-        try {
-            long value = object.get(key).getAsLong();
-            if (value > 0 && object.get(key).getAsString().matches("[0-9]+")) return value;
-        } catch (Exception ignored) { /* 下面统一返回输入错误。 */ }
-        throw new Failure("invalid_input", "invalid limit: " + key);
-    }
-
-    /** 返回 Host 也独立执行的结果字节上限。 */
+    /** 返回组件及公共输出边界共同使用的结果字节上限。 */
     long maxResultBytes() { return resultLimit; }
 
     /** 执行配置隔离解析、来源归并与关系终判。 */
@@ -178,12 +161,12 @@ final class Analyzer {
         JsonObject result = new JsonObject();
         result.add("graph", graph());
         result.add("evidence", evidence());
+        GraphChecks.validate(result, model);
         return result;
     }
 
-    /** 检查取消与分析总时限，JDT 回调间也执行。 */
+    /** 检查内部分析时限；调用方通过终止进程实现取消。 */
     private void checkpoint() throws Failure {
-        if (cancelled.get()) throw Failure.cancelled();
         if (System.nanoTime() > deadline) throw new Failure("resource_limit", "analysis timeout");
     }
 
@@ -239,9 +222,9 @@ final class Analyzer {
                     }
                 }
             }, new NullProgressMonitor() {
-                /** JDT 查询时立即感知取消和期限。 */
+                /** JDT 查询时保留内部期限检查，外部取消由调用方终止。 */
                 @Override public boolean isCanceled() {
-                    return cancelled.get() || System.nanoTime() > deadline;
+                    return System.nanoTime() > deadline;
                 }
             });
             if (callbackFailure[0] != null) throw callbackFailure[0];
@@ -252,7 +235,6 @@ final class Analyzer {
         catch (UnionConflict e) { throw new Failure("union_conflict", "incompatible source identity: " + e.getMessage()); }
         catch (Exception e) {
             if (System.nanoTime() > deadline) throw new Failure("resource_limit", "analysis timeout");
-            if (cancelled.get()) throw Failure.cancelled();
             throw new Failure("object_extraction_failed", "JDT parser failed: " + e.getMessage());
         }
     }
@@ -625,7 +607,9 @@ final class Analyzer {
         String scope = repository ? "repository" : "dependency";
         target.addProperty("kind", "external");
         target.addProperty("symbol", symbol);
-        externals.putIfAbsent(symbol, new External(symbol, display(declaration), scope));
+        // 匿名构造器的 binding 名为空时，使用此次已确认关系的源码显示名。
+        String name = display(declaration);
+        externals.putIfAbsent(symbol, new External(symbol, name.isEmpty() ? pending.observed : name, scope));
         return target;
     }
 

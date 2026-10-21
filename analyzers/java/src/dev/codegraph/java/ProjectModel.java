@@ -40,7 +40,7 @@ final class ProjectModel {
     private final Checkpoint checkpoint;
     private final Map<String, List<String>> inventories = new HashMap<>();
 
-    /** 将目录和配置加载纳入同一次请求的取消及期限。 */
+    /** 将目录和配置加载纳入同一次请求的期限。 */
     @FunctionalInterface
     interface Checkpoint { void check() throws Failure; }
 
@@ -88,44 +88,26 @@ final class ProjectModel {
     }
 
     /** 从固定输入发现 standalone 声明或有限 Maven POM。 */
-    static ProjectModel discover(JsonObject request, Checkpoint checkpoint) throws Failure {
-        JsonObject input = Main.object(request, "input");
-        JsonObject requiredInput = input.deepCopy();
-        requiredInput.remove("files");
-        Main.fields(requiredInput, Set.of("repository_root", "include_tests", "profile"));
-        boolean discovery = !input.has("files");
-        Main.requireString(input, "profile", Main.PROFILE);
-        Path root = Path.of(Main.string(input, "repository_root"));
+    static ProjectModel discover(AnalysisInput input, SdkDiscovery.Provider targetProvider, Checkpoint checkpoint) throws Failure {
+        boolean discovery = input.files() == null;
+        Path root = input.repository();
         if (!root.isAbsolute() || !Files.isDirectory(root)) throw new Failure("invalid_input", "invalid repository_root");
         try { root = root.toRealPath(); } catch (Exception e) { throw new Failure("invalid_input", "unreadable repository_root"); }
-        if (!input.get("include_tests").isJsonPrimitive() || !input.get("include_tests").getAsJsonPrimitive().isBoolean())
-            throw new Failure("invalid_input", "include_tests must be boolean");
-        boolean includeTests = input.get("include_tests").getAsBoolean();
-        JsonArray requested = discovery ? new JsonArray() : Main.array(input, "files");
+        boolean includeTests = input.includeTests();
+        List<String> requested = discovery ? List.of() : input.files();
         if (requested.size() > MAX_FILES) throw new Failure("resource_limit", "Java selection exceeds file limit");
         List<String> files = new ArrayList<>();
         Set<String> unique = new HashSet<>();
-        for (JsonElement element : requested) {
-            if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isString())
-                throw new Failure("invalid_input", "files must be paths");
-            String file = element.getAsString();
+        for (String file : requested) {
             validateRelative(file);
-            if (!file.endsWith(".java") || !unique.add(file))
-                throw new Failure("invalid_input", "duplicate or non-Java file: " + file);
+            if (!file.endsWith(".java") || !unique.add(file)) throw new Failure("invalid_input", "duplicate or non-Java file: " + file);
             files.add(file);
-            if (files.size() > MAX_FILES) throw new Failure("resource_limit", "Java selection exceeds file limit");
         }
-        // 明确缺少受支持配置的错误保持原有优先级；后续耗时加载允许取消。
+        // 明确缺少受支持配置的错误保持原有优先级；后续耗时加载保留内部期限。
         if ((discovery || !requested.isEmpty()) && !Files.exists(root.resolve("narrant-java.json")) &&
             !Files.exists(root.resolve("pom.xml")))
             throw new Failure("unsupported_configuration", "no explicit Java source roots or target release");
         for (String file : files) { checkpoint.check(); checkedFile(root, file); }
-        JsonObject environment = Main.object(request, "environment");
-        Main.fields(environment, Set.of("scratch_root", "platforms"));
-        Main.array(environment, "platforms");
-        Path scratch = Path.of(Main.string(environment, "scratch_root"));
-        if (!scratch.isAbsolute() || scratch.normalize().startsWith(root))
-            throw new Failure("invalid_input", "scratch_root must be outside repository");
         if (!discovery && files.isEmpty())
             return new ProjectModel(root, List.of(), Map.of(), files, includeTests, checkpoint);
         List<Configuration> configs = new ArrayList<>();
@@ -140,14 +122,15 @@ final class ProjectModel {
             throw new Failure("unsupported_configuration", "Gradle needs narrant-java.json static metadata");
         else throw new Failure("unsupported_configuration", "no explicit Java source roots or target release");
         if (configs.isEmpty()) throw new Failure("unsupported_configuration", "no Java configurations");
-        if (discovery) Observation.record(Main.string(request, "id"));
+        if (discovery) Observation.record(input.id());
+        List<SdkDiscovery.Candidate> platforms = targetProvider.discover();
         Map<String, Target> targets = new HashMap<>();
         List<Configuration> bound = new ArrayList<>();
         for (Configuration config : configs) {
             checkpoint.check();
             Target target = targets.get(config.release);
             if (target == null) {
-                target = chooseTarget(environment, config.release);
+                target = chooseTarget(platforms, config.release);
                 targets.put(config.release, target);
             }
             bound.add(new Configuration(config.id, config.release, config.sourcePaths, config.roots, target));
@@ -181,7 +164,7 @@ final class ProjectModel {
     /** 仅接受规范仓内相对路径。 */
     static void validateRelative(String path) throws Failure {
         if (path.isEmpty() || path.startsWith("/") || path.indexOf('\\') >= 0 || path.indexOf('\0') >= 0 ||
-            path.matches("^[A-Za-z]:.*")) throw new Failure("invalid_input", "invalid relative path");
+            path.indexOf(':') >= 0) throw new Failure("invalid_input", "invalid relative path");
         for (String part : path.split("/", -1)) if (part.isEmpty() || part.equals(".") || part.equals(".."))
             throw new Failure("invalid_input", "invalid relative path");
     }
@@ -198,23 +181,16 @@ final class ProjectModel {
     }
 
     /** 验证目标声明与 JDK release 文件严格一致。 */
-    private static Target chooseTarget(JsonObject environment, String release) throws Failure {
+    private static Target chooseTarget(List<SdkDiscovery.Candidate> platforms, String release) throws Failure {
         Target chosen = null;
         Set<String> ids = new HashSet<>();
-        for (JsonElement element : Main.array(environment, "platforms")) {
-            if (!element.isJsonObject()) throw new Failure("invalid_input", "platform must be object");
-            JsonObject platform = element.getAsJsonObject();
-            Main.fields(platform, Set.of("id", "kind", "version", "root", "metadata"));
-            String id = Main.string(platform, "id");
+        for (SdkDiscovery.Candidate platform : platforms) {
+            String id = platform.id();
             if (id.isEmpty() || !ids.add(id)) throw new Failure("invalid_input", "duplicate platform id");
-            String version = Main.string(platform, "version");
-            if (version.isEmpty())
-                throw new Failure("invalid_input", "empty platform version");
-            if (!"java-jdk".equals(Main.string(platform, "kind"))) continue;
-            JsonObject metadata = Main.object(platform, "metadata");
-            Main.fields(metadata, Set.of("release"));
-            if (!release.equals(Main.string(metadata, "release"))) continue;
-            Path path = Path.of(Main.string(platform, "root"));
+            String version = platform.version();
+            if (version.isEmpty()) throw new Failure("invalid_input", "empty platform version");
+            if (!release.equals(platform.release())) continue;
+            Path path = platform.root();
             if (!path.isAbsolute()) throw new Failure("invalid_input", "target JDK root must be absolute");
             try {
                 path = path.toRealPath();
@@ -233,11 +209,8 @@ final class ProjectModel {
 
     /** 从 release 文件的真实版本读取稳定 major，兼容 1.8.0_XXX 格式。 */
     private static String jdkRelease(String version) throws Failure {
-        if (version.matches("1\\.[1-8]\\.0(?:_[0-9]+)?")) return version.substring(2, 3);
-        try {
-            Runtime.Version parsed = Runtime.Version.parse(version);
-            if (parsed.pre().isEmpty()) return Integer.toString(parsed.feature());
-        } catch (IllegalArgumentException ignored) { /* 无法确认稳定版本时不使用该目标。 */ }
+        long[] parts = SdkDiscovery.stableVersion(version);
+        if (parts != null) return Long.toString(parts[0]);
         throw new Failure("target_unavailable", "target JDK has no stable Java version");
     }
 

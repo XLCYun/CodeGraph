@@ -15,7 +15,7 @@ final class Observation {
         if (target == null) return;
         JsonObject marker = new JsonObject();
         marker.addProperty("schema_version", 1);
-        marker.addProperty("helper_id", "codegraph-java-engine");
+        marker.addProperty("helper_id", "codegraph-java");
         marker.addProperty("request_id", requestId);
         marker.addProperty("pid", ProcessHandle.current().pid());
         marker.addProperty("milestone", "project-configurations-loaded");

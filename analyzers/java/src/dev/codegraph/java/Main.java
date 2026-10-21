@@ -8,127 +8,117 @@ import com.google.gson.JsonPrimitive;
 import com.google.gson.Strictness;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.io.ByteArrayOutputStream;
 import java.io.StringReader;
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Java 静态分析进程；一次启动只处理一个请求。 */
+/** Java 公开分析程序；主线程直接处理一次请求，不建立控制线程或分析 worker。 */
 public final class Main {
-    static final String PROTOCOL = "codegraph.engine/1";
+    static final String PROTOCOL = "codegraph.analyzer/1";
     static final String PROFILE = "java-static-v1";
-    private static final int MAX_INPUT_CHARS = 1_048_576;
+    static final int MAX_BYTES = 128 * 1024 * 1024;
 
     /** 防止工具类被实例化。 */
     private Main() {}
 
-    /** 启动握手、分析和有界取消监听。 */
-    public static void main(String[] args) throws Exception {
-        if (args.length != 0) throw new IllegalArgumentException("unexpected arguments");
-        BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
-        JsonObject ready = base("ready");
-        ready.addProperty("helper_id", "codegraph-java-engine");
-        ready.addProperty("helper_version", "0.1.0");
-        ready.addProperty("projection_revision", "java-source-v1");
-        ready.add("languages", strings(List.of("java")));
-        ready.add("profiles", strings(List.of(PROFILE)));
-        emit(ready);
-        String line = input.readLine();
-        if (line == null) return;
-        JsonObject request;
-        String id;
+    /** CLI、完整输入和唯一最终输出由同一语言程序实现。 */
+    public static void main(String[] args) {
         try {
-            request = parseObject(line);
-            fields(request, Set.of("protocol", "type", "id", "input", "environment", "limits"));
-            requireString(request, "protocol", PROTOCOL);
-            requireString(request, "type", "analyze");
-            id = string(request, "id");
-            if (id.isEmpty()) throw new Failure("invalid_input", "empty request id");
-        } catch (Failure problem) {
-            throw new IllegalArgumentException(problem.getMessage(), problem);
+            String text = command(args);
+            if (text != null) { System.out.print(text); System.out.flush(); return; }
+        } catch (IllegalArgumentException problem) {
+            System.err.println(problem.getMessage());
+            System.exit(2);
+            return;
         }
-        AtomicBoolean cancelled = new AtomicBoolean();
-        AtomicBoolean invalidCancel = new AtomicBoolean();
-        Thread listener = new Thread(() -> listen(input, id, cancelled, invalidCancel), "codegraph-java-engine-cancel");
-        listener.setDaemon(true);
-        listener.start();
-        JsonObject completed = base("completed");
-        completed.addProperty("id", id);
+        PublicRequest request = null;
+        JsonObject completed;
+        int status = 0;
         try {
-            Analyzer analyzer = new Analyzer(request, cancelled);
-            JsonObject result = analyzer.run();
-            if (invalidCancel.get()) throw new Failure("invalid_input", "invalid cancel frame");
-            if (cancelled.get()) {
-                completed.addProperty("outcome", "cancelled");
-            } else {
-                completed.addProperty("outcome", "ok");
-                completed.add("graph", result.get("graph"));
-                completed.add("evidence", result.get("evidence"));
-            }
-            if (completed.toString().getBytes(StandardCharsets.UTF_8).length > analyzer.maxResultBytes())
-                throw new Failure("resource_limit", "result exceeds max_result_bytes");
-        } catch (Failure problem) {
-            if (problem.cancellation && cancelled.get() && !invalidCancel.get()) {
-                completed.addProperty("outcome", "cancelled");
-            } else {
-                completed.addProperty("outcome", "error");
-                JsonObject error = new JsonObject();
-                error.addProperty("code", problem.code);
-                error.addProperty("message", problem.getMessage());
-                error.add("paths", strings(problem.paths));
-                completed.add("error", error);
-            }
+            request = PublicRequest.decode(readInput());
+            request.validateSource();
+            JsonObject graph;
+            if (request.files() != null && request.files().isEmpty()) graph = emptyGraph();
+            else graph = new Analyzer(request.analysisInput(), SdkDiscovery::discover).run().getAsJsonObject("graph");
+            completed = base(request.id(), "ok");
+            completed.add("graph", graph);
+            if (completed.toString().getBytes(StandardCharsets.UTF_8).length + 1 > MAX_BYTES)
+                throw new Failure("resource_limit", "result exceeds 128 MiB");
         } catch (Throwable problem) {
-            completed.addProperty("outcome", "error");
+            status = 1;
+            completed = base(request == null ? null : request.id(), "error");
             JsonObject error = new JsonObject();
-            error.addProperty("code", "internal_failure");
-            error.addProperty("message", problem.getClass().getSimpleName() + ": " + problem.getMessage());
-            error.add("paths", new JsonArray());
+            String code = problem instanceof Failure failure ? failure.code : "internal_failure";
+            if (!Set.of("invalid_request", "incompatible_protocol", "invalid_input", "invalid_pack", "resource_limit",
+                        "timeout", "io_failure", "cleanup_failed", "internal_failure").contains(code)) code = "analysis_failed";
+            error.addProperty("code", code);
+            String message = String.valueOf(problem.getMessage());
+            error.addProperty("message", message.substring(0, Math.min(message.length(), 4096)));
             completed.add("error", error);
         }
-        emit(completed);
+        // PrintStream 默认吞掉管道异常；checkError 保证输出失败不能以成功退出。
+        byte[] output = (completed + "\n").getBytes(StandardCharsets.UTF_8);
+        System.out.write(output, 0, output.length);
+        System.out.flush();
+        if (System.out.checkError()) status = 1;
+        if (status != 0) System.exit(status);
     }
 
-    /** 在分析期间只接受同一请求的取消帧。 */
-    private static void listen(BufferedReader input, String id, AtomicBoolean cancelled,
-                               AtomicBoolean invalidCancel) {
-        try {
-            String line = input.readLine();
-            if (line == null) { cancelled.set(true); return; }
-            JsonObject frame = parseObject(line);
-            fields(frame, Set.of("protocol", "type", "id"));
-            requireString(frame, "protocol", PROTOCOL);
-            requireString(frame, "type", "cancel");
-            requireString(frame, "id", id);
-            cancelled.set(true);
-            if (input.ready() && input.readLine() != null) invalidCancel.set(true);
-        } catch (Exception problem) {
-            invalidCancel.set(true);
-            cancelled.set(true);
+    /** 固定语言入口只接受 analyze 或一次帮助、版本查询。 */
+    private static String command(String[] args) {
+        if (args.length == 1 && args[0].equals("--version")) return "codegraph-java 0.1.0\n";
+        if (args.length == 1 && args[0].equals("--help") || args.length == 2 && args[0].equals("analyze") && args[1].equals("--help"))
+            return "Usage: codegraph-java analyze\nOne UTF-8 JSON request on stdin followed by EOF.\n";
+        if (args.length == 1 && args[0].equals("analyze")) return null;
+        throw new IllegalArgumentException("Usage: codegraph-java analyze");
+    }
+
+    /** 有界读取全部 UTF-8 输入；EOF 是正常完成，不承担取消语义。 */
+    private static String readInput() throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        int size;
+        while ((size = System.in.read(chunk)) != -1) {
+            if (bytes.size() + size > MAX_BYTES) throw new Failure("resource_limit", "request exceeds 128 MiB");
+            bytes.write(chunk, 0, size);
         }
+        try { return StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes.toByteArray())).toString(); }
+        catch (java.nio.charset.CharacterCodingException problem) { throw new Failure("invalid_request", "request is not UTF-8"); }
     }
 
-    /** 创建带固定协议标识的帧。 */
-    static JsonObject base(String type) {
+    /** 每个最终结果包含编译期身份，任何请求字段都不能覆盖它。 */
+    private static JsonObject base(String id, String outcome) {
         JsonObject object = new JsonObject();
         object.addProperty("protocol", PROTOCOL);
-        object.addProperty("type", type);
+        object.addProperty("engine_version", "0.1.0");
+        object.addProperty("pack_id", "java");
+        object.addProperty("type", "completed");
+        object.add("id", id == null ? JsonNull.INSTANCE : new JsonPrimitive(id));
+        object.addProperty("outcome", outcome);
         return object;
     }
 
-    /** 向协议输出发送唯一完整 JSON 行。 */
-    private static void emit(JsonObject message) {
-        System.out.println(message);
-        System.out.flush();
+    /** 明确空集的图不需要读取配置或发现目标 JDK。 */
+    static JsonObject emptyGraph() {
+        JsonObject graph = new JsonObject();
+        graph.add("root_contains", new JsonArray());
+        graph.add("nodes", new JsonArray());
+        graph.add("external_symbols", new JsonArray());
+        return graph;
     }
 
     /** 读取有限 JSON 对象并拒绝重复键。 */
     static JsonObject parseObject(String line) throws Failure {
-        if (line.length() > MAX_INPUT_CHARS) throw new Failure("invalid_input", "input frame too large");
+        return parseObject(line, 1_048_576);
+    }
+
+    /** 请求和控制配置共用严格解析器，各自保留字节读取边界。 */
+    static JsonObject parseObject(String line, int limit) throws Failure {
+        if (line.length() > limit) throw new Failure("resource_limit", "JSON input too large");
         try {
             JsonReader reader = new JsonReader(new StringReader(line));
             reader.setStrictness(Strictness.STRICT);
@@ -213,29 +203,19 @@ public final class Main {
         return result;
     }
 
-    /** 受控失败及其仓内相对来源。 */
+    /** 受控失败及其仓内相对来源；公共输出只保留代码与说明。 */
     static final class Failure extends Exception {
         final String code;
         final List<String> paths;
-        final boolean cancellation;
 
         /** 建立无路径错误。 */
         Failure(String code, String message) { this(code, message, List.of()); }
 
         /** 建立有路径错误。 */
         Failure(String code, String message, List<String> paths) {
-            this(code, message, paths, false);
-        }
-
-        /** 指明错误是否确实由取消造成。 */
-        private Failure(String code, String message, List<String> paths, boolean cancellation) {
             super(message);
             this.code = code;
             this.paths = paths;
-            this.cancellation = cancellation;
         }
-
-        /** 标记已观测到的取消终止，而不遮盖别的失败。 */
-        static Failure cancelled() { return new Failure("resource_limit", "analysis cancelled", List.of(), true); }
     }
 }
