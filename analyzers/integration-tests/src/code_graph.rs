@@ -19,10 +19,12 @@ pub struct AnalysisInput {
 pub trait LanguageAnalyzer {
     fn analyze(&self, input: &AnalysisInput) -> Result<CodeGraph, AnalysisError>;
 }
-/// 调用方失败视图，只保留原错误文本和是否由本测试主动终止。
+/// 调用方失败视图，保留公共错误码、实际说明与 stderr，不推断语言诊断。
 #[derive(Debug)]
 pub struct AnalysisError {
     pub message: String,
+    pub code: Option<String>,
+    pub diagnostic: String,
     pub cancelled: bool,
 }
 impl AnalysisError {
@@ -30,6 +32,8 @@ impl AnalysisError {
     pub fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
+            code: None,
+            diagnostic: String::new(),
             cancelled: false,
         }
     }
@@ -41,7 +45,11 @@ impl AnalysisError {
 impl std::fmt::Display for AnalysisError {
     /// 展示实际诊断，帮助定位语义回归。
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
+        f.write_str(&self.message)?;
+        if !self.diagnostic.is_empty() {
+            write!(f, "\n{}", self.diagnostic)?;
+        }
+        Ok(())
     }
 }
 /// 保持旧断言的根只读 API；contains 的成员与顺序来自公共 JSON。

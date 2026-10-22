@@ -58,7 +58,11 @@ impl PublicAnalyzer {
             executable.display()
         );
         let mut environment: BTreeMap<OsString, OsString> = std::env::vars_os()
-            .filter(|(key, _)| !key.to_string_lossy().starts_with("CODEGRAPH_"))
+            .filter(|(key, _)| {
+                !key.to_string_lossy()
+                    .to_uppercase()
+                    .starts_with("CODEGRAPH_")
+            })
             .collect();
         environment.remove(std::ffi::OsStr::new("RUSTUP_TOOLCHAIN"));
         if pack == "rust" {
@@ -89,7 +93,7 @@ impl PublicAnalyzer {
     }
 }
 /// 排空实际管道并只保存有界前缀，避免 stdout/stderr 背压死锁。
-fn drain(mut reader: impl Read, maximum: usize, overflow: Arc<AtomicBool>) -> Vec<u8> {
+pub(crate) fn drain(mut reader: impl Read, maximum: usize, overflow: Arc<AtomicBool>) -> Vec<u8> {
     let mut bytes = Vec::new();
     let mut chunk = [0; 8192];
     loop {
@@ -154,6 +158,8 @@ impl LanguageAnalyzer for PublicAnalyzer {
             if self.cancellation.as_ref().is_some_and(|cancel| cancel()) {
                 break Some(AnalysisError {
                     message: "调用方终止进程树".into(),
+                    code: None,
+                    diagnostic: String::new(),
                     cancelled: true,
                 });
             }
@@ -184,9 +190,13 @@ impl LanguageAnalyzer for PublicAnalyzer {
         if result["outcome"] == "error" {
             assert!(!status.success());
             assert!(result.get("graph").is_none());
-            return Err(AnalysisError::new(
-                result["error"]["message"].as_str().unwrap(),
-            ));
+            // 公共说明可以概括诊断；旧语义断言继续核对同一实际程序写到 stderr 的细节。
+            return Err(AnalysisError {
+                message: result["error"]["message"].as_str().unwrap().to_owned(),
+                code: Some(result["error"]["code"].as_str().unwrap().to_owned()),
+                diagnostic: String::from_utf8_lossy(&stderr).into_owned(),
+                cancelled: false,
+            });
         }
         assert!(
             status.success(),

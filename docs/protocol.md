@@ -47,6 +47,8 @@ Success exits 0. A handled failure has no graph and exits 1:
 
 When no valid request ID was accepted, `id` is null. Stable error codes remain `invalid_request`, `incompatible_protocol`, `invalid_input`, `invalid_pack`, `analysis_failed`, `resource_limit`, `timeout`, `io_failure`, `cleanup_failed`, `internal_failure`; messages may evolve. No graph is attached to errors. Normal unresolved symbols are valid graph data, not whole-analysis failure.
 
+Programs may validate a request ID before other envelope fields. A rejected envelope may therefore return null or the exact independently valid request ID; it cannot return an invalid or unrelated ID. Once analysis is accepted, both success and analysis failure echo that accepted ID.
+
 Startup/transport failure, crash or forced termination may produce no final JSON. EOF alone, a result without successful exit, or successful exit without one complete matching result is never success. CLI usage exits 2; cancellation by killing the process has platform-specific status and does not promise an error JSON.
 
 ## Graph

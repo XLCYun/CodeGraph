@@ -193,7 +193,7 @@ fn project_requires_python_controls_native_syntax() {
         files: Some(vec!["main.py".into()]),
         options: Default::default(),
     });
-    let error = result.unwrap_err().message;
+    let error = result.unwrap_err().to_string();
     assert!(
         error.contains("语法") && error.contains("main.py"),
         "{error}"
@@ -216,7 +216,7 @@ fn escaping_context_links_fail_native_loading() {
         files: Some(vec!["main.py".into()]),
         options: Default::default(),
     });
-    assert!(result.unwrap_err().message.contains("逃逸"));
+    assert!(result.unwrap_err().to_string().contains("逃逸"));
 }
 
 /// 输入验证先于测试过滤；排除的测试明确覆盖，启用后恢复实际节点。
@@ -338,62 +338,110 @@ fn python_helper_preserves_historical_complete_graphs() {
 #[test]
 #[ignore = "需要已构建 Python helper，单独串行运行"]
 fn python_helper_timeout_and_caller_panic_reap_actual_process() {
-    use std::{os::unix::fs::PermissionsExt, sync::Arc, time::Duration};
+    use crate::child_process::ProcessTree;
+    use std::{
+        io::Write,
+        process::{Command, Stdio},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        time::{Duration, Instant},
+    };
     for panic in [false, true] {
         let repository = tempfile::tempdir().unwrap();
-        let tools = tempfile::tempdir().unwrap();
+        let tools = tempfile::Builder::new()
+            .prefix("codegraph-discovery-probe-")
+            .tempdir()
+            .unwrap();
         let source: String = (0..15000)
             .map(|index| format!("def value_{index}(): return len([])\n"))
             .collect();
         fs::write(repository.path().join("main.py"), source).unwrap();
-        let marker = tools.path().join("pid");
-        let launcher = tools.path().join("start-helper");
-        let executable = PathBuf::from(std::env::var_os("CODEGRAPH_PYTHON_HELPER").unwrap());
-        // 测试只记录即将 exec 的真实 PID，不加入假分析器或任何控制/所有权实现。
-        let quote = |value: &std::path::Path| {
-            format!("'{}'", value.to_str().unwrap().replace('\'', "'\\''"))
-        };
         fs::write(
-            &launcher,
-            format!(
-                "#!/bin/sh\nprintf '%s' \"$$\" > {}\nexec {} analyze\n",
-                quote(&marker),
-                quote(&executable)
-            ),
+            repository.path().join("ty.toml"),
+            "[environment]\npython-version='3.11'\n",
         )
         .unwrap();
-        fs::set_permissions(&launcher, fs::Permissions::from_mode(0o755)).unwrap();
-        let mut native = analyzer();
-        native.executable = launcher;
-        let observed = marker.clone();
-        native = native
-            .with_limits(crate::public::AnalysisLimits {
-                analysis_timeout: Duration::from_millis(150),
-                ..Default::default()
-            })
-            .with_cancellation(Arc::new(move || {
-                assert!(!(panic && observed.exists()), "模拟调用方观察器 panic");
-                false
-            }));
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            native.analyze(&AnalysisInput {
-                repository_root: repository.path().into(),
-                files: Some(vec!["main.py".into()]),
-                options: Default::default(),
-            })
+        let marker = tools.path().join("reached.json");
+        let analyzer = analyzer();
+        let mut command = Command::new(analyzer.executable);
+        command
+            .arg("analyze")
+            .env_clear()
+            .envs(analyzer.environment)
+            .env("CODEGRAPH_TEST_DISCOVERY_PROBE", &marker)
+            .current_dir(std::env::temp_dir())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let mut tree = ProcessTree::spawn(&mut command).unwrap();
+        let stdout = tree.take_stdout().unwrap();
+        let stderr = tree.take_stderr().unwrap();
+        let overflow = Arc::new(AtomicBool::new(false));
+        let flag = overflow.clone();
+        let output =
+            std::thread::spawn(move || crate::public::drain(stdout, 128 * 1024 * 1024, flag));
+        let diagnostic = std::thread::spawn(move || {
+            crate::public::drain(stderr, 256 * 1024, Arc::new(AtomicBool::new(false)))
+        });
+        let request = serde_json::json!({"protocol":"codegraph.analyzer/1","type":"analyze","id":"python-owned-deadline","repository_root":repository.path(),"options":{"include_tests":false,"rust_dependency_scope":"repository-only"}});
+        // 先确认真实程序读取配置，再计算期限；不把解释器/内核启动等待当作活动分析。
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+            let mut tree = tree;
+            let mut stdin = tree.take_stdin().unwrap();
+            stdin.write_all(request.to_string().as_bytes()).unwrap();
+            drop(stdin);
+            let started = Instant::now();
+            loop {
+                if let Ok(bytes) = fs::read(&marker) {
+                    if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                        assert_eq!(value["helper_id"], "codegraph-python");
+                        assert_eq!(value["request_id"], "python-owned-deadline");
+                        assert_eq!(value["milestone"], "project-configuration-read");
+                        assert_eq!(value["schema_version"], 1);
+                        let pid = value["pid"].as_i64().unwrap() as i32;
+                        assert!(pid > 0 && pid != std::process::id() as i32);
+                        // SAFETY: 只查询本次实际程序刚记录的 PID，确认计时前它确实仍活动。
+                        assert_eq!(unsafe { libc::kill(pid, 0) }, 0);
+                        break;
+                    }
+                }
+                assert!(tree.status().unwrap().is_none(), "实际入口未进入加载就退出");
+                assert!(
+                    started.elapsed() < Duration::from_secs(10),
+                    "真实配置读取观察超时"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            assert!(!panic, "模拟调用方观察器 panic");
+            let deadline = Instant::now();
+            std::thread::sleep(Duration::from_millis(150));
+            assert!(tree.status().unwrap().is_none(), "超时夹具在期限前意外完成");
+            tree.reap().unwrap();
+            assert!(
+                deadline.elapsed() < Duration::from_secs(5),
+                "超时回收没有有界完成"
+            );
         }));
-        if panic {
-            assert!(result.is_err());
-        } else {
-            let error = result.unwrap().unwrap_err();
-            assert!(error.message.contains("超时"), "{error}");
-            assert!(!error.is_cancelled());
-        }
-        let pid: i32 = fs::read_to_string(&marker).unwrap().parse().unwrap();
+        let bytes = output.join().unwrap();
+        let stderr = diagnostic.join().unwrap();
+        assert!(!overflow.load(Ordering::Acquire));
+        assert!(
+            bytes.is_empty(),
+            "主动终止不应得到成功 JSON：{}",
+            String::from_utf8_lossy(&stderr)
+        );
+        assert_eq!(result.is_err(), panic);
+        let value: serde_json::Value =
+            serde_json::from_slice(&fs::read(tools.path().join("reached.json")).unwrap()).unwrap();
+        let pid = value["pid"].as_i64().unwrap() as i32;
+        assert!(pid > 0);
+        // SAFETY: PID 只来自本测试实际程序的原子加载标记，信号 0 只检查退出。
         assert_eq!(
             unsafe { libc::kill(pid, 0) },
             -1,
-            "返回后真实 helper {pid} 未退出"
+            "返回后真实程序 {pid} 未退出"
         );
     }
 }

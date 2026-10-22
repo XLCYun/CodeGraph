@@ -84,7 +84,6 @@ export async function verifyNativeAnalyzers(artifacts, build = false, language =
   for (const id of ids) {
     const pack = path.join(artifacts, 'smoke-installed', id, '0.1.0', target);
     if (id === 'typescript-javascript') environment.CODEGRAPH_TYPESCRIPT_PACK = pack;
-    if (id === 'python') environment.CODEGRAPH_PYTHON_HELPER = path.join(pack, `bin/codegraph-python${process.platform === 'win32' ? '.exe' : ''}`);
   }
   if (ids.includes('rust')) Object.assign(environment, await prepareRustNativeTests(environment));
   const commands = verificationCommands(environment, process.platform, language);

@@ -12,9 +12,9 @@ export const discoveryMilestones = {
   rust: ['codegraph-rust', 'workspace-metadata-loaded', /codegraph-rust/],
   python: ['codegraph-python', 'project-configuration-read', /codegraph-python/],
   go: ['codegraph-go-engine', 'module-configurations-loaded', /codegraph-go/],
-  java: ['codegraph-java-engine', 'project-configurations-loaded', /dev\.codegraph\.java\.Main/],
+  java: ['codegraph-java', 'project-configurations-loaded', /dev\.codegraph\.java\.Main/],
   csharp: ['codegraph-csharp-engine', 'source-text-read', /codegraph-csharp/],
-  'typescript-javascript': ['codegraph-typescript-engine', 'repository-snapshot-read', /runtime[/\\]analyzer[/\\]main\.mjs/],
+  'typescript-javascript': ['codegraph-typescript-javascript', 'repository-snapshot-read', /runtime[/\\]analyzer[/\\]main\.mjs/],
   'c-cpp': ['codegraph-clang-engine', 'compilation-database-read', /codegraph-c-cpp/],
 };
 
@@ -110,7 +110,11 @@ export function decodePublicResult(bytes, { code, signal }, pack, request, ident
   assert.equal(result.engine_version, identity.engineVersion, 'Public final identity mismatch');
   assert.equal(result.pack_id, pack, 'Public final identity mismatch');
   assert.equal(result.type, 'completed');
-  assert.equal(result.id, expectedFailure === 'invalid_request' || expectedFailure === 'incompatible_protocol' ? null : request.id);
+  const earlyFailure = expectedFailure === 'invalid_request' || expectedFailure === 'incompatible_protocol';
+  // 各语言可在其余请求字段之前验证 ID；只允许 null 或独立确认合法且完全相同的 ID。
+  const validId = typeof request.id === 'string' && request.id.isWellFormed() && !request.id.includes('\0') && Buffer.byteLength(request.id, 'utf8') <= 1024 && /[^\p{White_Space}\uFEFF]/u.test(request.id);
+  if (earlyFailure) assert.ok(result.id === null || validId && result.id === request.id, 'Rejected request returned an unaccepted or mismatched id');
+  else assert.equal(result.id, request.id);
   assert.equal(result.outcome, expectedFailure ? 'error' : 'ok');
   assert.deepEqual(Object.keys(result).sort(), ['protocol', 'engine_version', 'pack_id', 'type', 'id', 'outcome', expectedFailure ? 'error' : 'graph'].sort());
   if (expectedFailure) {

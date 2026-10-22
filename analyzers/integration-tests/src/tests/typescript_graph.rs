@@ -1162,11 +1162,10 @@ fn typescript_aliases_merge_canonical_nodes_and_keep_boundary_and_test_policy() 
     assert_eq!(graph.root().contains.len(), 2);
     assert_eq!(nodes(&graph).len(), 4);
     input.files.as_mut().unwrap().push("impl/main.ts".into());
-    assert!(analyzer
-        .analyze(&input)
-        .unwrap_err()
-        .to_string()
-        .contains("重复路径"));
+    assert_eq!(
+        analyzer.analyze(&input).unwrap_err().code.as_deref(),
+        Some("invalid_request")
+    );
     let outside = fixture(&[("escape.ts", "export function escape() {}")]);
     link_directory(outside.path(), &directory.path().join("outside"));
     input.files = Some(vec!["outside/escape.ts".into()]);

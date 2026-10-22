@@ -16,8 +16,13 @@ Set `CODEGRAPH_NATIVE_PACKS` to an exact-source artifact output containing
 `smoke-installed/<id>/0.1.0/<target>`, and expose already-installed target SDKs through
 standard discovery variables. Rust additionally uses
 `CODEGRAPH_PROJECT_RUST_TOOLCHAIN=stable`; the actual Cargo/rustc probes preserve
-per-project override tests. `CODEGRAPH_PYTHON_HELPER` names the same real Python
-public executable only for the caller-panic/timeout launch recorder.
+per-project override tests. The Python deadline/panic fixture waits for its actual
+configuration-read milestone and PID, then terminates through the same test-only
+ProcessTree owner and drains/joins both real pipes. It uses no shell startup recorder.
+
+Error views preserve the actual public error code/message and separately captured
+bounded stderr. Existing detailed diagnostic assertions read those actual diagnostics;
+they never synthesize private error text or change the public response.
 
 ```sh
 scripts/cargo-agent.sh test --manifest-path analyzers/integration-tests/Cargo.toml --locked --lib tests::view::

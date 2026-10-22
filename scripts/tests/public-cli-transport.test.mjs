@@ -20,6 +20,19 @@ test('public decoder rejects missing malformed duplicate lifecycle and nonzero s
   assert.throws(() => decodePublicResult(bytes(result), { code: null, signal: 'SIGKILL' }, 'go', request, identity));
 });
 
+/** 前置请求失败可尚未接受 ID，或已经接受同一个合法 ID；成功和分析失败仍必须匹配。 */
+test('public decoder binds early-error ids to null or the independently valid request id', () => {
+  const bytes = value => Buffer.from(JSON.stringify(value) + '\n');
+  const failure = (code, id) => ({ protocol: identity.protocol, engine_version: identity.engineVersion, pack_id: 'go', type: 'completed', id, outcome: 'error', error: { code, message: 'actual failure' } });
+  for (const code of ['invalid_request', 'incompatible_protocol']) {
+    for (const id of [null, request.id]) decodePublicResult(bytes(failure(code, id)), { code: 1, signal: null }, 'go', request, identity, code);
+    assert.throws(() => decodePublicResult(bytes(failure(code, 'other')), { code: 1, signal: null }, 'go', request, identity, code));
+    for (const id of ['', ' \t', '\u0085', '\0', 'x'.repeat(1025), '\ud800', 7, []]) assert.throws(() => decodePublicResult(bytes(failure(code, id)), { code: 1, signal: null }, 'go', { ...request, id }, identity, code));
+  }
+  assert.throws(() => decodePublicResult(bytes(failure('analysis_failed', null)), { code: 1, signal: null }, 'go', request, identity, 'analysis_failed'));
+  decodePublicResult(bytes(failure('analysis_failed', request.id)), { code: 1, signal: null }, 'go', request, identity, 'analysis_failed');
+});
+
 /** 真实子进程必须先读到 EOF；UTF-8 无尾换行输入与 stderr 在实际管道中往返。 */
 test('one-shot exchange closes stdin and accepts only matching actual stdio and exit', async () => {
   const code = `const chunks=[];process.stdin.on('data',c=>chunks.push(c));process.stdin.on('end',()=>{const input=JSON.parse(Buffer.concat(chunks));if(Buffer.concat(chunks).at(-1)===10)process.exit(9);process.stderr.write('bounded diagnostic');console.log(JSON.stringify({...${JSON.stringify(result)},id:input.id}));});`;

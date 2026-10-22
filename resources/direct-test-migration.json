@@ -612,7 +612,8 @@
           ],
           "commands": [
             "integration"
-          ]
+          ],
+          "rationale": "Original graph/alias/test/source assertions are unchanged. The duplicate selected-path fixture now checks the stable public invalid_request code; the removed Host-specific Chinese diagnostic wording is retired. Public paths and outside links still fail on the actual fixed entry."
         },
         {
           "name": "typescript_historical_identity_and_source_contract",
@@ -1783,7 +1784,7 @@
             "drop_reclaims_parent_and_descendant_matrix",
             "python_helper_timeout_and_caller_panic_reap_actual_process"
           ],
-          "rationale": "The original direct-child/descendant Drop matrix is retained and the public caller timeout/panic test runs the actual Python entry; ProcessTree owns cleanup, not an analyzer Session."
+          "rationale": "The actual Python program emits its configuration-read milestone/PID before the caller starts a 150ms deadline or panics. The preserved ProcessTree guard terminates and waits; both real stdout/stderr pipes are drained and joined, and the observed native PID must already be gone. Startup observation has a separate bounded wait; no shell timing assumption or private cancellation frame remains."
         },
         {
           "name": "subprocess_bounds_blocked_stdin_writer",
@@ -2081,7 +2082,8 @@
           ],
           "commands": [
             "integration"
-          ]
+          ],
+          "rationale": "Original semantic failure and detailed diagnostics remain asserted against the actual direct entry. The view retains raw public error.code/message separately from its actual captured stderr; detailed syntax/path/toolchain strings come from the real stderr diagnostic and are not regenerated from test expectations."
         },
         {
           "name": "first_valid_utf8_cookie_controls_source_decoding",
@@ -2133,7 +2135,8 @@
           ],
           "commands": [
             "integration"
-          ]
+          ],
+          "rationale": "Original semantic failure and detailed diagnostics remain asserted against the actual direct entry. The view retains raw public error.code/message separately from its actual captured stderr; detailed syntax/path/toolchain strings come from the real stderr diagnostic and are not regenerated from test expectations."
         },
         {
           "name": "python_helper_preserves_historical_complete_graphs",
@@ -2159,7 +2162,8 @@
           ],
           "commands": [
             "integration"
-          ]
+          ],
+          "rationale": "The actual Python program emits its configuration-read milestone/PID before the caller starts a 150ms deadline or panics. The preserved ProcessTree guard terminates and waits; both real stdout/stderr pipes are drained and joined, and the observed native PID must already be gone. Startup observation has a separate bounded wait; no shell timing assumption or private cancellation frame remains."
         },
         {
           "name": "receiver_fields_distinguish_expression_scopes_and_outer_walrus",
@@ -2290,7 +2294,8 @@
           ],
           "commands": [
             "integration"
-          ]
+          ],
+          "rationale": "Original semantic failure and detailed diagnostics remain asserted against the actual direct entry. The view retains raw public error.code/message separately from its actual captured stderr; detailed syntax/path/toolchain strings come from the real stderr diagnostic and are not regenerated from test expectations."
         },
         {
           "name": "native_cross_project_modern_decorator_and_base_remain_unproven",
@@ -2316,7 +2321,8 @@
           ],
           "commands": [
             "integration"
-          ]
+          ],
+          "rationale": "Original semantic failure and detailed diagnostics remain asserted against the actual direct entry. The view retains raw public error.code/message separately from its actual captured stderr; detailed syntax/path/toolchain strings come from the real stderr diagnostic and are not regenerated from test expectations."
         },
         {
           "name": "native_descriptor_writes_and_exception_receivers_do_not_create_fields",
@@ -2630,7 +2636,8 @@
           ],
           "commands": [
             "integration"
-          ]
+          ],
+          "rationale": "Original semantic failure and detailed diagnostics remain asserted against the actual direct entry. The view retains raw public error.code/message separately from its actual captured stderr; detailed syntax/path/toolchain strings come from the real stderr diagnostic and are not regenerated from test expectations."
         },
         {
           "name": "rust_helper_loads_project_shapes_and_preserves_standalone_failure",
@@ -2643,7 +2650,8 @@
           ],
           "commands": [
             "integration"
-          ]
+          ],
+          "rationale": "Original semantic failure and detailed diagnostics remain asserted against the actual direct entry. The view retains raw public error.code/message separately from its actual captured stderr; detailed syntax/path/toolchain strings come from the real stderr diagnostic and are not regenerated from test expectations."
         },
         {
           "name": "rust_helper_multiple_project_toolchains_keep_scope_boundary",
@@ -2656,7 +2664,8 @@
           ],
           "commands": [
             "integration"
-          ]
+          ],
+          "rationale": "Original semantic failure and detailed diagnostics remain asserted against the actual direct entry. The view retains raw public error.code/message separately from its actual captured stderr; detailed syntax/path/toolchain strings come from the real stderr diagnostic and are not regenerated from test expectations."
         },
         {
           "name": "rust_helper_recognizes_custom_and_empty_crate_roots",

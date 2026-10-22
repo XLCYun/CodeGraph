@@ -370,7 +370,7 @@ fn rust_helper_loads_project_shapes_and_preserves_standalone_failure() {
     .unwrap();
     assert!(analyze(&["lib.rs"])
         .unwrap_err()
-        .message
+        .to_string()
         .contains("standalone"));
     fs::write(
         root.path().join("rust-project.json"),
@@ -604,7 +604,7 @@ fn rust_helper_multiple_project_toolchains_keep_scope_boundary() {
     analyzer.scope = "standard-library";
     let error = analyzer.analyze(&input).unwrap_err();
     assert!(
-        error.message.contains("多个 Rust 项目使用不同工具链"),
+        error.to_string().contains("多个 Rust 项目使用不同工具链"),
         "{error:?}"
     );
 }
@@ -722,5 +722,5 @@ fn rust_helper_lifecycle_native_failure_remains_error() {
         })
         .unwrap_err();
     assert!(!error.is_cancelled(), "{error}");
-    assert!(error.message.contains("无法解析"), "{error}");
+    assert!(error.to_string().contains("无法解析"), "{error}");
 }
