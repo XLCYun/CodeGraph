@@ -91,7 +91,7 @@ test('all fourteen package identities reject generic, foreign and incomplete pay
     const build = () => archiveFixture({ id, version: '0.1.0', target }, payload, output, executables);
     await verifyAnalyzerDistribution(await build());
     verifiedIdentities.add(`${id}-${target}`);
-    for (const unwanted of [`bin/codegraph${suffix}`, `bin/codegraph-${id === 'go' ? 'rust' : 'go'}${suffix}`, `runtime/codegraph-python${suffix}`, 'bin/unrelated-tool']) {
+    for (const unwanted of [`bin/codegraph${suffix}`, `bin/codegraph-${id === 'go' ? 'rust' : 'go'}${suffix}`, `runtime/codegraph-python${suffix}`, `bin/codegraph-process-owner${suffix}`, `runtime/analyzer/codegraph-process-owner${suffix}`, 'bin/unrelated-tool']) {
       await fs.mkdir(path.dirname(path.join(payload, unwanted)), { recursive: true });
       await fs.writeFile(path.join(payload, unwanted), 'unwanted executable');
       executables.add(unwanted);

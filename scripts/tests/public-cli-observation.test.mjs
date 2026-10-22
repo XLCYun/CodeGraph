@@ -39,7 +39,7 @@ async function fixture(t, mode) {
     return value;
   }
   await message('started');
-  return { child, probe, exit, messages, message, cancel: options => cancelLoadedProject(child, 'go', request, new Map([[child.pid, process.execPath]]), () => closed, probe, options) };
+  return { child, probe, exit, messages, message, cancel: options => cancelLoadedProject(child, 'go', request, new Map([[child.pid, process.execPath]]), () => closed, probe, { terminate: async () => { child.kill('SIGKILL'); await exit; }, ...options }) };
 }
 
 /** 已存在的初始化进程必须先失败等待；只有真实读取后的匹配标记才能触发取消。 */

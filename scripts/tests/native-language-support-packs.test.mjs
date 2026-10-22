@@ -100,7 +100,7 @@ test('smoke waits for killed child close before rejecting and removing cwd', asy
 /** 清理异常保留原始最终身份故障，无主故障时报告真实清理错误。 */
 test('smoke preserves primary failure and reports cleanup-only failure', async t => {
   const cleanupError = new Error('fixture cleanup failure'), remove = fs.rm;
-  t.mock.method(fs, 'rm', async (root, options) => { await remove(root, options); throw cleanupError; });
+  t.mock.method(fs, 'rm', async (root, options) => { await remove(root, options); if (path.basename(root).startsWith('codegraph-direct-pack-smoke-')) throw cleanupError; });
   const smoke = pack => smokeAnalyzer({ executable: process.execPath, id: 'go', args: ['-e', `process.stdin.resume();process.stdin.on('end',()=>console.log(JSON.stringify({protocol:'codegraph.analyzer/1',engine_version:'0.1.0',pack_id:'${pack}',type:'completed',id:'pack-smoke',outcome:'ok',graph:{root_contains:[],nodes:[],external_symbols:[]}})))`] });
   await assert.rejects(smoke('other'), error => /identity mismatch/.test(error.message) && /scratch cleanup failed: fixture cleanup failure/.test(error.message));
   await assert.rejects(smoke('go'), error => error === cleanupError);

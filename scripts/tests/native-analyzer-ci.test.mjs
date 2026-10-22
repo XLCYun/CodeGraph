@@ -14,6 +14,14 @@ const manifest = JSON.parse(await fs.readFile(new URL('../../resources/native-to
 const workflowSource = (await fs.readFile(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const publishingWorkflow = (await fs.readFile(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
+/** 双平台实际 pnpm 测试之前必须构建非交付所有者，不能用源码检查替代 Windows 执行。 */
+test('CI prepares the retained owner before actual descendant transport regressions', () => {
+  const prepare = workflowSource.indexOf('run: node scripts/language-packs/public-cli-owner.mjs');
+  assert.ok(prepare > workflowSource.indexOf('- run: pnpm install --frozen-lockfile'));
+  assert.ok(prepare < workflowSource.indexOf('Verify scripts, version contracts and engine format'));
+  assert.match(workflowSource, /pnpm test/);
+});
+
 test('provisioned target SDKs survive public sanitization on both path conventions', () => {
   for (const [platform, paths, output] of [['darwin', path.posix, '/isolated tools'], ['win32', path.win32, 'D:\\isolated tools']]) {
     const installed = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'DOTNET_SDK', 'CMAKE_ROOT']

@@ -4,6 +4,12 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
+[[bin]]
+name = "codegraph-process-owner"
+path = "src/owner.rs"
+test = false
+bench = false
+
 [dependencies]
 libc = "=0.2.191"
 tempfile = "=3.27.0"

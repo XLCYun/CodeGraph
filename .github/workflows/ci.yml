@@ -60,6 +60,8 @@ jobs:
           node scripts/language-packs/run-windows-process-probe.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Windows process cleanup probe failed' }
       - run: pnpm install --frozen-lockfile
+      - name: Build non-shipped caller tree owner before real transport regressions
+        run: node scripts/language-packs/public-cli-owner.mjs
       - name: Verify scripts, version contracts and engine format
         run: |
           pnpm test

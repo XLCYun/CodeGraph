@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import os from 'node:os';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { spawn, execFile } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
+import { spawnOwnedCli } from './public-cli-owner.mjs';
 
 const run = promisify(execFile);
 const probeVariable = 'CODEGRAPH_TEST_DISCOVERY_PROBE';
@@ -45,15 +46,8 @@ function observeTree(snapshot, observed) {
   } while (changed);
 }
 
-/** 调用方终止整树；macOS 使用独立进程组，Windows 使用实际 taskkill /T。 */
-export async function terminateTree(child, { grouped = false } = {}) {
-  if (!child.pid) return;
-  if (process.platform === 'win32') await run('taskkill.exe', ['/F', '/T', '/PID', String(child.pid)], { windowsHide: true }).catch(error => { if (child.exitCode === null && child.signalCode === null) throw error; });
-  else { try { process.kill(grouped ? -child.pid : child.pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; } }
-}
-
 /** 只在真实加载标记出现后触发调用方终止；stdin 已正常 EOF，不发送控制消息。 */
-export async function cancelLoadedProject(child, pack, request, observed, closed, probe, { timeout = 30_000, grouped = false } = {}) {
+export async function cancelLoadedProject(child, pack, request, observed, closed, probe, { timeout = 30_000, terminate } = {}) {
   assert.ok(!Object.hasOwn(request, 'files'), 'Discovery cancellation requires omitted files');
   const [helperId, milestone, analyzer] = discoveryMilestones[pack];
   const deadline = Date.now() + timeout;
@@ -82,7 +76,8 @@ export async function cancelLoadedProject(child, pack, request, observed, closed
     await delay(25);
   }
   console.log(`Public discovery milestone: ${JSON.stringify({ pack, ...marker })}`);
-  await terminateTree(child, { grouped });
+  assert.equal(typeof terminate, 'function', 'Loading cancellation requires a retained caller owner');
+  await terminate();
   return marker;
 }
 
@@ -126,57 +121,64 @@ export function decodePublicResult(bytes, { code, signal }, pack, request, ident
 }
 
 /** 实际标准管道写完单个 JSON 后关闭输入，等待唯一结果与退出；取消由调用方整树终止。 */
-export async function exchangeCli(executable, pack, request, identity, expectedFailure, { cancel = false, environment = process.env, args = ['analyze'], rawInput, timeoutMs, trace, cwd = os.tmpdir() } = {}) {
+export async function exchangeCli(executable, pack, request, identity, expectedFailure, { cancel = false, environment = process.env, args = ['analyze'], rawInput, timeoutMs, trace, cwd = os.tmpdir(), createOwner = spawnOwnedCli } = {}) {
   const probeDirectory = cancel ? await fs.mkdtemp(path.join(os.tmpdir(), 'codegraph-discovery-probe-')) : undefined;
   const probe = probeDirectory && path.join(probeDirectory, 'reached.json');
   const env = publicEnvironment(environment);
   if (probe) env[probeVariable] = probe;
-  const grouped = process.platform !== 'win32';
-  const child = spawn(executable, args, { cwd, env, detached: grouped, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  const lifetimeMs = timeoutMs ?? (cancel ? 45_000 : 120_000);
+  let owner;
+  try { owner = await createOwner(executable, args, { cwd, environment: env, lifetimeMs }); }
+  catch (error) { if (probeDirectory) await fs.rm(probeDirectory, { recursive: true, force: true }); throw error; }
+  const { child } = owner;
   const chunks = [], observed = new Map();
-  let length = 0, stderr = '', failure, closed = false, exitStatus;
-  const exit = new Promise((resolve, reject) => {
-    child.once('error', reject);
-    child.once('close', (code, signal) => { closed = true; resolve({ code, signal }); });
-  });
-  exit.catch(() => {});
+  let length = 0, stderr = '', failure, stopped = false, exitStatus, decoded;
+  const cleanupFailures = [];
+  let stopWaiting;
+  const interrupted = new Promise((_, reject) => { stopWaiting = reject; });
+  interrupted.catch(() => {});
   if (child.pid) observed.set(child.pid, executable);
-  /** 保留首个传输失败并启动整树清理，close 屏障仍由 finally 等待。 */
-  const stop = error => { failure ??= error; terminateTree(child, { grouped }).catch(cause => { failure ??= cause; }); };
-  const timer = setTimeout(() => stop(new Error('Public CLI acceptance timed out')), timeoutMs ?? (cancel ? 45_000 : 120_000));
+  /** 保留首错并唤醒等待者；真实 owner 清理失败由收尾屏障另行汇总。 */
+  const stop = error => { failure ??= error; stopped = true; stopWaiting(failure); owner.reap().catch(() => {}); };
+  const timer = setTimeout(() => stop(new Error('Public CLI acceptance timed out')), lifetimeMs);
   child.stdout.on('data', chunk => { length += chunk.length; if (length > 128 * 1024 * 1024) stop(new Error('Public CLI output exceeds limit')); else chunks.push(chunk); });
   child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-262144); });
   child.stdin.on('error', error => { if (!cancel) stop(error); });
   try {
     // 刻意不加尾换行，所有真实包都必须在 EOF 正常解码完整 JSON。
     child.stdin.end(rawInput ?? JSON.stringify(request));
-    if (cancel) await cancelLoadedProject(child, pack, request, observed, () => closed || length > 0, probe, { grouped });
-    const status = await exit;
-    exitStatus = status;
-    if (failure) throw failure;
+    if (cancel) await Promise.race([cancelLoadedProject(child, pack, request, observed, () => stopped || owner.closed() || length > 0, probe, { terminate: () => owner.reap() }), interrupted]);
+    exitStatus = await Promise.race([owner.completed, interrupted]);
+  } catch (error) { failure ??= error; }
+  clearTimeout(timer);
+  // 根退出和 pipe EOF 都不能释放后代；成功、失败、超时逐条经过同一树/排空/join屏障。
+  try { await owner.reap(); }
+  catch (error) { cleanupFailures.push(error); }
+  exitStatus ??= owner.rootStatus();
+  if (!failure && !cleanupFailures.length) try {
     const output = Buffer.concat(chunks);
     if (cancel) {
-      assert.ok(status.signal || status.code !== 0, 'Caller tree termination returned success');
+      assert.ok(exitStatus.signal || exitStatus.code !== 0, 'Caller tree termination returned success');
       assert.equal(output.length, 0, 'Cancelled analysis emitted a final result');
       await assertTreeExited(observed);
-      console.log(`Public caller tree termination verified: ${JSON.stringify({ pack, ...status, observed_processes: observed.size })}`);
-    } else return decodePublicResult(output, status, pack, request, identity, expectedFailure);
-  } catch (error) {
-    error.message += stderr ? `; stderr: ${stderr}` : '';
-    throw error;
-  } finally {
-    clearTimeout(timer);
-    child.stdin.destroy();
-    if (!closed) await terminateTree(child, { grouped });
-    await exit.catch(() => {});
-    if (cancel) await assertTreeExited(observed);
+      console.log(`Public caller tree termination verified: ${JSON.stringify({ pack, ...exitStatus, observed_processes: observed.size })}`);
+    } else decoded = decodePublicResult(output, exitStatus, pack, request, identity, expectedFailure);
+  } catch (error) { failure ??= error; }
+  try {
     if (trace) {
       await fs.mkdir(trace, { recursive: true });
       await fs.writeFile(path.join(trace, 'request.json'), rawInput ?? JSON.stringify(request), { flag: 'wx' });
       await fs.writeFile(path.join(trace, 'stdout.json'), Buffer.concat(chunks), { flag: 'wx' });
       await fs.writeFile(path.join(trace, 'stderr.txt'), stderr, { flag: 'wx' });
-      await fs.writeFile(path.join(trace, 'status.json'), JSON.stringify({ ...exitStatus, expectedFailure: expectedFailure ?? null, callerTreeTermination: cancel, failure: failure?.message ?? null }), { flag: 'wx' });
+      await fs.writeFile(path.join(trace, 'status.json'), JSON.stringify({ ...exitStatus, expectedFailure: expectedFailure ?? null, callerTreeTermination: cancel, failure: failure?.message ?? null, cleanupFailures: cleanupFailures.map(error => error.message) }), { flag: 'wx' });
     }
     if (probeDirectory) await fs.rm(probeDirectory, { recursive: true, force: true });
+  } catch (error) { cleanupFailures.push(error); }
+  try { await owner.dispose(); } catch (error) { cleanupFailures.push(error); }
+  if (failure || cleanupFailures.length) {
+    const error = cleanupFailures.length ? new AggregateError([failure, ...cleanupFailures].filter(Boolean), `${failure?.message ?? 'Public CLI cleanup failed'}; cleanup: ${cleanupFailures.map(error => error.message).join('; ')}`, { cause: failure }) : failure;
+    error.message += stderr ? `; stderr: ${stderr}` : '';
+    throw error;
   }
+  return decoded;
 }

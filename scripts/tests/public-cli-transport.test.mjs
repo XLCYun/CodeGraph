@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+import { preparePublicCliOwner, spawnOwnedCli } from '../language-packs/public-cli-owner.mjs';
 import { decodePublicResult, exchangeCli } from '../language-packs/public-cli-session.mjs';
 
 const identity = { protocol: 'codegraph.analyzer/1', engineVersion: '0.1.0' };
@@ -10,6 +12,7 @@ const request = { protocol: identity.protocol, type: 'analyze', id: 'transport',
 const graph = { root_contains: [], nodes: [], external_symbols: [] };
 const result = { ...identity, engine_version: identity.engineVersion, pack_id: 'go', type: 'completed', id: request.id, outcome: 'ok', graph };
 delete result.engineVersion;
+test.before(preparePublicCliOwner);
 
 /** 成功退出或单独 EOF 都不充分，唯一完整结果和最终身份缺一不可。 */
 test('public decoder rejects missing malformed duplicate lifecycle and nonzero success results', () => {
@@ -64,4 +67,96 @@ test('one-shot exchange bounds a child that never reads stdin', async t => {
   assert.ok(Date.now() - started < 5000);
   const pid = Number(await fs.readFile(marker, 'utf8'));
   assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+});
+
+/** PID 标记只由本用例的真实后代写入，测试兜底不能掩盖调用方未完成回收。 */
+async function descendantFixture(t, inherited, final = result) {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'codegraph-owned-descendant-'));
+  const marker = path.join(directory, 'child.json');
+  let fallback = false;
+  const cleanup = async () => {
+    const record = await fs.readFile(marker, 'utf8').then(JSON.parse).catch(() => undefined);
+    if (record) {
+      try { process.kill(record.pid, 0); fallback = true; process.kill(record.pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+    }
+  };
+  t.after(async () => { await cleanup(); await fs.rm(directory, { recursive: true, force: true }); });
+  const descendant = `require('node:fs').writeFileSync(${JSON.stringify(marker)},JSON.stringify({pid:process.pid,parent:process.ppid}));setInterval(()=>{},1000);`;
+  const body = `process.stdin.resume();process.stdin.on('end',()=>{const fs=require('node:fs');const child=require('node:child_process').spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{stdio:${JSON.stringify(inherited ? ['ignore', 'inherit', 'inherit'] : 'ignore')}});child.unref();const timer=setInterval(()=>{if(fs.existsSync(${JSON.stringify(marker)})){clearInterval(timer);${inherited ? 'process.stderr.write("root-exited-before-caller-deadline",()=>process.exit(0));' : `process.stdout.write(${JSON.stringify(JSON.stringify(final) + '\n')},()=>process.exit(0));`}}},5);});`;
+  return { body, marker, cleanup, usedFallback: () => fallback };
+}
+
+/** 有界等待真实后代启动，不能把未启动的用例当作清理成功。 */
+async function readDescendant(marker) {
+  const deadline = Date.now() + 2000;
+  while (true) {
+    const record = await fs.readFile(marker, 'utf8').then(JSON.parse).catch(() => undefined);
+    if (record) return record;
+    assert.ok(Date.now() < deadline, 'Real descendant did not reach its PID milestone');
+    await delay(10);
+  }
+}
+
+/** 正常成功也必须在返回前回收已退出根留下的闭管道后代。 */
+test('one-shot exchange reaps a closed-stdio descendant after valid final and root exit', async t => {
+  const fixture = await descendantFixture(t, false);
+  const started = Date.now();
+  assert.deepEqual(await exchangeCli(process.execPath, 'go', request, identity, undefined, { args: ['-e', fixture.body], timeoutMs: 2000 }), graph);
+  const record = await readDescendant(fixture.marker);
+  assert.throws(() => process.kill(record.parent, 0), { code: 'ESRCH' });
+  assert.throws(() => process.kill(record.pid, 0), { code: 'ESRCH' });
+  assert.equal(fixture.usedFallback(), false);
+  assert.ok(Date.now() - started < 5000);
+});
+
+/** 错误最终身份仍须先回收真实遗留子树，再向调用方报告原协议错误。 */
+test('one-shot exchange reaps a closed-stdio descendant before rejecting an invalid final', async t => {
+  const fixture = await descendantFixture(t, false, { ...result, pack_id: 'wrong-pack' });
+  await assert.rejects(exchangeCli(process.execPath, 'go', request, identity, undefined, { args: ['-e', fixture.body], timeoutMs: 2000 }), /Public final identity mismatch/);
+  const record = await readDescendant(fixture.marker);
+  assert.throws(() => process.kill(record.parent, 0), { code: 'ESRCH' });
+  assert.throws(() => process.kill(record.pid, 0), { code: 'ESRCH' });
+  assert.equal(fixture.usedFallback(), false);
+});
+
+/** 根先退出而后代持有真实继承管道时，deadline仍须有界清理并保留首错和实际诊断。 */
+test('one-shot exchange bounds inherited descendant pipes after root exit at caller deadline', async t => {
+  const fixture = await descendantFixture(t, true);
+  const started = Date.now();
+  const pending = exchangeCli(process.execPath, 'go', request, identity, undefined, { args: ['-e', fixture.body], timeoutMs: 700 });
+  pending.catch(() => {});
+  const record = await readDescendant(fixture.marker);
+  await delay(100);
+  assert.throws(() => process.kill(record.parent, 0), { code: 'ESRCH' });
+  const watchdog = setTimeout(() => fixture.cleanup().catch(() => {}), 4000);
+  try { await assert.rejects(pending, /Public CLI acceptance timed out.*root-exited-before-caller-deadline/s); }
+  finally { clearTimeout(watchdog); }
+  assert.equal(fixture.usedFallback(), false, 'Caller needed external fixture cleanup to close descendant pipes');
+  assert.throws(() => process.kill(record.pid, 0), { code: 'ESRCH' });
+  assert.ok(Date.now() - started < 5000);
+});
+
+/** 真实树已清理后注入收尾报告失败，首个 deadline 和实际 stderr 仍须可见。 */
+test('one-shot exchange preserves primary failure alongside a cleanup failure', async t => {
+  const fixture = await descendantFixture(t, true);
+  const cleanupFailure = new Error('fixture cleanup receipt failure');
+  await assert.rejects(exchangeCli(process.execPath, 'go', request, identity, undefined, {
+    args: ['-e', fixture.body], timeoutMs: 700,
+    createOwner: async (...args) => {
+      const owner = await spawnOwnedCli(...args);
+      return { ...owner, reap: async () => { await owner.reap(); throw cleanupFailure; } };
+    },
+  }), error => {
+    assert.ok(error instanceof AggregateError);
+    assert.match(error.cause.message, /Public CLI acceptance timed out/);
+    assert.equal(error.errors[0], error.cause);
+    assert.ok(error.errors.includes(cleanupFailure));
+    assert.match(error.message, /fixture cleanup receipt failure/);
+    assert.match(error.message, /root-exited-before-caller-deadline/);
+    return true;
+  });
+  const record = await readDescendant(fixture.marker);
+  assert.throws(() => process.kill(record.parent, 0), { code: 'ESRCH' });
+  assert.throws(() => process.kill(record.pid, 0), { code: 'ESRCH' });
+  assert.equal(fixture.usedFallback(), false);
 });
