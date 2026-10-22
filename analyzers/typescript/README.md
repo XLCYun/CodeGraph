@@ -41,5 +41,7 @@ CODEGRAPH_TYPESCRIPT_PACK=/absolute/extracted/pack node --test analyzers/typescr
 CODEGRAPH_TYPESCRIPT_PACK=/absolute/extracted/pack node analyzers/typescript/tests/benchmark.mjs
 ```
 
-旧 Host 和打包脚本仍在后续迁移范围。旧结构的历史验收仅证明当时的实现，不能作为
-当前直接入口的双平台打包证据；Windows 和正式包由最终自动 CI 验证。
+七语言已通过直接入口和当前[分发接口](../../docs/distribution.md)构建；
+随包 Node、生产模块与固定声明的布局见[包说明](../../docs/pack-layout.md)。
+2026-10-22 的 PR CI 39777180923 中 macOS 成功，Windows 的 Python junction 诊断断言失败；
+须取得修复后的完整自动 CI，首个固定发布仍待完成。旧结构验收仅作为有日期的历史记录。

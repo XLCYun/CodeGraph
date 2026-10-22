@@ -48,7 +48,11 @@ class PublicConformanceTests(unittest.TestCase):
         from test_helper import TARGET
         env = dict(os.environ, CODEGRAPH_JAVA_TARGET_JDK=str(TARGET))
         if environment:
-            env.update(environment)
+            for key, value in environment.items():
+                if value is None:
+                    env.pop(key, None)
+                else:
+                    env[key] = value
         result = subprocess.run([*PUBLIC_COMMAND, *(args if args is not None else ["analyze"])],
                                 input=payload, text=True, encoding="utf-8", capture_output=True,
                                 timeout=20, cwd=tempfile.gettempdir(), env=env)
@@ -127,6 +131,48 @@ class PublicConformanceTests(unittest.TestCase):
         self.request["options"]["include_tests"] = True
         self.assertTrue(any(n["name"] == "MainTest" for n in self.exchange(json.dumps(self.request))[1]["graph"]["nodes"]))
         self.assertEqual(snapshot_files(self.root), before)
+
+    def test_target_sdk_roots_cannot_contain_or_be_below_source(self):
+        """复制真实目标 JDK，在公共入口覆盖双向重叠、外部有效 SDK 和空集绕过。"""
+        import shutil
+        from test_helper import TARGET, metadata, write
+        sdk = pathlib.Path(self.temp.name) / "owned-jdk"
+        shutil.copytree(TARGET, sdk, symlinks=False)
+        for location in ["external", "below", "ancestor"]:
+            with self.subTest(location=location):
+                if location == "below":
+                    moved = self.root / "sdk"
+                    shutil.move(str(sdk), moved)
+                    sdk = moved
+                elif location == "ancestor":
+                    moved = pathlib.Path(self.temp.name) / "owned-jdk"
+                    shutil.move(str(sdk), moved)
+                    sdk = moved
+                    self.root = sdk / "project"
+                    self.root.mkdir()
+                metadata(self.root)
+                write(self.root, "src/main/java/A.java", "class A { String value; }")
+                self.request["repository_root"] = str(self.root)
+                self.request["files"] = ["src/main/java/A.java"]
+                environment = {"CODEGRAPH_JAVA_TARGET_JDK": None, "JAVA_HOME": str(sdk), "JDK_HOME": str(sdk), "PATH": str(sdk / "bin")}
+                result, message = self.exchange(json.dumps(self.request), environment=environment)
+                if location == "external":
+                    self.assertEqual(result.returncode, 0, (message, result.stderr))
+                    self.assertTrue(any(node["name"] == "A" for node in message["graph"]["nodes"]))
+                else:
+                    self.assertEqual(result.returncode, 1, (message, result.stderr))
+                    self.assertEqual(message["id"], self.request["id"])
+                    self.assertEqual(message["error"]["code"], "invalid_input")
+                    self.assertNotIn("graph", message)
+                    self.assertIn("target JDK root overlaps repository", message["error"]["message"])
+                    discovery = dict(self.request)
+                    del discovery["files"]
+                    result, message = self.exchange(json.dumps(discovery), environment=environment)
+                    self.assertEqual(result.returncode, 1, (message, result.stderr))
+                    self.assertEqual(message["error"]["code"], "invalid_input")
+                    self.assertIn("target JDK root overlaps repository", message["error"]["message"])
+                    self.request["files"] = []
+                    self.assertEqual(self.exchange(json.dumps(self.request), environment=environment)[0].returncode, 0)
 
     def test_sdk_discovery_component_policy(self):
         """同进程发现器沿用多 major、最高稳定补丁及标准库布局规则。"""

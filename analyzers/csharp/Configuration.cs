@@ -168,6 +168,7 @@ internal static class Configuration
             document = XDocument.Load(input, LoadOptions.None);
             documents.Add(path, document);
         }
+        catch (HelperException) { throw; }
         catch (Exception error) { throw new HelperException("unsupported_configuration", error.Message, relative); }
         cancellation.ThrowIfCancellationRequested();
         var project = document.Root;

@@ -40,9 +40,11 @@
 Rust/Python 只共用进程内 DTO、公共输入与必要图检查，内部来源记录不进入公共结果。
 
 调用方负责源码状态一致、EOF 后读完结果、期限及整棵进程树取消。
-[既有迁移证据](../../docs/research/existing-native-helper-migration-validation.md)记录旧结构，
-不证明本次直接入口和新包完成双平台验收。包布局及七语言联合验收随后迁移，许可材料
-与固定上游来源保持不变。
+截至 2026-10-17 的[既有迁移证据](https://github.com/XLCYun/narrant/blob/b594535116654e101658e8d2b94f2719e6c0b082/docs/research/existing-native-helper-migration-validation.md)记录旧结构，
+仅作为旧结构的历史记录。当前[分发接口](../../docs/distribution.md)已按
+[包布局](../../docs/pack-layout.md)构建七语言直接入口，保留许可材料与固定上游来源。
+2026-10-22 的 PR CI 39777180923 中 macOS 成功，Windows 的 Python junction 诊断断言失败；
+修复后的完整自动 CI 和首个固定发布仍待完成。
 
 在仓库根执行（所有 Cargo 命令经全局锁与 sccache wrapper）：
 
@@ -54,4 +56,4 @@ scripts/cargo-agent.sh +1.98.0 clippy --manifest-path analyzers/python/Cargo.tom
 scripts/cargo-agent.sh +1.98.0 fmt --manifest-path analyzers/python/Cargo.toml -- --check
 ```
 
-本轮证据与未验收范围见 `docs/research/existing-native-helper-migration-validation.md`。
+旧结构验证的日期与范围见上述历史迁移记录。

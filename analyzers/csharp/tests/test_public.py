@@ -22,3 +22,18 @@ class PublicTests(native_public.NativePublicTests):
         self.assertEqual(result['outcome'], 'error', result)
         self.assertEqual(result['error']['code'], 'invalid_input', result)
         self.assertEqual(result['id'], request['id'])
+
+    def test_project_metadata_resource_limit_keeps_public_classification(self):
+        """超限项目必须报告资源限制；有效与损坏 XML 分别保持成功和配置失败。"""
+        files = self.prepare()
+        project = self.root / 'App.csproj'
+        valid = project.read_text(encoding='utf-8')
+        success = self.run_public(self.request(files[:1]))
+        self.assertEqual(success['outcome'], 'ok', success)
+        project.write_text('<Project broken', encoding='utf-8')
+        malformed = self.run_public(self.request(files[:1]))
+        self.assertEqual(malformed['error']['code'], 'analysis_failed', malformed)
+        project.write_text(valid + ' ' * (1024 * 1024), encoding='utf-8')
+        oversized = self.run_public(self.request(files[:1]))
+        self.assertEqual(oversized['id'], self.request()['id'])
+        self.assertEqual(oversized['error']['code'], 'resource_limit', oversized)

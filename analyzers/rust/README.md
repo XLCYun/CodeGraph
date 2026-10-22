@@ -4,7 +4,7 @@
 的 `project-model`、`load-cargo`、`ide`、`syntax`、`vfs`、`base-db` 和 `hir-def` 直接链接到同一个程序。
 提供只读项目核心、完整 Rust 图投影和固定入口 `codegraph-rust analyze`。程序直接实现
 `codegraph.analyzer/1`，进程内调用原生核心、准备项目工具链并检查来源和图。
-原结构的[迁移证据](../../docs/research/existing-native-helper-migration-validation.md)仅作历史记录，
+截至 2026-10-17 的原结构[迁移证据](https://github.com/XLCYun/narrant/blob/b594535116654e101658e8d2b94f2719e6c0b082/docs/research/existing-native-helper-migration-validation.md)仅作历史记录，
 不构成本次直接入口或新包的双平台验收。
 
 ## 构建与验证
@@ -27,7 +27,8 @@ scripts/cargo-agent.sh +1.98.0 test --manifest-path analyzers/rust/Cargo.toml --
 公共入口与调用方生命周期测试可用
 `test --manifest-path analyzers/rust/Cargo.toml --test initial_protocol --test lifecycle`。
 不要给整个语义套件强制离线，网络政策用例需要它自己的环回服务；限制档位仍自行强制离线。
-旧根 Host、旧工厂和正常支持包构建仍由后续迁移处理，不能把本轮新二进制当作旧私有引擎。
+七语言均已迁到直接入口；当前[构建分发接口](../../docs/distribution.md)负责各包，
+[包布局](../../docs/pack-layout.md)保留原生程序与运行依赖。
 完整 Rust 门禁必须显式设置 `CODEGRAPH_PROJECT_RUST_TOOLCHAIN` 和绝对 `CARGO_HOME`，
 并已安装项目测试工具链的 rust-src。`node scripts/language-packs/prepare-rust-native-tests.mjs --prepare`
 仅在测试准备阶段补齐标准库 metadata 依赖并验证离线解析；门禁本身只检查已有前提。
@@ -52,7 +53,7 @@ scripts/cargo-agent.sh +1.98.0 test --manifest-path analyzers/rust/Cargo.toml --
 标准库和全部依赖要求 `ProjectToolchain` 显式提供已有 sysroot 和 rust-src。每档均
 禁止 build scripts、过程宏服务和 rustup 自动安装。分析子进程设置 `CARGO_CACHE_RUSTC_INFO=0`，
 避免在已有 target 内写入编译器版本缓存；开发编译脚本与缓存配置不变。`test_cfg` 明确控制语义 cfg；
-默认启用，对应旧入口的测试上下文，后续图的测试节点过滤应单独实现。
+默认启用，对应旧入口的测试上下文，图投影按请求的 `include_tests` 保留既有测试节点过滤。
 
 全部依赖先只读发现真实 workspace 根和项目 Cargo 版本，再将项目锁文件解析移到
 独立临时目录。已有 Cargo.lock 保留原始约束，无锁 workspace 也不在项目内生成锁。
@@ -72,12 +73,12 @@ VFS 文件身份也可以属于合法二进制资源，不保证存在可查询�
 查询各有一个完整事务异常边界，位置校验的原文读取也在查询事务中。加载故障保留诊断
 并结束该次加载、丢弃数据库；查询故障返回明确 Err，原生取消保留其错误类型。
 完整图调用方遇到任一查询 Err 必须终止该次分析并丢弃项目，不能重试或继续拼接部分图；
-完整图与协议路径已固定该义务，并验证公共 Host 对忙碌 helper 及实际 Cargo 子进程的取消回收。
+完整图与协议路径已固定该义务，并验证公共入口调用方对忙碌分析器及实际 Cargo 子进程的取消回收。
 异常边界用于真实事务隔离，不逐文件探测文本可用性。
 候选检查只读重读路径，不更新数据库或替换原文。上游源码与 loader 保持固定版本。
 调用者必须在加载期间保持输入不变；此校验不提供对并发改写的原子保证。加载完成后
-查询始终使用原始不可变快照。上游可能返回的 no-deps 回退不能当作成功。当前只有 macOS ARM64
-聚焦证据，详见 [迁移验证](../../docs/research/existing-native-helper-migration-validation.md)。
+查询始终使用原始不可变快照。上游可能返回的 no-deps 回退不能当作成功。2026-10-11 的 macOS ARM64
+聚焦证据见上述历史迁移验证。
 
 ## 图与协议边界
 
@@ -105,4 +106,6 @@ stdin 接收一个 UTF-8 公共 JSON 对象后 EOF，尾换行可选；stdout �
 和注入参数均被禁止。标准库及全部依赖所需 sysroot/rust-src 在实际项目目录自行发现。
 
 公开入口使用 `--help`、`analyze --help` 和 `--version`。版本仍为未发布的 `0.1.0`。
-包布局及七语言联合验收由后续打包迁移完成；旧 Host 不能直接消费该新入口。
+当前包直接交付原生 `bin/codegraph-rust`，七语言联合验收使用上述分发接口。
+2026-10-22 的 PR CI 39777180923 中 macOS 成功，Windows 因 Python junction 诊断断言失败；
+须取得修复后的完整自动 CI，首个固定发布仍待人工合并及确切 main CI。

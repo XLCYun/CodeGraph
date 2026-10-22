@@ -130,7 +130,7 @@ final class ProjectModel {
             checkpoint.check();
             Target target = targets.get(config.release);
             if (target == null) {
-                target = chooseTarget(platforms, config.release);
+                target = chooseTarget(root, platforms, config.release);
                 targets.put(config.release, target);
             }
             bound.add(new Configuration(config.id, config.release, config.sourcePaths, config.roots, target));
@@ -181,7 +181,7 @@ final class ProjectModel {
     }
 
     /** 验证目标声明与 JDK release 文件严格一致。 */
-    private static Target chooseTarget(List<SdkDiscovery.Candidate> platforms, String release) throws Failure {
+    private static Target chooseTarget(Path repository, List<SdkDiscovery.Candidate> platforms, String release) throws Failure {
         Target chosen = null;
         Set<String> ids = new HashSet<>();
         for (SdkDiscovery.Candidate platform : platforms) {
@@ -194,6 +194,9 @@ final class ProjectModel {
             if (!path.isAbsolute()) throw new Failure("invalid_input", "target JDK root must be absolute");
             try {
                 path = path.toRealPath();
+                // 标准声明必须来自仓外 SDK；共同祖先同样会扩大来源授权。
+                if (path.startsWith(repository) || repository.startsWith(path))
+                    throw new Failure("invalid_input", "target JDK root overlaps repository");
                 String data = Files.readString(path.resolve("release"), StandardCharsets.UTF_8);
                 Matcher match = Pattern.compile("(?m)^JAVA_VERSION=\"([^\"\\r\\n]+)\"\\s*$").matcher(data);
                 if (!match.find() || !version.equals(match.group(1)) || !release.equals(jdkRelease(version)))

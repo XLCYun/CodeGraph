@@ -83,4 +83,6 @@ Java 8 夹具未配置且未在 `.tools` 中找到时，对应测试会明确跳
 `build.py --tests` 把历史配置、来源、只读、图与目标 SDK 用例的驱动编译到
 `build/test-classes`；正式包只复制 `build/classes`。驱动没有生产兼容入口。
 公共协议、EOF、调用方终止、背压与管道错误使用真实 JVM 的公开 Main 验证。
-旧 Host 与打包脚本由后续任务迁移；本机 macOS 结果不代替 Windows 或正式包 CI。
+七语言已使用直接入口和统一[分发接口](../../docs/distribution.md)打包，布局见[包说明](../../docs/pack-layout.md)。
+2026-10-22 的 PR CI 39777180923 中 macOS 成功，Windows 因 Python junction 诊断断言失败；
+完整 Windows 门禁仍须修复后的自动 CI 验证，首个固定发布尚未完成。

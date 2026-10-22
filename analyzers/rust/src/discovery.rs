@@ -32,6 +32,7 @@ pub(crate) fn manifests(repository: &Path) -> Result<Vec<PathBuf>> {
 
 /// 逐目录探测用户覆盖/目录工具链；标准库模式要求所有项目与已批准平台一致。
 pub(crate) fn policies(
+    repository: &Path,
     manifests: &[PathBuf],
     scope: DependencyScope,
     platform: Option<&crate::protocol::Platform>,
@@ -52,6 +53,10 @@ pub(crate) fn policies(
             None
         } else {
             ensure!(
+                !sysroot.starts_with(repository) && !repository.starts_with(&sysroot),
+                "目标 SDK 根不能与分析仓库重叠"
+            );
+            ensure!(
                 previous.as_ref().is_none_or(|root| root == &sysroot),
                 "此仓库的多个 Rust 项目使用不同工具链；当前标准库分析不支持这种组合"
             );
@@ -62,6 +67,19 @@ pub(crate) fn policies(
                     && rust_src.join("std/src/lib.rs").is_file(),
                 "项目工具链缺少 rust-src；不会自动安装组件"
             );
+            // 标准源码目录及 core/std 入口逐一解析链接，不能扩大已接受 sysroot 的授权。
+            let rust_src = dunce::canonicalize(&rust_src)?;
+            ensure!(
+                rust_src.starts_with(&sysroot),
+                "Rust 标准声明不存在或逃逸 sysroot"
+            );
+            for relative in ["core/src/lib.rs", "std/src/lib.rs"] {
+                let source = dunce::canonicalize(rust_src.join(relative))?;
+                ensure!(
+                    source.starts_with(&sysroot) && source.is_file(),
+                    "Rust 标准声明不存在或逃逸 sysroot"
+                );
+            }
             if let Some(platform) = platform {
                 ensure!(
                     platform.kind == "rust-standard-library"
@@ -93,7 +111,7 @@ pub(crate) fn policies(
     Ok(policies)
 }
 
-/// 探测继承 Host 的进程树所有权与运行时覆盖，强制禁止自动安装和版本缓存写回。
+/// 探测继承调用方的进程树所有权与运行时覆盖，强制禁止自动安装和版本缓存写回。
 fn probe(tool: &str, arguments: &[&str], directory: &Path) -> Result<String> {
     let output = Command::new(tool)
         .args(arguments)

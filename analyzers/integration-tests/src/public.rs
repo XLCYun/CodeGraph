@@ -176,35 +176,79 @@ impl LanguageAnalyzer for PublicAnalyzer {
             return Err(reason.unwrap());
         }
         let status = status.unwrap();
-        let result: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_else(|error| {
-            panic!(
-                "Missing/malformed public result: {error}; {}",
-                String::from_utf8_lossy(&stderr)
-            )
-        });
-        assert!(bytes.ends_with(b"\n"));
-        assert_eq!(result["protocol"], "codegraph.analyzer/1");
-        assert_eq!(result["engine_version"], "0.1.0");
-        assert_eq!(result["pack_id"], self.pack);
-        assert_eq!(result["type"], "completed");
-        if result["outcome"] == "error" {
-            assert!(!status.success());
-            assert!(result.get("graph").is_none());
-            // 公共说明可以概括诊断；旧语义断言继续核对同一实际程序写到 stderr 的细节。
-            return Err(AnalysisError {
-                message: result["error"]["message"].as_str().unwrap().to_owned(),
-                code: Some(result["error"]["code"].as_str().unwrap().to_owned()),
-                diagnostic: String::from_utf8_lossy(&stderr).into_owned(),
-                cancelled: false,
-            });
-        }
-        assert!(
-            status.success(),
-            "{status}; {result}; {}",
-            String::from_utf8_lossy(&stderr)
-        );
-        assert_eq!(result["id"], "public-integration");
-        assert_eq!(result["outcome"], "ok");
-        Ok(CodeGraph::decode(result["graph"].clone()))
+        decode_final(
+            &bytes,
+            status,
+            &stderr,
+            self.pack,
+            &serde_json::Value::Object(request),
+        )
     }
 }
+
+/// 与真实进程调用共用最终响应断言，便于精确验证非交付测试调用方的身份政策。
+fn decode_final(
+    bytes: &[u8],
+    status: std::process::ExitStatus,
+    stderr: &[u8],
+    pack: &str,
+    request: &serde_json::Value,
+) -> Result<CodeGraph, AnalysisError> {
+    let result: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_else(|error| {
+        panic!(
+            "Missing/malformed public result: {error}; {}",
+            String::from_utf8_lossy(&stderr)
+        )
+    });
+    assert!(bytes.ends_with(b"\n"));
+    assert_eq!(result["protocol"], "codegraph.analyzer/1");
+    assert_eq!(result["engine_version"], "0.1.0");
+    assert_eq!(result["pack_id"], pack);
+    assert_eq!(result["type"], "completed");
+    assert!(
+        result.get("id").is_some(),
+        "Public final result is missing its id"
+    );
+    let early_error = result["outcome"] == "error"
+        && matches!(
+            result["error"]["code"].as_str(),
+            Some("invalid_request" | "incompatible_protocol")
+        );
+    let valid_id = request["id"].as_str().is_some_and(|id| {
+        !id.contains('\0')
+            && id.len() <= 1024
+            && id.chars().any(|ch| !ch.is_whitespace() && ch != '\u{feff}')
+    });
+    if early_error {
+        assert!(
+            result["id"].is_null() || valid_id && result["id"] == request["id"],
+            "Rejected request returned an unaccepted or mismatched id"
+        );
+    } else {
+        assert_eq!(
+            result["id"], request["id"],
+            "Accepted analysis returned a mismatched id"
+        );
+    }
+    if result["outcome"] == "error" {
+        assert!(!status.success());
+        assert!(result.get("graph").is_none());
+        // 公共说明可以概括诊断；旧语义断言继续核对同一实际程序写到 stderr 的细节。
+        return Err(AnalysisError {
+            message: result["error"]["message"].as_str().unwrap().to_owned(),
+            code: Some(result["error"]["code"].as_str().unwrap().to_owned()),
+            diagnostic: String::from_utf8_lossy(&stderr).into_owned(),
+            cancelled: false,
+        });
+    }
+    assert!(
+        status.success(),
+        "{status}; {result}; {}",
+        String::from_utf8_lossy(&stderr)
+    );
+    assert_eq!(result["outcome"], "ok");
+    Ok(CodeGraph::decode(result["graph"].clone()))
+}
+
+#[path = "tests/public.rs"]
+mod tests;

@@ -59,8 +59,12 @@ pub fn build(request: &Request) -> Result<Projection> {
         "rust-all-dependencies-v1" => DependencyScope::AllDependencies,
         _ => unreachable!("请求已验证"),
     };
-    let policies =
-        crate::discovery::policies(&manifests, scope, request.environment.platforms.first())?;
+    let policies = crate::discovery::policies(
+        &repository,
+        &manifests,
+        scope,
+        request.environment.platforms.first(),
+    )?;
     let observation = request
         .input
         .files

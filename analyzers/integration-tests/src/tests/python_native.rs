@@ -825,5 +825,22 @@ fn native_windows_junction_escape_is_rejected() {
             options: Default::default(),
         })
         .unwrap_err();
-    assert!(error.message.contains("逃逸仓库"), "{error:?}");
+    assert_eq!(error.code.as_deref(), Some("analysis_failed"), "{error:?}");
+    assert!(!error.cancelled, "{error:?}");
+    assert!(
+        error.diagnostic.contains("Python 路径逃逸仓库"),
+        "{error:?}"
+    );
+    assert!(
+        error.diagnostic.contains(
+            &root
+                .path()
+                .canonicalize()
+                .unwrap()
+                .join("escaped")
+                .to_string_lossy()
+                .to_string()
+        ),
+        "{error:?}"
+    );
 }

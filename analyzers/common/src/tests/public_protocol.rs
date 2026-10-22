@@ -25,7 +25,7 @@ fn public_selection_and_recursive_duplicate_keys_are_strict() {
 /// 来源和安装边界对空集同样生效，真实文件与链接都不能越出源码根。
 #[test]
 fn repository_and_package_boundaries_apply_before_the_empty_fast_path() {
-    use crate::public_protocol::{check, repository_file};
+    use crate::public_protocol::check;
     let repository = tempfile::tempdir().unwrap();
     let package = tempfile::tempdir().unwrap();
     std::fs::create_dir(package.path().join("bin")).unwrap();
@@ -42,6 +42,7 @@ fn repository_and_package_boundaries_apply_before_the_empty_fast_path() {
     );
     #[cfg(unix)]
     {
+        use crate::public_protocol::repository_file;
         let outside = tempfile::tempdir().unwrap();
         std::fs::write(outside.path().join("source.rs"), "").unwrap();
         std::os::unix::fs::symlink(

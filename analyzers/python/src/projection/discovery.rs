@@ -109,10 +109,10 @@ pub(super) fn load(repository: &Path, deadline: Instant, request_id: &str) -> Re
         let ty = read("ty.toml")?;
         let pyproject = read("pyproject.toml")?;
         // 只有真实配置字节已读入并解析后才报告，不能把默认配置或启动当作加载证据。
-        if ty.is_some() || pyproject.is_some() {
-            if let Some(observation) = &observation {
-                observation.record("project-configuration-read")?;
-            }
+        if (ty.is_some() || pyproject.is_some())
+            && let Some(observation) = &observation
+        {
+            observation.record("project-configuration-read")?;
         }
         let inline = pyproject
             .as_ref()

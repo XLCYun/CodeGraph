@@ -191,3 +191,22 @@ test('one-shot exchange preserves primary failure alongside a cleanup failure', 
   assert.equal(fixture.usedFallback(), false);
   assert.ok(Date.now() - started < 5000);
 });
+
+/** 已收集完整输出后注入清理收据失败，协议首错仍须独立保留。 */
+test('one-shot exchange retains invalid-final diagnostics alongside cleanup failure', async () => {
+  const cleanupFailure = new Error('fixture cleanup receipt failure');
+  const code = `process.stdin.resume();process.stdin.on('end',()=>console.log(JSON.stringify(${JSON.stringify({ ...result, pack_id: 'foreign-pack' })})));`;
+  await assert.rejects(exchangeCli(process.execPath, 'go', request, identity, undefined, {
+    args: ['-e', code],
+    createOwner: async (...args) => {
+      const owner = await spawnOwnedCli(...args);
+      return { ...owner, reap: async () => { await owner.reap(); throw cleanupFailure; } };
+    },
+  }), error => {
+    assert.ok(error instanceof AggregateError);
+    assert.match(error.cause?.message ?? '', /Public final identity mismatch/);
+    assert.equal(error.errors[0], error.cause);
+    assert.ok(error.errors.includes(cleanupFailure));
+    return true;
+  });
+});

@@ -155,7 +155,8 @@ export async function exchangeCli(executable, pack, request, identity, expectedF
   try { await owner.reap(); }
   catch (error) { cleanupFailures.push(error); }
   exitStatus ??= owner.rootStatus();
-  if (!failure && !cleanupFailures.length) try {
+  // 完整传输已保留输出和退出状态时，清理失败不能掩盖独立的最终结果错误。
+  if (!failure && (!cleanupFailures.length || !cancel && exitStatus)) try {
     const output = Buffer.concat(chunks);
     if (cancel) {
       assert.ok(exitStatus.signal || exitStatus.code !== 0, 'Caller tree termination returned success');
