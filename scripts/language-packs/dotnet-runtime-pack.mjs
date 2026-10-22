@@ -15,6 +15,13 @@ export function validateRuntimePack(entry, target) {
   return entry;
 }
 
+/** 只识别 LF/CRLF 记录分隔符与一个末尾换行，路径空白和类型字段不能被 trim 掩盖。 */
+export function validateRuntimeArchiveListing(namesOutput, listingOutput) {
+  const names = namesOutput.replace(/\r?\n$/, '').split(/\r?\n/);
+  const listing = listingOutput.replace(/\r?\n$/, '').split(/\r?\n/);
+  if (names.some(name => !safeFilePath(name.replace(/\/$/, ''))) || listing.some(line => !['-', 'd'].includes(line[0]))) throw new Error('Runtime pack contains unsafe archive entries');
+}
+
 /** 优先复用既有 NuGet 缓存；只把核验过的固定 nupkg 暂存为离线恢复源。 */
 export async function prepareRuntimePack(target, temporary, environment = process.env) {
   const manifest = JSON.parse(await fs.readFile(path.join(repository, 'resources/native-toolchains.json'), 'utf8'));
@@ -34,9 +41,9 @@ export async function prepareRuntimePack(target, temporary, environment = proces
   await fs.mkdir(source);
   const archive = path.join(source, filename);
   await fs.writeFile(archive, bytes, { flag: 'wx' });
-  const names = execFileSync(systemTar(), ['-tf', archive], { encoding: 'utf8' }).trim().split('\n');
-  const listing = execFileSync(systemTar(), ['-tvf', archive], { encoding: 'utf8' }).trim().split('\n');
-  if (names.some(name => !safeFilePath(name.replace(/\/$/, ''))) || listing.some(line => !['-', 'd'].includes(line[0]))) throw new Error('Runtime pack contains unsafe archive entries');
+  const names = execFileSync(systemTar(), ['-tf', archive], { encoding: 'utf8' });
+  const listing = execFileSync(systemTar(), ['-tvf', archive], { encoding: 'utf8' });
+  validateRuntimeArchiveListing(names, listing);
   const notices = path.join(temporary, 'runtime-notices');
   await fs.mkdir(notices);
   execFileSync(systemTar(), ['-xf', archive, '-C', notices, 'LICENSE.TXT', 'THIRD-PARTY-NOTICES.TXT']);
