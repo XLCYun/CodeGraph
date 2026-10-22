@@ -10,6 +10,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { extractTarXz } from './native-xz-extraction.mjs';
 import { systemTar } from './system-tar.mjs';
+import { validateRuntimePack } from './dotnet-runtime-pack.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const nativeTargets = { 'darwin-arm64': 'aarch64-apple-darwin', 'win32-x64': 'x86_64-pc-windows-msvc' };
@@ -34,6 +35,7 @@ export function validateToolchainManifest(manifest) {
       if (!/^CODEGRAPH_[A-Z0-9_]+$/.test(item.environment)) throw new Error('Invalid environment variable');
     }
   }
+  for (const target of Object.values(nativeTargets)) validateRuntimePack(manifest.runtime_packs?.[target], target);
   return manifest;
 }
 

@@ -7,14 +7,13 @@ import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { finalizeToolchainEnvironment, validateToolchainManifest, verifyArchive } from '../language-packs/provision-native-toolchains.mjs';
-import { runVerificationCommands, validateNativeConfiguration, verificationCommands } from '../language-packs/verify-native-analyzers.mjs';
+import { runVerificationCommands, verificationCommands } from '../language-packs/verify-native-analyzers.mjs';
 import { publicEnvironment } from '../language-packs/public-cli-session.mjs';
 
 const manifest = JSON.parse(await fs.readFile(new URL('../../resources/native-toolchains.json', import.meta.url), 'utf8'));
 const workflowSource = (await fs.readFile(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const publishingWorkflow = (await fs.readFile(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
-/** 真正的环境收尾结果经过序列化及公开清理后，仍能发现两个目标 JDK 和匹配的 Go SDK。 */
 test('provisioned target SDKs survive public sanitization on both path conventions', () => {
   for (const [platform, paths, output] of [['darwin', path.posix, '/isolated tools'], ['win32', path.win32, 'D:\\isolated tools']]) {
     const installed = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'DOTNET_SDK', 'CMAKE_ROOT']
@@ -34,6 +33,7 @@ test('provisioned target SDKs survive public sanitization on both path conventio
 });
 
 /** 没有安装目标时不能把构建 SDK 当成目标，也不伪造标准发现路径。 */
+
 test('environment finalization does not invent missing target SDKs', () => {
   const environment = finalizeToolchainEnvironment({ CODEGRAPH_GO_SDK: '/build/go', CODEGRAPH_JAVA_RUNTIME: '/build/jdk' }, '/tools');
   assert.equal(environment.GOROOT, undefined);
@@ -48,6 +48,7 @@ test('environment finalization does not invent missing target SDKs', () => {
 });
 
 // 用真实 Cargo 解析生产命令生成的 runner 配置，覆盖 Node → Git Bash → 缓存入口边界。
+
 test('Rust helper runner configuration survives the complete Cargo agent chain', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'narrant cargo config 空格-'));
   try {
@@ -68,12 +69,14 @@ test('Rust helper runner configuration survives the complete Cargo agent chain',
 });
 
 // 两个平台必须拥有全部固定构建工具和引用夹具，清单不能遗漏语言运行时。
+
 test('official pinned manifest covers every required tool on both platforms', () => {
   assert.equal(validateToolchainManifest(manifest), manifest);
   for (const entries of Object.values(manifest.targets)) assert.deepEqual(entries.map(entry => entry.name).sort(), ['cmake', 'dotnet', 'dotnet-ref8', 'dotnet-ref9', 'go', 'go-target', 'jdk17', 'jdk25', 'jdk8', 'llvm']);
 });
 
 // 恶意或不完整清单必须在任何下载和解包发生前被拒绝。
+
 test('untrusted downloads, missing digests and escaping homes fail before installation', () => {
   for (const mutation of [{ url: 'https://example.org/LLVM-latest.tar.xz' }, { digest: 'deadbeef' }, { home: '../outside' }, { home: 'C:/outside' }]) {
     const invalid = structuredClone(manifest);
@@ -83,6 +86,7 @@ test('untrusted downloads, missing digests and escaping homes fail before instal
 });
 
 // 篡改下载文件必须触发摘要失败，而不是继续安装。
+
 test('download verification rejects a modified archive with a fixed SHA256', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'native-checksum-'));
   try {
@@ -96,73 +100,7 @@ test('download verification rejects a modified archive with a fixed SHA256', asy
 });
 
 // Windows 空格路径可用，缺任意 helper 或相对 SDK 根都要失败。
-test('all enabled helpers and narrow absolute platform roots are mandatory', () => {
-  const config = Object.fromEntries(['rust', 'python', 'typescript', 'go', 'java', 'csharp', 'clang'].map(id => [id, { executable: `C:\\Native Tools\\${id}.exe`, args: [], trusted_roots: ['C:\\Native Tools'], platforms: [{ id: 'fixed', kind: 'sdk', version: '1', root: 'C:\\SDK\\1' }] }]));
-  config.csharp.platforms = [['net8.0', '8.0.0'], ['net9.0', '9.0.20'], ['net10.0', '10.0.0']].map(([tfm, version]) => ({ id: tfm, kind: 'dotnet-reference-assemblies', version, root: `C:\\SDK\\${tfm}`, metadata: { tfm, reference_pack: 'Microsoft.NETCore.App.Ref', reference_pack_version: version } }));
-  assert.equal(validateNativeConfiguration(config, 'win32'), config);
-  const singleTarget = structuredClone(config);
-  singleTarget.csharp.platforms.shift();
-  assert.throws(() => validateNativeConfiguration(singleTarget, 'win32'), /net8.0/);
-  const sharedRoot = structuredClone(config);
-  sharedRoot.csharp.platforms[1].root = sharedRoot.csharp.platforms[0].root;
-  assert.throws(() => validateNativeConfiguration(sharedRoot, 'win32'), /distinct roots/);
-  const incomplete = structuredClone(config);
-  delete incomplete.clang;
-  assert.throws(() => validateNativeConfiguration(incomplete, 'win32'), /clang/);
-  config.java.platforms[0].root = '../sdk';
-  assert.throws(() => validateNativeConfiguration(config, 'win32'), /platform catalog/);
-});
 
-// 验收命令覆盖所有 helper，且 Cargo 统一串行经过仓库入口。
-test('verification uses every helper suite and serialized Cargo host and real graph tests', () => {
-  const environment = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`CODEGRAPH_${name}`, '/isolated/tools']));
-  const commands = verificationCommands(environment, 'win32');
-  assert.equal(commands.length, 20);
-  assert.equal(commands[2].environment.CODEGRAPH_TEST_REFS8, path.join('/isolated/tools', 'ref/net8.0'));
-  assert.match(commands[0].executable, /go\.exe$/);
-  assert.deepEqual(commands.filter(command => command.args[0] === '-m').map(command => command.args[4]), ['analyzers/java/tests', 'analyzers/csharp/tests', 'analyzers/clang/tests']);
-  for (const command of commands.filter(command => command.executable === 'bash')) {
-    assert.equal(command.executable, 'bash');
-    assert.equal(command.args[0], 'scripts/cargo-agent.sh');
-  }
-  const csharpFactory = commands.find(command => command.args.includes('adapters::csharp_graph::'));
-  assert.deepEqual(csharpFactory.args, ['scripts/cargo-agent.sh', 'test', '--locked', '--lib', 'adapters::csharp_graph::', '--', '--ignored', '--test-threads=1']);
-  assert.deepEqual(csharpFactory.requiredTests, ['adapters::csharp_graph::factory_preserves_source_and_local_calls']);
-  assert.ok(commands.at(-1).args.includes('scripts/language-packs/verify-public-cli.mjs'));
-  assert.equal(commands.flatMap(command => command.requiredTests ?? []).length, 71);
-  assert.throws(() => verificationCommands({}), /Missing fixed toolchain/);
-});
-
-// 公共进程所有者和原生协议在两个平台使用相同的实际验收入口。
-test('shared process and native acceptance use the same live groups on both platforms', () => {
-  const environment = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`CODEGRAPH_${name}`, '/isolated/tools']));
-  const windows = verificationCommands(environment, 'win32');
-  const macOS = verificationCommands(environment, 'darwin');
-  assert.equal(macOS.length, 21);
-  assert.equal(windows.length, 20);
-  assert.ok(macOS.some(command => command.args.includes('adapters::rust::tests::')));
-  assert.ok(windows.every(command => !command.args.includes('adapters::rust::tests::')));
-  for (const commands of [windows, macOS]) {
-    const owners = commands.filter(command => command.args.includes('--lib') && !command.args.includes('--manifest-path') && !command.args.includes('--ignored'));
-    assert.equal(owners.length, 1);
-    assert.deepEqual(owners[0].args, ['scripts/cargo-agent.sh', 'test', '--locked', '--lib', '--', '--test-threads=1']);
-  }
-  for (const commands of [windows, macOS]) assert.doesNotMatch(JSON.stringify(commands), /lsp::/);
-  // 平台特有 cfg 与 runner 路径分隔符除外，共同验收组的命令与参数严格对照。
-  const runnerPrefix = "target.'cfg(all())'.runner=";
-  const commonTests = new Set(windows.flatMap(command => command.requiredTests ?? []).filter(test => macOS.some(command => command.requiredTests?.includes(test))));
-  const normalizeRunnerPaths = commands => commands.filter(command => !command.args.includes('adapters::rust::tests::')).map(command => ({
-    ...command,
-    ...(command.requiredTests ? { requiredTests: command.requiredTests.filter(test => commonTests.has(test)) } : {}),
-    args: command.args.map(arg => arg.startsWith(runnerPrefix)
-      ? [runnerPrefix, ...JSON.parse(arg.slice(runnerPrefix.length)).map(file => path.normalize(file))]
-      : arg),
-  }));
-  const shared = commands => commands.filter(command => command.executable === 'bash' || command.executable === process.execPath);
-  assert.deepEqual(normalizeRunnerPaths(shared(windows)), normalizeRunnerPaths(shared(macOS)));
-});
-
-// 前组真实子进程失败后仍必须执行后组，同时整体保持失败，不能只收集成功日志。
 test('failed validation child does not prevent later child execution or make the result successful', async t => {
   const diagnostics = t.mock.method(console, 'error', () => {});
   const launches = t.mock.method(console, 'log', () => {});
@@ -188,6 +126,7 @@ test('failed validation child does not prevent later child execution or make the
 });
 
 // 多组失败保留各自命令和原始错误，异步执行始终串行且次序不变。
+
 test('validation collects multiple original failures in order without overlapping groups', async t => {
   const diagnostics = t.mock.method(console, 'error', () => {});
   const commands = ['first', 'middle', 'last'].map(name => ({ executable: name, args: ['--fixture'] }));
@@ -221,6 +160,7 @@ test('validation collects multiple original failures in order without overlappin
 });
 
 // 全部验收成功时正常完成，不能因汇总机制产生伪失败。
+
 test('successful validation groups all complete normally', async () => {
   const commands = ['one', 'two'].map(executable => ({ executable, args: [] }));
   const visited = [];
@@ -229,6 +169,7 @@ test('successful validation groups all complete normally', async () => {
 });
 
 // 引用专用 NuGet 包跨架构使用同一来源摘要，不能偷换为浮动版本或任意 NuGet 工具。
+
 test('net8 standard references have one official architecture-independent SHA512 pin', () => {
   const references = Object.values(manifest.targets).map(entries => entries.find(entry => entry.name === 'dotnet-ref8'));
   assert.deepEqual(references[0], references[1]);
@@ -242,6 +183,7 @@ test('net8 standard references have one official architecture-independent SHA512
 });
 
 // 官方引用包使用 SHA512，字节篡改必须在解包前被发现。
+
 test('reference package verification checks SHA512 content', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'native-reference-checksum-'));
   try {
@@ -256,51 +198,7 @@ test('reference package verification checks SHA512 content', async () => {
 
 
 /** 每个平台编译出的原有语义断言都必须逐名接入。 */
-test('semantic acceptance inventory exactly covers all retained ignored tests', async () => {
-  const inventory = JSON.parse(await fs.readFile(new URL('../../resources/semantic-acceptance.json', import.meta.url)));
-  assert.equal(inventory.filter(item => item.platforms.includes('darwin')).length, 77);
-  assert.equal(inventory.filter(item => item.platforms.includes('win32')).length, 71);
-  const environment = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`CODEGRAPH_${name}`, '/isolated/tools']));
-  for (const platform of ['darwin', 'win32']) {
-    const commands = verificationCommands(environment, platform);
-    const actual = commands.flatMap(command => command.requiredTests ?? []).sort();
-    assert.deepEqual(actual, inventory.filter(item => item.platforms.includes(platform)).map(item => item.name).sort());
-    assert.doesNotMatch(JSON.stringify(commands), /--lib[^]*src-tauri|native_helper_graphs|application::|structure_review::/);
-  }
-  for (const file of new Set(inventory.map(item => item.source))) {
-    const source = await fs.readFile(new URL(`../../${file}`, import.meta.url), 'utf8');
-    const functions = [...source.matchAll(/#\[test\]\s*#\[ignore[^\n]*\]\s*fn (\w+)\(/g)].map(match => match[1]).sort();
-    assert.deepEqual(functions, inventory.filter(item => item.source === file).map(item => item.name.split('::').at(-1)).sort());
-  }
-  for (const language of ['typescript-javascript', 'python', 'rust', 'go', 'java', 'csharp', 'c-cpp']) {
-    const commands = verificationCommands(environment, 'darwin', language);
-    assert.ok(commands.some(command => command.args.includes('cli')));
-    assert.ok(commands.some(command => command.args.includes('scripts/language-packs/verify-public-cli.mjs') && command.args.at(-1) === language));
-    assert.ok(commands.some(command => command.args.includes('--lib') && !command.args.includes('--manifest-path') && !command.args.includes('--ignored')));
-  }
-  assert.ok(verificationCommands({}, 'darwin', 'typescript-javascript')[0].args.includes('--test-concurrency=1'));
-  assert.throws(() => verificationCommands({}, 'darwin', 'go'), /Missing fixed toolchain/);
-  assert.throws(() => verificationCommands({}, 'darwin', 'typo'), /not enabled/);
-});
 
-/** 清单逐项服从原测试的函数级 cfg，函数体中的链接实现 cfg 不改变测试平台。 */
-test('semantic inventory platforms exactly follow retained Rust cfg boundaries', async () => {
-  const inventory = JSON.parse(await fs.readFile(new URL('../../resources/semantic-acceptance.json', import.meta.url)));
-  for (const file of new Set(inventory.map(item => item.source))) {
-    const source = (await fs.readFile(new URL(`../../${file}`, import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
-    const functions = [...source.matchAll(/^((?:#\[[^\n]+\]\n)+)fn (\w+)\(/gm)].filter(match => match[1].includes('#[ignore'));
-    assert.equal(functions.length, inventory.filter(item => item.source === file).length, `Every retained test must have parsed attributes: ${file}`);
-    for (const [, attributes, name] of functions) {
-      const cfg = [...attributes.matchAll(/#\[cfg\(([^\n]+)\)\]/g)].map(match => match[1]);
-      assert.ok(cfg.length === 0 || (cfg.length === 1 && ['unix', 'windows'].includes(cfg[0])), `Review unsupported cfg for ${file}:${name}`);
-      const platforms = cfg[0] === 'unix' ? ['darwin'] : cfg[0] === 'windows' ? ['win32'] : ['darwin', 'win32'];
-      const entry = inventory.find(item => item.source === file && item.name.endsWith(`::${name}`));
-      assert.deepEqual(entry?.platforms, platforms, `${file}:${name}`);
-    }
-  }
-});
-
-/** 双平台任务不能跳过完整构建；上传必须发生在成功验收以后。 */
 test('CI gates both native targets, exact prerequisites, all packs and immutable release evidence', () => {
   assert.match(workflowSource, /runner: macos-15/);
   assert.match(workflowSource, /runner: windows-2022/);
@@ -323,6 +221,7 @@ test('CI gates both native targets, exact prerequisites, all packs and immutable
 });
 
 /** helper 固定编译器与项目 Rust 矩阵是两个独立前置，缺少任何一项都失败。 */
+
 test('Rust runner and project prerequisites preserve pinned compiler and isolated metadata', async () => {
   const commands = verificationCommands({ CODEGRAPH_PROJECT_RUST_TOOLCHAIN: 'stable', CODEGRAPH_TEST_CARGO_TOOLCHAINS: '/81:/94:/96', CODEGRAPH_TEST_CARGO_194: '/94' }, 'darwin', 'rust');
   assert.deepEqual(commands[0].args.slice(0, 6), ['scripts/cargo-agent.sh', '+1.98.0', 'test', '--manifest-path', 'analyzers/rust/Cargo.toml', '--config']);
@@ -334,12 +233,7 @@ test('Rust runner and project prerequisites preserve pinned compiler and isolate
 });
 
 /** 提供空目录或拼错 SDK 不会被 helper suite 的 skip 分支隐藏。 */
-test('requested native fixtures must exist before running suites', async () => {
-  const { validateNativeFixtures } = await import('../language-packs/verify-native-analyzers.mjs');
-  await assert.rejects(validateNativeFixtures({ go: { executable: '/missing/codegraph/go', trusted_roots: [], platforms: [] } }, {}, 'go'), /ENOENT/);
-});
 
-/** 即使子进程退出 0，漏跑的已登记语义断言也必须关闭验收。 */
 test('missing named semantic success rejects an otherwise successful subprocess', async t => {
   const diagnostics = t.mock.method(console, 'error', () => {});
   const launches = t.mock.method(console, 'log', () => {});
@@ -351,4 +245,60 @@ test('missing named semantic success rejects an otherwise successful subprocess'
   assert.deepEqual(launches.mock.calls.map(call => call.arguments), [[`Native validation: ${command.executable} ${command.args.join(' ')}`]]);
   assert.equal(diagnostics.mock.callCount(), 1);
   assert.match(diagnostics.mock.calls[0].arguments[0].cause.message, /Required semantic test did not pass: required::real_semantic_case/);
+});
+
+/** 新命令绑定非交付驱动和公共入口，不能借旧根模块或静默子集产生完整 receipt。 */
+test('verification binds every retained semantic name to new public integration commands', async () => {
+  const environment = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`CODEGRAPH_${name}`, '/isolated/tools']));
+  const inventory = JSON.parse(await fs.readFile(new URL('../../resources/semantic-acceptance.json', import.meta.url)));
+  assert.equal(inventory.flatMap(item => item.historicalNames).length, 78);
+  for (const platform of ['darwin', 'win32']) {
+    const commands = verificationCommands(environment, platform);
+    assert.deepEqual(commands.flatMap(command => command.requiredTests ?? []).sort(), inventory.filter(item => item.platforms.includes(platform)).map(item => item.name).sort());
+    assert.ok(commands.some(command => command.args.includes('analyzers/go/tests')));
+    assert.ok(commands.some(command => command.args.includes('analyzers/common/Cargo.toml')));
+    assert.ok(commands.some(command => command.args.includes('analyzers/windows-process-probe/Cargo.toml')));
+    assert.ok(commands.some(command => command.args.includes('--workspace')));
+    assert.ok(commands.some(command => command.environment?.CODEGRAPH_CLANG_HELPER?.includes('codegraph-clang-components')));
+    assert.ok(commands.some(command => command.args.includes('analyzers/typescript/tests/historical.test.mjs')));
+    assert.doesNotMatch(JSON.stringify(commands), /adapters::|native_analyzer::|codegraph-.*-engine(?:\.exe)?["/]/);
+    for (const command of commands.filter(command => command.executable === 'bash')) assert.equal(command.args[0], 'scripts/cargo-agent.sh');
+  }
+  for (const file of new Set(inventory.map(item => item.source))) {
+    const source = (await fs.readFile(new URL(`../../${file}`, import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+    const functions = [...source.matchAll(/^((?:#\[[^\n]+\]\n)+)fn (\w+)\(/gm)].filter(match => match[1].includes('#[ignore'));
+    assert.equal(functions.length, inventory.filter(item => item.source === file).length, file);
+    for (const [, attributes, name] of functions) {
+      const cfg = [...attributes.matchAll(/#\[cfg\(([^\n]+)\)\]/g)].map(match => match[1]);
+      assert.ok(cfg.length === 0 || cfg.length === 1 && ['unix', 'windows'].includes(cfg[0]));
+      const platforms = cfg[0] === 'unix' ? ['darwin'] : cfg[0] === 'windows' ? ['win32'] : ['darwin', 'win32'];
+      assert.deepEqual(inventory.find(item => item.source === file && item.name.endsWith(`::${name}`))?.platforms, platforms);
+    }
+  }
+  assert.throws(() => verificationCommands({}, 'darwin', 'go'), /Missing fixed toolchain/);
+  assert.throws(() => verificationCommands({}, 'darwin', 'typo'), /not enabled/);
+});
+
+/** 不随包组件由源码构建，公共测试必须指向真实包内 apphost/native 程序。 */
+test('each selected language requires its package and real test drivers', async () => {
+  const { validateNativeFixtures } = await import('../language-packs/verify-native-analyzers.mjs');
+  await assert.rejects(validateNativeFixtures({ CODEGRAPH_NATIVE_PACKS: '/missing/codegraph' }, 'go'), /ENOENT/);
+  for (const id of ['rust', 'typescript-javascript', 'python', 'java', 'go', 'csharp', 'c-cpp']) {
+    const env = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`CODEGRAPH_${name}`, '/fixed']));
+    const commands = verificationCommands(env, 'darwin', id);
+    assert.ok(commands.some(command => command.args.includes('scripts/language-packs/verify-public-cli.mjs') && command.args.at(-1) === id));
+    assert.ok(commands.some(command => command.args.includes('analyzers/integration-tests/Cargo.toml') && command.requiredTests.length));
+  }
+});
+
+/** 完整 self-contained 恢复必须核对两个真实 RID 的官方版本和 SHA512。 */
+test('self-contained runtime packs bind official RID version and digest', async () => {
+  const { validateRuntimePack } = await import('../language-packs/dotnet-runtime-pack.mjs');
+  for (const target of ['aarch64-apple-darwin', 'x86_64-pc-windows-msvc']) {
+    const entry = manifest.runtime_packs[target];
+    assert.equal(validateRuntimePack(entry, target), entry);
+    assert.equal(entry.version, '10.0.0');
+    for (const mutation of [{ rid: 'other' }, { version: '10.0.1' }, { digest: 'abc' }, { url: entry.url.replace('10.0.0', '10.0.1') }, { metadata_source: 'https://example.org/' }]) assert.throws(() => validateRuntimePack({ ...entry, ...mutation }, target), /fixed .NET runtime/);
+  }
+  assert.notEqual(manifest.runtime_packs['aarch64-apple-darwin'].digest, manifest.runtime_packs['x86_64-pc-windows-msvc'].digest);
 });

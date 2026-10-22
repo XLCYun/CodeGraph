@@ -26,7 +26,7 @@ jobs:
         shell: bash
     env:
       CODEGRAPH_PROJECT_RUST_TOOLCHAIN: stable
-      CARGO_INCREMENTAL: '1'
+      # 保留 Cargo dev/test 默认 incremental；显式 CARGO_INCREMENTAL=1 会被 sccache 拒绝。
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,7 +45,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            . -> target
+            launchers -> ../target
+            analyzers/common -> target
+            analyzers/integration-tests -> target
             analyzers/rust -> target
             analyzers/python -> target
             analyzers/windows-process-probe -> target
@@ -63,7 +65,12 @@ jobs:
           pnpm test
           pnpm check:scripts
           bash scripts/cargo-agent.sh fmt --all --check
-          bash scripts/cargo-agent.sh check --locked --lib --bins
+          bash scripts/cargo-agent.sh check --locked --workspace --lib --bins
+          bash scripts/cargo-agent.sh fmt --manifest-path analyzers/common/Cargo.toml --check
+          bash scripts/cargo-agent.sh fmt --manifest-path analyzers/rust/Cargo.toml --check
+          bash scripts/cargo-agent.sh fmt --manifest-path analyzers/python/Cargo.toml --check
+          bash scripts/cargo-agent.sh fmt --manifest-path analyzers/integration-tests/Cargo.toml --check
+          bash scripts/cargo-agent.sh fmt --manifest-path analyzers/windows-process-probe/Cargo.toml --check
       - name: Enable Windows Git checkout long paths
         if: runner.os == 'Windows'
         run: git config --global core.longpaths true

@@ -87,7 +87,7 @@ test('all fourteen package identities reject generic, foreign and incomplete pay
     const content = fixtureContent(id, target);
     await writePayload(payload, content);
     const output = path.join(root, 'output');
-    const executables = new Set(files.filter(name => name.startsWith('bin/') || name === `runtime/jdk/bin/java${suffix}`));
+    const executables = new Set(files.filter(name => name === `bin/codegraph-${id}${suffix}` || name === `bin/node${suffix}` || name === `runtime/jdk/bin/java${suffix}`));
     const build = () => archiveFixture({ id, version: '0.1.0', target }, payload, output, executables);
     await verifyAnalyzerDistribution(await build());
     verifiedIdentities.add(`${id}-${target}`);

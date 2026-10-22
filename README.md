@@ -1,77 +1,74 @@
 # CodeGraph
 
-CodeGraph analyzes a fixed source directory and produces a common Code Graph through
-seven fixed language entries and one UTF-8 NDJSON protocol. Rust, TypeScript/JavaScript, Python, Java, Go, C#,
-and C/C++ use their native analysis libraries. No Narrant checkout, installation,
-Tauri dependency, Git repository, or Review state is required.
+CodeGraph provides seven language programs that analyze a fixed source directory
+and return a common Code Graph. Each program directly implements the same UTF-8
+[public JSON protocol](docs/protocol.md): one request followed by stdin EOF, one
+final result, then exit. Rust, TypeScript/JavaScript, Python, Java, Go, C# and C/C++
+use their own native analysis libraries and discover target SDKs themselves.
 
-This is the **0.1.0 development extraction**. No executable or language-pack release
-is published by this stage. macOS ARM64 and Windows x64 are the intended targets;
-complete dual-platform CI acceptance remains required before release. Independent
-builds, package verification and the release contract are in
-[distribution.md](docs/distribution.md).
+This is the unreleased **0.1.0 development series**, targeting macOS ARM64 and
+Windows x64. No Narrant checkout, installation, Tauri dependency, Git repository
+or Review state is needed. The first immutable prerelease requires human merge
+and exact-source complete dual-platform CI; `published` remains false until actual
+release consumption. See [distribution.md](docs/distribution.md).
 
 ## Build and verify
 
-Use Rust and Node.js (for the serialized Cargo/cache launcher and process fixtures).
-Rust 1.98.0 is required by the Rust/Python engines and common crate. Each small
-public entry builds with Rust 1.97.1 or later. `sccache` is optional: the wrapper warns
-and falls back if unavailable.
+Use Node 24.18.0, pnpm 11.13.1 and the pinned language build tools in
+[the toolchain manifest](resources/native-toolchains.json). All Cargo commands use
+`scripts/cargo-agent.sh`, which serializes repository builds and uses sccache when
+available. Keep incremental enabled and a separate target per divergent worktree.
 
 ```sh
-scripts/cargo-agent.sh build --locked --bin codegraph-rust
-scripts/cargo-agent.sh test --locked --lib -- --test-threads=1
-scripts/cargo-agent.sh test --locked --test cli -- --test-threads=1
-scripts/cargo-agent.sh +1.98.0 check --locked --manifest-path analyzers/common/Cargo.toml
-node --test scripts/tests/rust-cache.test.mjs
+pnpm install --frozen-lockfile
+pnpm test
+pnpm check:scripts
+scripts/cargo-agent.sh fmt --all --check
+scripts/cargo-agent.sh check --locked --workspace --lib --bins
+scripts/cargo-agent.sh +1.98.0 check --manifest-path analyzers/rust/Cargo.toml --lib --locked
+scripts/cargo-agent.sh +1.98.0 check --manifest-path analyzers/python/Cargo.toml --lib --locked
+node scripts/language-packs/build-language-support-packs.mjs --native --output artifacts/direct-development
 ```
 
-All Cargo commands, including engine builds and formatting, go through
-`scripts/cargo-agent.sh`. Linked worktrees share the repository lock and sccache;
-each checkout keeps its own `target`. Keep Cargo incremental enabled. Do not share
-a target directory across divergent branches. The shared `codegraph-runtime` library is private (`publish = false`); each public
-binary binds one concrete adapter. There is no generic executable or supported Rust API.
-Heavy language engines have separate manifests,
-pinned toolchains/dependencies, and licenses under `analyzers/`.
+The root Cargo workspace contains only TS/Java thin launchers. Rust and Python
+build with their own manifests, locks and Rust 1.98.0. Go and C/C++ have native
+entries. C# publishes a self-contained apphost plus its fixed .NET runtime. There
+is no cross-language Rust Host or public Rust SDK. TS/Java launchers only locate
+bundled runtimes, inherit stdio and propagate exit status; macOS uses exec and
+Windows uses spawn/wait. [Package layout](docs/pack-layout.md) lists runtime files.
 
-Tests marked `ignore` require real prepared language packs or are subprocess fixtures.
-They must be explicitly run with their documented environment in release acceptance;
-a green small-engine test run does not certify all seven language semantics.
+The complete CI command is
+`node scripts/language-packs/verify-native-analyzers.mjs artifacts --build --language all`.
+It requires prepared fixed SDK fixtures, runs all native semantic suites, the
+non-shipped public integration crate and real seven-package acceptance.
+[Historical test mappings](docs/direct-test-migration.md) identify preserved
+semantics and retired private control behavior. Focused local results do not
+replace complete platform CI evidence.
 
 ## Run
 
-```sh
-target/debug/codegraph-rust --help
-target/debug/codegraph-rust --version
-python3 scripts/examples/empty-selection.py target/debug/codegraph-rust
-```
-
-The last command creates isolated temporary directories and exercises a valid empty
-selection with stdin closed after the request. For real configuration-based directory
-analysis, verify and install the complete language package, then run:
+Verify and install the full language package, then invoke its fixed entry:
 
 ```sh
 python3 scripts/examples/analyze-directory.py /absolute/trusted/pack/bin/codegraph-typescript-javascript /absolute/project
+python3 scripts/examples/empty-selection.py analyzers/rust/target/release/codegraph-rust
 ```
 
-This example omits `files`, uses the project's supported language configuration,
-and closes stdin after the request. To select only particular files, supply `files`
-in your request; `files: []` always requests an empty graph. See the per-language
-[discovery policies](docs/engine-selection.md). Installed target SDKs are discovered
-through the standard environment described in [distribution.md](docs/distribution.md).
+Omitting `files` uses the project's supported configuration; explicit nonempty
+`files` is exact selection, and `files: []` returns an empty graph without project
+or SDK discovery. A final newline on input is optional. Close stdin after the
+request. Verify final `protocol`, `engine_version`, `pack_id`, request ID, outcome
+and successful exit before consuming a graph. Cancellation, deadlines and
+transport failures require caller-owned process-tree termination, pipe draining
+and an exit barrier before releasing source/package leases.
 
-Each entry derives its package root from its own `bin/` directory and verifies
-its compiled language identity against `control/codegraph.json`. Consumers do not
-pass a language selector or package directory. Requests contain one JSON object followed by a newline. For interactive
-cancellation, keep stdin open and send `cancel` with the same ID. Consumers that own
-the child process must also retain process-tree ownership for forced cleanup.
-
-See [the public protocol](docs/protocol.md), [language-pack layout](docs/pack-layout.md),
-and [migration provenance and test ownership](docs/migration.md).
+Target SDK discovery is read-only. It never installs SDKs or runs project build
+scripts. See [selection policies](docs/engine-selection.md),
+[the public contract](docs/protocol.md) and [provenance](docs/migration.md).
+Code Graph Difference and multi-language merging belong to consumers.
 
 ## License
 
 CodeGraph uses Apache-2.0. Extracted Narrant code retains its original licensing;
-third-party components keep their own licenses, fixed revisions, and notices.
-The migration originates in [Narrant issue #205](https://github.com/XLCYun/narrant/issues/205).
-Code Graph Difference remains in the consuming application.
+third-party components retain fixed revisions, licenses and notices. The migration
+originates in [Narrant #205](https://github.com/XLCYun/narrant/issues/205).

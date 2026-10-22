@@ -1,16 +1,14 @@
 import { migratedNativePacks } from './native-migration.mjs';
 import fs from 'node:fs/promises';
-import { verifyAnalyzerDistribution } from './verify-analyzer-package.mjs';
 import path from 'node:path';
 import os from 'node:os';
-import { spawn, execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-
+import { execFileSync } from 'node:child_process';
 import { stageAnalyzer } from './build-analyzer.mjs';
+import { nativeTarget, repository, releaseIdentity } from './distribution.mjs';
 import { verifyAndExtract } from './verify-distribution.mjs';
-
-const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const nativeIds = Object.keys(migratedNativePacks);
+import { verifyAnalyzerDistribution } from './verify-analyzer-package.mjs';
+import { exchangeCli } from './public-cli-session.mjs';
+import { prepareRuntimePack, verifyPublishedRuntime } from './dotnet-runtime-pack.mjs';
 
 /** 只复制自己构建的工具和批准的 SDK 声明，展开 SDK 内部链接，拒绝外向链接。 */
 export async function copyToolTree(source, destination) {
@@ -42,7 +40,7 @@ async function findDirectory(candidates, label) {
   throw new Error(`${label} not installed; provide an isolated tool directory for local pack construction`);
 }
 
-/** 为真实 helper 验收读取私有测试 SDK 的引用目录；目标声明不再复制进支持包。 */
+/** 为原生组件验收读取独立测试 SDK 的引用目录；目标声明不再复制进支持包。 */
 export async function csharpFixturePlatforms(sdk) {
   const base = path.join(sdk, 'packs/Microsoft.NETCore.App.Ref');
   const targets = new Map();
@@ -57,7 +55,7 @@ export async function csharpFixturePlatforms(sdk) {
   return [...targets.values()];
 }
 
-/** 验收只描述明确准备的真实 JDK；产品的安装发现由 Rust Host 负责。 */
+/** 验收只描述明确准备的真实 JDK；产品的安装发现由 Java 程序负责。 */
 export async function javaFixturePlatforms(roots) {
   const platforms = [];
   for (const root of [...new Set(roots.filter(Boolean))]) {
@@ -82,60 +80,16 @@ export async function goFixturePlatforms(roots) {
   return platforms;
 }
 
-/** 以空业务环境启动自己的 helper，验证 ready 身份以及协议错误的受控终结。 */
-export async function smokeNativeHelper({ executable, args = [], id, projection, languages, profile, environment = {} }) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codegraph-engine-pack-smoke-'));
+/** 实际唯一公开入口在空业务环境中接收无尾换行 JSON 后 EOF，并返回固定最终身份。 */
+export async function smokeAnalyzer({ executable, args = ['analyze'], id, environment = {}, timeoutMs }) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codegraph-direct-pack-smoke-'));
   let primaryError;
   try {
-    await new Promise((resolve, reject) => {
-      const child = spawn(executable, args, { cwd: root, env: { ...(process.platform === 'win32' ? { SystemRoot: process.env.SystemRoot } : {}), TMPDIR: root, TMP: root, TEMP: root, DOTNET_EnableDiagnostics: '0', ...environment }, stdio: ['pipe', 'pipe', 'pipe'] });
-      let stdout = '', stderr = '', ready = false;
-      let failure, closeTimer;
-      /** 保存首个失败，等待异步 close 后才允许调用方清理 cwd。 */
-      function stop(error) {
-        if (failure) return;
-        failure = error;
-        clearTimeout(timer);
-        closeTimer = setTimeout(() => {
-          failure.message += '; native helper close timeout';
-          child.stdin.destroy(); child.stdout.destroy(); child.stderr.destroy();
-          child.unref();
-          reject(failure);
-        }, 3_000);
-        try { child.kill('SIGKILL'); } catch { /* 原始错误仍由 close 或有界兜底返回。 */ }
-      }
-      const timer = setTimeout(() => stop(new Error('Native helper startup smoke timeout')), 30_000);
-      child.on('error', stop);
-      child.stdin.on('error', stop);
-      child.stdout.on('data', chunk => {
-        stdout += chunk;
-        if (failure) return;
-        if (stdout.length > 262144) { stop(new Error('Native helper smoke output exceeds limit')); return; }
-        if (!ready && stdout.includes('\n')) {
-          try {
-            const message = JSON.parse(stdout.slice(0, stdout.indexOf('\n')));
-            if (message.protocol !== 'codegraph.engine/1' || message.type !== 'ready' || message.helper_id !== id || message.helper_version !== '0.1.0' || message.projection_revision !== projection || JSON.stringify(message.languages) !== JSON.stringify(languages) || !message.profiles.includes(profile)) throw new Error('Native helper ready identity mismatch');
-            ready = true;
-            // EOF 在请求前只允许终止，不应遗留自己的输入线程或子进程。
-            child.stdin.end();
-          } catch (error) { stop(error); }
-        }
-      });
-      child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-262144); });
-      child.on('close', (code, signal) => {
-        clearTimeout(timer);
-        clearTimeout(closeTimer);
-        if (failure) reject(failure);
-        else if (!ready || signal || ![0, 1, 2].includes(code)) reject(new Error(`Native helper smoke failed (${code}/${signal}): ${stderr}`));
-        else resolve();
-      });
-    });
+    const graph = await exchangeCli(executable, id, { protocol: 'codegraph.analyzer/1', type: 'analyze', id: 'pack-smoke', repository_root: root, files: [], options: { include_tests: false, rust_dependency_scope: 'repository-only' } }, await releaseIdentity(), undefined, { args, timeoutMs, cwd: root, environment: { ...(process.platform === 'win32' ? { SystemRoot: process.env.SystemRoot } : {}), TMPDIR: root, TMP: root, TEMP: root, ...environment } });
+    if (JSON.stringify(graph) !== JSON.stringify({ root_contains: [], nodes: [], external_symbols: [] })) throw new Error('Empty public graph mismatch');
   } catch (error) { primaryError = error; }
   try { await fs.rm(root, { recursive: true, force: true }); }
-  catch (error) {
-    if (primaryError) primaryError.message += `; scratch cleanup failed: ${error.message}`;
-    else primaryError = error;
-  }
+  catch (error) { if (primaryError) primaryError.message += `; scratch cleanup failed: ${error.message}`; else primaryError = error; }
   if (primaryError) throw primaryError;
 }
 
@@ -146,7 +100,9 @@ export async function packageCargoLicenses(source, target, payload, label) {
   const metadata = JSON.parse(execFileSync('bash', [path.join(repository, 'scripts/cargo-agent.sh'), 'metadata', '--locked', '--filter-platform', target, '--format-version', '1'], { cwd: source, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }));
   const nodes = new Map(metadata.resolve.nodes.map(node => [node.id, node]));
   const included = new Set();
-  const pending = [metadata.resolve.root];
+  const owner = metadata.packages.find(pkg => path.resolve(pkg.manifest_path) === path.resolve(source, 'Cargo.toml'));
+  if (!owner) throw new Error('Cargo license owner not found');
+  const pending = [owner.id];
   while (pending.length) {
     const id = pending.pop();
     if (included.has(id)) continue;
@@ -196,134 +152,83 @@ export async function packageCargoLicenses(source, target, payload, label) {
   await fs.writeFile(path.join(payload, `licenses/${label}-dependencies.json`), JSON.stringify(notices, null, 2));
 }
 
-/** 从固定语言源码和私有 SDK 组装本机开发包；不下载项目依赖、不调用项目构建。 */
+/** 原生程序与随包运行依赖共同暂存；分析入口永远是固定的 bin/codegraph-<id>。 */
 export async function buildNativePack({ id, target, output, definition, packageDirectory }) {
-  if (!nativeIds.includes(id)) throw new Error('Unknown native pack');
-  const expectedTarget = ({ 'darwin-arm64': 'aarch64-apple-darwin', 'win32-x64': 'x86_64-pc-windows-msvc' })[`${process.platform}-${process.arch}`];
-  if (target !== expectedTarget) throw new Error('Native pack must be built and smoke-tested on its target OS and CPU');
+  if (!Object.hasOwn(migratedNativePacks, id) || id === 'typescript-javascript') throw new Error('Unknown native pack');
+  if (target !== nativeTarget()) throw new Error('Native pack must be built and smoke-tested on its target OS and CPU');
   output = path.resolve(output);
   await fs.mkdir(output, { recursive: true });
   const temporary = await fs.mkdtemp(path.join(output, '.native-build-'));
   const payload = path.join(temporary, 'payload');
-  const windows = process.platform === 'win32';
-  const suffix = windows ? '.exe' : '';
+  const windows = process.platform === 'win32', suffix = windows ? '.exe' : '';
   const platforms = [];
-  const externalPlatforms = [];
-  let executable, args = [];
   try {
     for (const part of ['bin', 'runtime', 'licenses', 'control']) await fs.mkdir(path.join(payload, part), { recursive: true });
     if (id === 'rust' || id === 'python') {
-      const { buildMigratingNativeHelper } = await import('./build-migrating-native-helper.mjs');
-      await buildMigratingNativeHelper(id, payload);
-      executable = path.join(payload, `bin/codegraph-${id}-engine${suffix}`);
-      await packageCargoLicenses(path.join(repository, `analyzers/${id}`), target, payload, id === 'rust' ? 'Rust' : 'Python');
       if (id === 'python') {
-        const source = path.join(repository, 'analyzers/python/licenses');
-        for (const name of ['ruff-LICENSE', 'typeshed-LICENSE']) await fs.copyFile(path.join(source, name), path.join(payload, 'licenses', name));
+        for (const name of ['ruff-LICENSE', 'typeshed-LICENSE']) await fs.copyFile(path.join(repository, 'analyzers/python/licenses', name), path.join(payload, 'licenses', name));
         platforms.push({ id: 'python-stdlib', kind: 'python-embedded-stdlib', version: definition.ty, root: 'bin', metadata: { source_revision: definition.sourceCommit } });
       }
     } else if (id === 'go') {
-      const sdk = await findDirectory([process.env.CODEGRAPH_GO_SDK, windows ? 'C:\\Program Files\\Go' : '/usr/local/go'], `Go ${definition.go} helper build SDK`);
+      const sdk = await findDirectory([process.env.CODEGRAPH_GO_SDK, windows ? 'C:\\Program Files\\Go' : '/usr/local/go'], `Go ${definition.go} build SDK`);
       if (!(await fs.readFile(path.join(sdk, 'VERSION'), 'utf8')).startsWith(`go${definition.go}\n`)) throw new Error('Go SDK version mismatch');
-      executable = path.join(payload, `bin/codegraph-go-engine${suffix}`);
-      execFileSync(path.join(sdk, `bin/go${suffix}`), ['build', '-trimpath', '-o', executable, '.'], { cwd: path.join(repository, 'analyzers/go'), stdio: 'inherit', env: { ...process.env, GOROOT: sdk, GOTOOLCHAIN: 'local', GOWORK: 'off', GOPROXY: 'off', GOSUMDB: 'off' } });
+      execFileSync(path.join(sdk, `bin/go${suffix}`), ['build', '-trimpath', '-o', path.join(payload, `bin/codegraph-go${suffix}`), '.'], { cwd: path.join(repository, 'analyzers/go'), stdio: 'inherit', env: { ...process.env, GOROOT: sdk, GOTOOLCHAIN: 'local', GOWORK: 'off', GOPROXY: 'off', GOSUMDB: 'off' } });
       await fs.copyFile(path.join(sdk, 'LICENSE'), path.join(payload, 'licenses/Go-LICENSE'));
-      externalPlatforms.push(...await goFixturePlatforms([process.env.CODEGRAPH_GO_TARGET_SDK, sdk]));
     } else if (id === 'csharp') {
       const sdk = await findDirectory([process.env.CODEGRAPH_DOTNET_SDK, '/usr/local/share/dotnet', windows && 'C:\\Program Files\\dotnet'], '.NET 10.0.100 SDK');
       const tool = path.join(sdk, `dotnet${suffix}`);
-      const buildEnvironment = { ...process.env, DOTNET_ROOT: sdk, DOTNET_CLI_HOME: path.join(temporary, 'dotnet-home'), DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1', DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false' };
-      const version = execFileSync(tool, ['--version'], { encoding: 'utf8', env: buildEnvironment, cwd: path.join(repository, 'analyzers/csharp') }).trim();
-      if (version !== definition.dotnetSdk) throw new Error('.NET SDK version mismatch');
+      const env = { ...process.env, DOTNET_ROOT: sdk, DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1', DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false' };
+      if (execFileSync(tool, ['--version'], { encoding: 'utf8', env, cwd: path.join(repository, 'analyzers/csharp') }).trim() !== definition.dotnetSdk) throw new Error('.NET SDK version mismatch');
+      const runtime = await prepareRuntimePack(target, temporary, env);
       const publish = path.join(temporary, 'publish');
-      execFileSync(tool, ['publish', path.join(repository, 'analyzers/csharp/CodeGraph.CSharp.Engine.csproj'), '-c', 'Release', '--no-self-contained', '-p:UseAppHost=false', '-o', publish], { stdio: 'inherit', env: buildEnvironment });
-      // 将实际 SDK 自带 runtime 私有化，避免 self-contained restore 访问 NuGet。
-      await copyToolTree(path.join(sdk, `dotnet${suffix}`), path.join(payload, `bin/dotnet${suffix}`));
-      await copyToolTree(path.join(sdk, 'host'), path.join(payload, 'bin/host'));
-      await copyToolTree(path.join(sdk, 'shared/Microsoft.NETCore.App', definition.dotnetRuntime), path.join(payload, 'bin/shared/Microsoft.NETCore.App', definition.dotnetRuntime));
-      await copyToolTree(publish, path.join(payload, 'runtime/helper'));
-      externalPlatforms.push(...await csharpFixturePlatforms(sdk));
+      execFileSync(tool, ['publish', path.join(repository, 'analyzers/csharp/CodeGraph.CSharp.Engine.csproj'), '-c', 'Release', '-r', runtime.entry.rid, '--self-contained', 'true', '-p:RuntimeFrameworkVersion=10.0.0', '-p:TargetLatestRuntimePatch=false', '--source', runtime.source, '-o', publish, '--nologo'], { stdio: 'inherit', env });
+      await verifyPublishedRuntime(publish, runtime, temporary);
+      await copyToolTree(publish, path.join(payload, 'bin'));
       for (const name of ['LICENSE.txt', 'ThirdPartyNotices.txt']) await fs.copyFile(path.join(sdk, name), path.join(payload, 'licenses', name));
-      executable = path.join(payload, `bin/dotnet${suffix}`);
-      args = [path.join(payload, 'runtime/helper/CodeGraph.CSharp.Engine.dll')];
+      for (const name of ['LICENSE.TXT', 'THIRD-PARTY-NOTICES.TXT']) await fs.copyFile(path.join(runtime.notices, name), path.join(payload, 'licenses', `Runtime-${name}`));
     } else if (id === 'java') {
-      const runtime = await findDirectory([process.env.CODEGRAPH_JAVA_RUNTIME, path.join(repository, '.tools/java-native/jdk-25.0.4.1+1/Contents/Home')], 'Pinned Java helper runtime');
-      const runtimeRelease = await fs.readFile(path.join(runtime, 'release'), 'utf8');
-      if (!runtimeRelease.includes(`IMPLEMENTOR_VERSION="Temurin-${definition.runtimeJava}"`)) throw new Error('Java helper runtime version mismatch');
+      const runtime = await findDirectory([process.env.CODEGRAPH_JAVA_RUNTIME, path.join(repository, '.tools/java-native/jdk-25.0.4.1+1/Contents/Home')], 'Pinned Java runtime');
+      if (!(await fs.readFile(path.join(runtime, 'release'), 'utf8')).includes(`IMPLEMENTOR_VERSION="Temurin-${definition.runtimeJava}"`)) throw new Error('Java runtime version mismatch');
       execFileSync(process.env.CODEGRAPH_PYTHON ?? process.env.PYTHON ?? (windows ? 'python' : 'python3'), [path.join(repository, 'analyzers/java/build.py'), runtime, path.join(repository, '.tools/java-native/lib')], { stdio: 'inherit', env: { ...process.env, CODEGRAPH_JAVA_RUNTIME: runtime } });
       await copyToolTree(runtime, path.join(payload, 'runtime/jdk'));
-      await copyToolTree(path.join(repository, 'analyzers/java/build/classes'), path.join(payload, 'runtime/helper/classes'));
-      await copyToolTree(path.join(repository, '.tools/java-native/lib'), path.join(payload, 'runtime/helper/lib'));
+      await copyToolTree(path.join(repository, 'analyzers/java/build/classes'), path.join(payload, 'runtime/analyzer/classes'));
+      await copyToolTree(path.join(repository, '.tools/java-native/lib'), path.join(payload, 'runtime/analyzer/lib'));
       await copyToolTree(path.join(repository, 'analyzers/java/dependencies.lock.json'), path.join(payload, 'licenses/Java-dependencies.json'));
       await copyToolTree(path.join(runtime, 'NOTICE'), path.join(payload, 'licenses/Java-runtime-NOTICE'));
-      executable = path.join(payload, `runtime/jdk/bin/java${suffix}`);
-      args = ['-cp', `${path.join(payload, 'runtime/helper/classes')}${path.delimiter}${path.join(payload, 'runtime/helper/lib/*')}`, 'dev.codegraph.java.Main'];
-      externalPlatforms.push(...await javaFixturePlatforms([process.env.CODEGRAPH_JAVA_TARGET_8, process.env.CODEGRAPH_JAVA_TARGET_JDK, runtime]));
     } else {
       const sdk = await findDirectory([process.env.CODEGRAPH_LLVM_SDK], 'LLVM 21.1.8 SDK');
+      const source = path.join(repository, 'analyzers/clang'), build = path.join(source, 'build');
       if (windows) {
         for (const name of ['CODEGRAPH_MSVC_VERSION', 'CODEGRAPH_VISUAL_STUDIO', 'CODEGRAPH_MSVC_REDIST']) if (!process.env[name]) throw new Error(`Missing fixed Windows toolchain input: ${name}`);
-        const source = path.join(repository, 'analyzers/clang');
-        const build = path.join(source, 'build');
         const cmake = process.env.CODEGRAPH_CMAKE || 'cmake';
-        execFileSync(cmake, ['-S', source, '-B', build, '-G', 'Visual Studio 17 2022', '-A', 'x64', '-T', `v143,version=${process.env.CODEGRAPH_MSVC_VERSION}`, '-DCMAKE_SYSTEM_VERSION=10.0.26100.0', `-DCMAKE_GENERATOR_INSTANCE=${process.env.CODEGRAPH_VISUAL_STUDIO}`, `-DLLVM_DIR=${path.join(sdk, 'lib/cmake/llvm')}`, `-DClang_DIR=${path.join(sdk, 'lib/cmake/clang')}`], { stdio: 'inherit' });
-        // 构建机器可按可用内存设置 CMake 并行度，默认仍为两个编译任务。
+        execFileSync(cmake, ['-S', source, '-B', build, '-G', 'Visual Studio 17 2022', '-A', 'x64', '-T', `v143,version=${process.env.CODEGRAPH_MSVC_VERSION}`, '-DCMAKE_SYSTEM_VERSION=10.0.26100.0', `-DCMAKE_GENERATOR_INSTANCE=${process.env.CODEGRAPH_VISUAL_STUDIO}`, `-DLLVM_DIR=${path.join(sdk, 'lib/cmake/llvm')}`, `-DClang_DIR=${path.join(sdk, 'lib/cmake/clang')}`, '-DCODEGRAPH_BUILD_COMPONENT_TESTS=OFF'], { stdio: 'inherit' });
         execFileSync(cmake, ['--build', build, '--config', 'Release', '--parallel', process.env.CMAKE_BUILD_PARALLEL_LEVEL || '2'], { stdio: 'inherit' });
-        // 运行时只从私有 bin 加载官方 LLVM DLL 与已批准的 VC143 CRT。
-        for (const directory of [path.join(sdk, 'bin'), process.env.CODEGRAPH_MSVC_REDIST]) {
-          for (const name of await fs.readdir(directory)) if (name.toLowerCase().endsWith('.dll')) await copyToolTree(path.join(directory, name), path.join(payload, 'bin', name));
+        // CMake 邻接输出是实际 LLVM DLL 闭包；CRT 只来自已核验的 VC143 目录。
+        const dlls = (await fs.readFile(path.join(build, 'runtime-dlls-Release.txt'), 'utf8')).split(/\r?\n/).filter(Boolean);
+        for (const dll of dlls) {
+          const relative = path.relative(await fs.realpath(sdk), await fs.realpath(dll));
+          if (!path.isAbsolute(dll) || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) || !dll.toLowerCase().endsWith('.dll')) throw new Error('CMake runtime DLL escapes pinned LLVM SDK');
+          await copyToolTree(dll, path.join(payload, 'bin', path.basename(dll)));
         }
-      } else execFileSync('bash', [path.join(repository, 'analyzers/clang/build.sh'), sdk], { stdio: 'inherit' });
-      executable = path.join(payload, `bin/codegraph-clang-engine${suffix}`);
-      await fs.copyFile(path.join(repository, `analyzers/clang/build/codegraph-clang-engine${suffix}`), executable);
-      await fs.chmod(executable, 0o755);
+        for (const name of await fs.readdir(process.env.CODEGRAPH_MSVC_REDIST)) if (name.toLowerCase().endsWith('.dll')) await copyToolTree(path.join(process.env.CODEGRAPH_MSVC_REDIST, name), path.join(payload, 'bin', name));
+      } else execFileSync('bash', [path.join(source, 'build.sh'), sdk], { stdio: 'inherit', env: { ...process.env, CODEGRAPH_BUILD_COMPONENT_TESTS: '0' } });
+      await fs.copyFile(path.join(build, `codegraph-c-cpp${suffix}`), path.join(payload, `bin/codegraph-c-cpp${suffix}`));
       await copyToolTree(path.join(sdk, 'lib/clang/21'), path.join(payload, 'runtime/platform/clang-resource'));
-      // 动态依赖必须由固定构建脚本落到 build/runtime，不能依赖研发机的绝对库路径。
-      if (!windows) await copyToolTree(path.join(repository, 'analyzers/clang/build/runtime/lib'), path.join(payload, 'runtime/lib'));
-      await copyToolTree(path.join(repository, 'analyzers/clang/LICENSE-LLVM.txt'), path.join(payload, 'licenses/LLVM-LICENSE'));
-      await copyToolTree(path.join(repository, 'analyzers/clang/LICENSE-Clang.txt'), path.join(payload, 'licenses/Clang-LICENSE'));
+      if (!windows) await copyToolTree(path.join(build, 'runtime/lib'), path.join(payload, 'runtime/lib'));
+      for (const name of ['LLVM', 'Clang']) await copyToolTree(path.join(source, `LICENSE-${name}.txt`), path.join(payload, `licenses/${name}-LICENSE`));
       platforms.push({ id: 'clang-resource-21', kind: 'clang-resource', version: definition.llvm, root: 'runtime/platform/clang-resource', metadata: {} });
     }
-    const control = { schema_version: 1, helper_version: definition.helperVersion, platforms };
-    if (id === 'java') control.target_sdk = { kind: 'java' };
-    if (id === 'go') control.target_sdk = { kind: 'go' };
-    if (id === 'csharp') control.target_sdk = { kind: 'dotnet' };
-    if (id === 'c-cpp') control.target_sdk = { kind: windows ? 'windows-msvc' : 'macos' };
-    await fs.writeFile(path.join(payload, 'control/native.json'), `${JSON.stringify(control, null, 2)}\n`);
-    const helper = id === 'c-cpp' ? 'clang' : id;
-    await smokeNativeHelper({ executable, args, id: definition.helperId, projection: definition.projectionRevision, languages: id === 'c-cpp' ? ['c', 'cpp'] : [id], profile: definition.profile });
+    const kind = { java: 'java', go: 'go', csharp: 'dotnet', 'c-cpp': windows ? 'windows-msvc' : 'macos' }[id];
+    await fs.writeFile(path.join(payload, 'control/native.json'), `${JSON.stringify({ schema_version: 1, helper_version: definition.version, platforms, ...(kind ? { target_sdk: { kind } } : {}) })}\n`);
     await stageAnalyzer(payload, id, target);
+    await smokeAnalyzer({ executable: path.join(payload, `bin/codegraph-${id}${suffix}`), id });
     const destination = await packageDirectory({ id, version: definition.version, target }, payload, output);
     await verifyAnalyzerDistribution(destination, { id, version: definition.version, target });
-    // 解压归档后再次启动，证明运行环境与可执行权限随支持包保存。
     const extracted = path.join(output, 'smoke-installed', id, definition.version, target);
-    await fs.rm(extracted, { recursive: true, force: true });
     await fs.mkdir(path.dirname(extracted), { recursive: true });
     await verifyAndExtract(destination, extracted);
-    const relocate = value => value.replaceAll(payload, extracted);
-    await smokeNativeHelper({ executable: relocate(executable), args: args.map(relocate), id: `codegraph-${helper}-engine`, projection: definition.projectionRevision, languages: id === 'c-cpp' ? ['c', 'cpp'] : [id], profile: definition.profile });
-    const configPath = path.join(output, 'analyzers-config.json');
-    let config = {};
-    try { config = JSON.parse(await fs.readFile(configPath, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-    const sdkPlatforms = [...platforms.map(platform => ({ ...platform, root: path.join(extracted, platform.root) })), ...externalPlatforms];
-    if (id === 'c-cpp') {
-      if (windows) {
-        const sdkRoot = await findDirectory([process.env.CODEGRAPH_WINDOWS_SDK], 'Windows SDK 10.0.26100.0 Include directory');
-        const standard = await findDirectory([process.env.CODEGRAPH_MSVC_ROOT && path.join(process.env.CODEGRAPH_MSVC_ROOT, 'include')], 'Exact MSVC standard headers');
-        sdkPlatforms.push({ id: 'msvc-standard-headers', kind: 'clang-system-headers', version: path.basename(path.dirname(standard)), root: standard, metadata: {} });
-        sdkPlatforms.push({ id: `windows-sdk-${path.basename(sdkRoot)}`, kind: 'clang-target', version: path.basename(sdkRoot), root: sdkRoot, metadata: { target_triple: 'x86_64-pc-windows-msvc', system_include_directories: ['ucrt', 'shared', 'um', 'winrt', 'cppwinrt'], resource_platform_id: 'clang-resource-21', additional_system_platform_ids: ['msvc-standard-headers'] } });
-      } else {
-        const sdkRoot = await findDirectory([process.env.CODEGRAPH_MACOS_SDK, '/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk', '/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk'], 'macOS target SDK');
-        const settings = JSON.parse(await fs.readFile(path.join(sdkRoot, 'SDKSettings.json'), 'utf8'));
-        const version = settings.Version;
-        if (typeof version !== 'string' || !/^\d+(\.\d+)+$/.test(version)) throw new Error('macOS SDK has no version metadata');
-        const deploymentTarget = settings.DefaultProperties?.MACOSX_DEPLOYMENT_TARGET ?? version;
-        sdkPlatforms.push({ id: `macos-${version}`, kind: 'clang-target', version, root: sdkRoot, metadata: { target_triple: `arm64-apple-macosx${deploymentTarget}`, system_include_directories: ['usr/include/c++/v1', 'usr/include'], resource_platform_id: 'clang-resource-21' } });
-      }
-    }
-    config[helper] = { executable: relocate(executable), args: args.map(relocate), environment: id === 'csharp' ? { DOTNET_ROOT: path.join(extracted, 'bin'), DOTNET_MULTILEVEL_LOOKUP: '0', DOTNET_EnableDiagnostics: '0' } : {}, trusted_roots: [id === 'python' ? path.join(extracted, 'bin') : extracted], platforms: sdkPlatforms };
-    await fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
-    console.log(`Built and smoke-tested local ${id}@${definition.version}: ${destination}`);
+    await smokeAnalyzer({ executable: path.join(extracted, `bin/codegraph-${id}${suffix}`), id });
+    console.log(`Built and public-smoke-tested ${id}@${definition.version}: ${destination}`);
     return destination;
   } finally { await fs.rm(temporary, { recursive: true, force: true }); }
 }

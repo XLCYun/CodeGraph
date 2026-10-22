@@ -5,49 +5,46 @@ import { fileURLToPath } from 'node:url';
 import { nativeTarget, packIds, releaseIdentity, repository, targets } from './distribution.mjs';
 import { packageCargoLicenses } from './native-language-support-packs.mjs';
 
-const analyzerBuilds = new Map();
-let runtimeLicenses;
+const builds = new Map();
 
-/** 每个语言对应独立 Cargo target，入口名与包身份都不能由调用方覆盖。 */
+/** 构建语言自己的入口；薄入口只来自 launchers，三种非 Rust 程序由原生构建器准备。 */
 export function analyzerBuildDefinition(id, target) {
   if (!packIds.includes(id) || !targets.includes(target)) throw new Error('Invalid analyzer identity');
   const binary = `codegraph-${id}`;
-  return { binary, entry: `bin/${binary}${target.includes('windows') ? '.exe' : ''}`,
-    args: ['scripts/cargo-agent.sh', 'build', '--locked', '--release', '--bin', binary] };
+  const source = ['rust', 'python'].includes(id) ? `analyzers/${id}` : ['java', 'typescript-javascript'].includes(id) ? 'launchers' : undefined;
+  const args = source ? ['scripts/cargo-agent.sh', ...(['rust', 'python'].includes(id) ? ['+1.98.0'] : []), 'build', '--manifest-path', `${source}/Cargo.toml`, '--locked', '--release', '--bin', binary] : undefined;
+  return { binary, entry: `bin/${binary}${target.includes('windows') ? '.exe' : ''}`, source, args };
 }
 
-/** 共享依赖许可证只收集一次，语言可执行文件按独立 target 构建和核对。 */
+/** 只编译实际需要的同语言程序，锁定 crate 许可与相同 manifest 的生产依赖闭包。 */
 async function prepareAnalyzer(id, target) {
   const definition = analyzerBuildDefinition(id, target);
   if (target !== nativeTarget()) throw new Error('Analyzer must be built on its native target');
+  if (!definition.source) return { definition };
   const key = `${id}:${target}`;
-  if (!analyzerBuilds.has(key)) analyzerBuilds.set(key, (async () => {
+  if (!builds.has(key)) builds.set(key, (async () => {
     execFileSync('bash', definition.args, { cwd: repository, stdio: 'inherit' });
-    const executable = path.join(repository, 'target/release', path.basename(definition.entry));
+    const targetDirectory = definition.source === 'launchers' ? 'target' : `${definition.source}/target`;
+    const executable = path.join(repository, targetDirectory, 'release', path.basename(definition.entry));
     const identity = await releaseIdentity();
-    if (execFileSync(executable, ['--version'], { encoding: 'utf8' }).trim() !== `${definition.binary} ${identity.version}`) throw new Error('Built analyzer identity mismatch');
-    if (!runtimeLicenses) runtimeLicenses = (async () => {
-      const licenses = path.join(repository, 'target/distribution-licenses');
-      await fs.rm(licenses, { recursive: true, force: true });
-      await fs.mkdir(licenses, { recursive: true });
-      await packageCargoLicenses(repository, target, licenses, 'CodeGraph');
-      return licenses;
-    })();
-    return { executable, licenses: await runtimeLicenses, definition };
+    // launcher 的 --version 必须在完整运行时资源暂存后再验证。
+    if (definition.source !== 'launchers' && execFileSync(executable, ['--version'], { encoding: 'utf8' }).trim() !== `${definition.binary} ${identity.version}`) throw new Error('Built analyzer identity mismatch');
+    return { executable, definition };
   })());
-  return analyzerBuilds.get(key);
+  return builds.get(key);
 }
 
-/** 包内保存与语言绑定的独立入口和五字段公开描述，依赖仍由对应构建器准备。 */
+/** 安装唯一固定公开入口与五字段描述；这里不创建任何私有分析程序。 */
 export async function stageAnalyzer(payload, id, target) {
-  const { executable, licenses, definition } = await prepareAnalyzer(id, target);
+  const { executable, definition } = await prepareAnalyzer(id, target);
   const identity = await releaseIdentity();
   await fs.mkdir(path.join(payload, 'bin'), { recursive: true });
   await fs.mkdir(path.join(payload, 'control'), { recursive: true });
   const entry = path.join(payload, definition.entry);
-  await fs.copyFile(executable, entry);
+  if (executable) await fs.copyFile(executable, entry);
+  if (!(await fs.stat(entry)).isFile()) throw new Error(`Missing direct analyzer: ${id}`);
   await fs.chmod(entry, 0o755);
-  await fs.cp(path.join(licenses, 'licenses'), path.join(payload, 'licenses/codegraph'), { recursive: true });
+  if (definition.source) await packageCargoLicenses(path.join(repository, definition.source), target, payload, id === 'python' ? 'Python' : id === 'rust' ? 'Rust' : 'Launcher');
   const descriptor = { schema_version: 1, pack_id: id, pack_version: identity.version, engine_version: identity.engineVersion, protocol: identity.protocol };
   await fs.writeFile(path.join(payload, 'control/codegraph.json'), `${JSON.stringify(descriptor)}\n`);
 }

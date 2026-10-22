@@ -1,6 +1,7 @@
 // 测试专用驱动直接调用 LibTooling 组件，不编入或交付生产二进制。
 #define CODEGRAPH_COMPONENT_TEST
 #include "../src/main.cpp"
+#include "sdk_discovery.hpp"
 
 // 将历史语义 fixture 转换为进程内请求，以保留精确平台、来源和资源限制断言。
 static void fixtureRequest(Request &r,const j::Object &message) {
@@ -17,7 +18,8 @@ static void fixtureRequest(Request &r,const j::Object &message) {
   auto catalog=environment->getArray("platforms"); require(catalog,"fixture catalog must be array"); platforms(r,*catalog); configureProject(r);
 }
 // EOF 后调用核心并输出来源断言所需的内部证据，测试 driver 不提供控制消息循环。
-int main() {
+int main(int argc,char **argv) {
+  if(argc==3 && std::string(argv[1])=="--sdk-discovery-tests") return sdkDiscoveryTests(fs::u8path(argv[2]));
   Request request; j::Object result;
   try { std::string bytes(std::istreambuf_iterator<char>(std::cin),{}); auto value=parse(bytes); auto fixture=value.getAsObject(); require(fixture,"fixture must be object"); fixtureRequest(request,*fixture); result=analyze(request);
     if(jsonText(j::Value(j::Object(result))).size()>request.maxResult) throw Failure("resource_limit","result byte limit exceeded");

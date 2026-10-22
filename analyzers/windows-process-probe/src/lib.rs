@@ -1,7 +1,5 @@
-//! Windows 轻量验收直接编译生产进程树及其全部平台回归，不复制清理实现或加载 Tauri。
-#![cfg(all(test, windows))]
-// 本组仅调用所有者生命周期接口；完整生产模块的其他调用入口仍编入。
+//! 不随分析器分发的调用方进程树验收工具；覆盖预恢复 Job 归属和后代退出屏障。
 #![allow(dead_code)]
 
-#[path = "../../../src/child_process.rs"]
+#[cfg(test)]
 mod child_process;

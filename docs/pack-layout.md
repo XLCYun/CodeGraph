@@ -1,66 +1,60 @@
 # Language package layout (0.1.0 development series)
 
-Every trusted package contains `control/codegraph.json`. This descriptor is public
-and separate from the private helper configuration:
+Each verified package exposes exactly one public entry
+`bin/codegraph-<pack-id>[.exe] analyze`. There is no required umbrella program,
+private analysis hop, worker, runtime command assembly or public Rust SDK.
+The program itself reads the public JSON, discovers target SDKs and emits its
+final Code Graph. See [protocol.md](protocol.md).
+
+Every package contains the exact public descriptor `control/codegraph.json`:
 
 ```json
 {"schema_version":1,"pack_id":"rust","pack_version":"0.1.0","engine_version":"0.1.0","protocol":"codegraph.analyzer/1"}
 ```
 
-All fields are mandatory; unknown or duplicate fields fail. The compiled entry identity,
-package version, engine version and protocol must exactly match the CLI. The file
-must resolve inside the pack and is capped at 1 MiB. Distribution tooling owns
-immutable archives, manifests, licensing and cryptographic verification; the caller
-must verify these before selecting a trusted root. The descriptor alone is not an
-integrity signature. This stage has no published archive.
+The descriptor is bounded to 1 MiB and has exactly these fields. The caller verifies
+the immutable manifest, hashes, paths and archive before trusting the installation;
+the descriptor alone is not an integrity signature. Final compiled identity must
+match the installed package. Programs do not accept catalog, SDK, runtime or command
+paths in their JSON request.
 
-Each package has exactly one public entry `bin/codegraph-<pack-id>[.exe]`.
-It accepts `analyze`, `--help`, and `--version`; the language adapter is bound at
-compile time. No generic executable, public language selector, runtime command
-assembly, or `--pack-root` is needed. All runtime dependencies travel with the package.
-
-The producer applies the same package-content policy during builds, public-entry
-acceptance and release verification. It rejects generic or foreign entries,
-unexpected payload regions, missing dependency files and mismatched public
-descriptors, after the manifest/archive byte and permission checks. Public acceptance
-then runs the unpacked fixed entry from an unrelated working directory without
-producer-only `CODEGRAPH_*` environment variables.
-
-`control/native.json` retains its private schema:
-
-```json
-{"schema_version":1,"helper_version":"0.1.0","platforms":[]}
-```
-
-An optional `target_sdk` object contains only `kind` (`java`, `go`, `dotnet`, `macos`,
-`windows-msvc`) and selects fixed local SDK discovery. Each bundled platform contains
-`id`, `kind`, `version`, `root` (pack-relative), and `metadata`. Metadata has the
-existing language-specific allowlist. It cannot contain command or environment
-injection. Fixed relative paths and symlink containment are checked by the factory.
-No public request exposes this layout or the helper protocol.
-
-| Pack ID | Private engine / runtime entry | Runtime / standard declarations |
+| Pack | Entry implementation | Required runtime and analysis resources |
 | --- | --- | --- |
-| `rust` | `bin/codegraph-rust-engine[.exe]` | Existing project Cargo/rustc; sysroot/rust-src discovered per scope |
-| `typescript-javascript` | `bin/node[.exe]`, `runtime/helper/main.mjs` | `runtime/typescript/lib`, `runtime/@types/node`, `runtime/undici-types` |
-| `python` | `bin/codegraph-python-engine[.exe]` | `python-embedded-stdlib` platform root `bin`, fixed ty_vendored revision |
-| `java` | `runtime/jdk/bin/java[.exe]` | `runtime/helper/classes`, `runtime/helper/lib/*`, main `dev.codegraph.java.Main`; local target JDK discovery |
-| `go` | `bin/codegraph-go-engine[.exe]` | Local Go SDK sources, highest stable patch in declared minor |
-| `csharp` | `bin/dotnet[.exe]`, `runtime/helper/CodeGraph.CSharp.Engine.dll` | Helper `.deps.json`, `.runtimeconfig.json`, Roslyn DLLs; local target .NET reference packs |
-| `c-cpp` | `bin/codegraph-clang-engine[.exe]` | Bundled Clang resources; approved local macOS or Windows/MSVC headers |
+| `rust` | Native Rust, in-process rust-analyzer | No analysis worker; installed project Cargo/rustc and rust-src according to scope |
+| `typescript-javascript` | Thin native launcher and JS program | `bin/node[.exe]`, every production module in `runtime/analyzer/`, fixed `runtime/typescript`, `runtime/@types/node`, `runtime/undici-types` |
+| `python` | Native Rust, in-process Ruff/ty | Fixed embedded typeshed; no Python interpreter |
+| `java` | Thin native launcher and Java program | `runtime/jdk/bin/java[.exe]`, production `runtime/analyzer/classes`, all locked `runtime/analyzer/lib/*.jar` |
+| `go` | Native Go | No execution runtime; installed target SDK sources discovered in-process |
+| `csharp` | SDK-generated self-contained apphost | Complete publish directory in `bin/`: managed entry, deps/runtimeconfig, Roslyn, BCL, CLR, hostfxr/hostpolicy, native sidecars and resource directories |
+| `c-cpp` | Native C++ with Clang LibTooling | `runtime/platform/clang-resource/include/stddef.h` and all fixed Clang resource contents; macOS `runtime/lib/libclang-cpp.dylib`; actual required Windows DLLs adjacent to EXE in `bin/` |
 
-Preserve upstream versions and licenses in the helper manifests, lockfiles,
-`licenses/`, Java dependency lock, C# `global.json`, and Clang `toolchain.json`.
-Private engines use CodeGraph identities and `codegraph.engine/1`, not a second
-CodeGraph consumer API. Sources under `analyzers/common` and
-`analyzers/windows-process-probe` reference only CodeGraph's own
-`src/child_process.rs`; no `src-tauri` source dependency remains.
+TS/Java launchers only resolve package-relative runtime/resources, set fixed argv
+and necessary environment, inherit stdio and propagate exit. macOS exec replaces
+the launcher; Windows spawn/wait preserves caller ownership of the whole subtree.
+C# never executes a caller-built dotnet command or falls back to an installed
+execution runtime. Its managed assembly is AnyCPU while the apphost and CLR match
+the package RID (`osx-arm64` or `win-x64`). The fixed runtime is 10.0.0 and roll-forward
+is disabled. Both RID NuGet runtime archives have official source and SHA512 pins
+in [native-toolchains.json](../resources/native-toolchains.json).
 
-Authoritative implementation links: [fixed factory](../src/adapters/mod.rs),
-[platform validation](../src/native_analyzer/input.rs),
-[public descriptor](../src/pack.rs), [Rust policies](../src/adapters/rust.rs).
-Distribution tooling adds this descriptor and the version-matched fixed public entry without adding public fields to the
-`deny_unknown_fields` private `native.json` schema.
+C/C++ uses executable-relative rpaths `@executable_path/runtime/lib` and
+`@executable_path/../runtime/lib` on macOS. Windows receives the actual CMake runtime
+DLL closure and approved fixed VC143 CRT; static LLVM does not imply invented DLLs.
+The resource directory contains the contents of LLVM `lib/clang/21`, without an
+extra nested `21` directory. System target headers remain installed SDK inputs.
 
-Distribution manifests, artifact names, size limits, fixed URL templates and local
-candidate paths are specified in [distribution.md](distribution.md).
+`control/native.json` remains producer package metadata (`schema_version`,
+`helper_version`, `platforms`, optional `target_sdk.kind`). It is not a private
+message interface and the programs do not require a caller to interpret it.
+Java/Go/C# platforms are empty and target declarations are not copied into
+`runtime/platform`. Python describes its embedded declaration revision; C/C++
+describes fixed builtin resources. No request can override this metadata.
+
+All upstream notices and locked-dependency licenses remain in the archive.
+C# includes both SDK and runtime pack notice variants. Java JDK legal files are
+retained. `ComponentDriver`, `codegraph-clang-components`, C# Components assemblies,
+Go test binaries, `analyzers/integration-tests` and process-probe utilities never ship.
+Old `*-engine` binaries and `runtime/helper` are rejected by the package verifier.
+
+[distribution.md](distribution.md) defines immutable manifests, fixed asset names,
+size limits, source receipts and local candidate handoff.

@@ -24,7 +24,8 @@ function validateIdentity({ id, version, target }) {
 export async function packageDirectory(identity, payload, output) {
   validateIdentity(identity);
   const destination = path.join(output, identity.id, identity.version, identity.target);
-  await fs.mkdir(destination, { recursive: true });
+  await fs.mkdir(path.dirname(destination), { recursive: true });
+  await fs.mkdir(destination);
   const files = [];
   /** 按稳定顺序记录文件，拒绝符号链接和跨平台不安全的文件名。 */
   async function visit(relative = '') {
@@ -37,7 +38,7 @@ export async function packageDirectory(identity, payload, output) {
         const bytes = await fs.readFile(path.join(payload, file));
         // Windows 运行入口由目标平台和 .exe 后缀确定；POSIX 仍保留真实执行权限。
         const runtimeExecutable = file.startsWith('runtime/') && (identity.target === 'x86_64-pc-windows-msvc' ? file.toLowerCase().endsWith('.exe') : (metadata.mode & 0o111) !== 0);
-        files.push({ path: file, size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), executable: file.startsWith('bin/') || runtimeExecutable });
+        files.push({ path: file, size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), executable: file === `bin/codegraph-${identity.id}${identity.target.includes('windows') ? '.exe' : ''}` || file === `bin/node${identity.target.includes('windows') ? '.exe' : ''}` || file.startsWith('bin/') && (identity.target.includes('windows') ? file.endsWith('.exe') : (metadata.mode & 0o111) !== 0) || runtimeExecutable });
       } else throw new Error('支持包只能包含普通文件和目录');
     }
   }
@@ -121,8 +122,8 @@ export async function buildPack({ id, target, output, cache = path.join(reposito
       }
     }
     if (id === 'typescript-javascript') {
-      const { buildMigratingNativeHelper } = await import('./build-migrating-native-helper.mjs');
-      await buildMigratingNativeHelper(id, payload);
+      const { stageTypeScript } = await import('./stage-typescript.mjs');
+      await stageTypeScript(payload);
       const platforms = definition.packages.map(({ name, version }) => ({ id: name.replaceAll('/', '-').replaceAll('@', ''), kind: 'typescript-declarations', version, root: `runtime/${name}${name === 'typescript' ? '/lib' : ''}`, metadata: { package: name } }));
       await fs.mkdir(path.join(payload, 'control'));
       await fs.writeFile(path.join(payload, 'control/native.json'), JSON.stringify({ schema_version: 1, helper_version: definition.helperVersion, platforms }));
@@ -137,20 +138,12 @@ export async function buildPack({ id, target, output, cache = path.join(reposito
       const runOptions = { encoding: 'utf8', timeout: 30_000, env: { ...process.env, NODE_OPTIONS: '', NODE_PATH: '' } };
       const version = execFileSync(executable, ['--version'], runOptions).trim();
       console.log(version);
-      if (id === 'typescript-javascript') {
-        const { smokeTypeScript, typescriptConfiguration } = await import('./typescript-native-smoke.mjs');
-        await smokeTypeScript(payload);
-        const extracted = path.join(output, 'smoke-installed', id, identity.version, target);
-        await fs.rm(extracted, { recursive: true, force: true });
-        await fs.mkdir(path.dirname(extracted), { recursive: true });
-        await verifyAndExtract(destination, extracted);
-        await smokeTypeScript(extracted);
-        const configPath = path.join(output, 'analyzers-config.json');
-        let config = {};
-        try { config = JSON.parse(await fs.readFile(configPath, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-        config.typescript = await typescriptConfiguration(extracted);
-        await fs.writeFile(configPath, JSON.stringify(config, null, 2));
-      }
+      const { smokeTypeScript } = await import('./typescript-native-smoke.mjs');
+      await smokeTypeScript(payload);
+      const extracted = path.join(output, 'smoke-installed', id, identity.version, target);
+      await fs.mkdir(path.dirname(extracted), { recursive: true });
+      await verifyAndExtract(destination, extracted);
+      await smokeTypeScript(extracted);
     }
     console.log(`Built ${id}@${identity.version} for ${target}: ${destination}`);
     return destination;

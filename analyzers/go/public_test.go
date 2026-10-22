@@ -70,6 +70,16 @@ func TestInstalledSDKCatalog(t *testing.T) {
 	}
 }
 
+// TestInstalledSDKMissingSourcesRejected 保留旧根 SDK 发现器对缺标准源码的明确拒绝。
+func TestInstalledSDKMissingSourcesRejected(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "VERSION", "go1.27.1\n")
+	writeFixture(t, root, "src/builtin/builtin.go", "")
+	if _, problem := sdkCatalog([]string{root}); problem == nil || problem.Code != "target_unavailable" {
+		t.Fatalf("incomplete SDK admitted: %+v", problem)
+	}
+}
+
 // TestCLI 验证固定子命令与已移除入口都不进入分析。
 func TestCLI(t *testing.T) {
 	for _, args := range [][]string{nil, {"__worker"}, {"analyze", "analyze"}, {"--pack", "go"}, {"analyze", "--version"}} {

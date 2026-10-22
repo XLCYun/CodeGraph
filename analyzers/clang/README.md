@@ -13,7 +13,7 @@ macOS ARM64 的固定官方 SDK 及校验和见 `toolchain.json`。SDK 只用于
 
 ```sh
 CODEGRAPH_BUILD_COMPONENT_TESTS=1 analyzers/clang/build.sh /absolute/LLVM-21.1.8-macOS-ARM64
-CODEGRAPH_LLVM_ROOT=/absolute/LLVM-21.1.8-macOS-ARM64 python3 -m unittest discover -s analyzers/clang/tests -v
+CODEGRAPH_LLVM_ROOT=/absolute/LLVM-21.1.8-macOS-ARM64 CODEGRAPH_CLANG_HELPER="$PWD/analyzers/clang/build/codegraph-clang-components" CODEGRAPH_CLANG_ANALYZER="$PWD/analyzers/clang/build/codegraph-c-cpp" python3 -m unittest discover -s analyzers/clang/tests -v
 ```
 
 产物为 `build/codegraph-c-cpp` 和 `build/runtime/lib/libclang-cpp.dylib`。公开发布包按
@@ -79,12 +79,13 @@ C11 `_Generic`、C23 `constexpr`，以及 C++11–C++23 的已实现特性。相
 Windows 构建入口已提供，须在实际 Windows 工具链中验证：
 
 ```powershell
-./analyzers/clang/build.ps1 -LlvmRoot C:/isolated/clang-llvm-21.1.8
+./analyzers/clang/build.ps1 -LlvmRoot C:/isolated/clang-llvm-21.1.8 -BuildComponents
 $env:CODEGRAPH_LLVM_ROOT = 'C:/isolated/clang-llvm-21.1.8'
-$env:CODEGRAPH_CLANG_HELPER = 'C:/repo/analyzers/clang/build/codegraph-c-cpp.exe'
+$env:CODEGRAPH_CLANG_HELPER = 'C:/repo/analyzers/clang/build/codegraph-clang-components.exe'
+$env:CODEGRAPH_CLANG_ANALYZER = 'C:/repo/analyzers/clang/build/codegraph-c-cpp.exe'
 $env:CODEGRAPH_WINDOWS_SDK = 'C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0'
 $env:CODEGRAPH_MSVC_ROOT = 'C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207'
-python analyzers/clang/tests/test_helper.py
+python -m unittest discover -s analyzers/clang/tests -v
 ```
 
 CMake 固定 LLVM 21.1.8，优先 clang-cpp 导出目标，否则链接官方静态 Clang 依赖图；关闭 RTTI、

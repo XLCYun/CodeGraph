@@ -1,56 +1,25 @@
-# Private engine selection and coverage
+# Language selection and source coverage
 
-This is the internal `codegraph.engine/1` contract used by fixed language
-adapters. Consumers use `codegraph.analyzer/1` and do not assemble this request.
-Both versions remain `1`, with package version `0.1.0`: the accepted standalone
-analyzer specification intentionally revises the unreleased request schema so
-`files` is optional. No published compatibility obligation is changed.
+The seven direct programs implement `codegraph.analyzer/1`. Each reads one public
+JSON after EOF, discovers its own target SDK and resolves the selection in-process.
+There is no private wire protocol or cross-language Host.
 
-## Request selection
-
-Public `files` and private `input.files` have the same three forms:
-
-| JSON | Meaning |
+| Public JSON | Meaning |
 | --- | --- |
-| Field omitted | Discover the selection from the loaded language project |
-| `"files": []` | Explicit empty selection; no project or SDK discovery |
-| `"files": ["src/lib.rs"]` | Exact explicit selection; context never expands it |
+| `files` omitted | Discover source through the language's actual project configuration |
+| `"files": []` | Explicit empty graph; no project configuration or target SDK discovery |
+| `"files": ["src/lib.rs"]` | Exact selection; referenced context cannot expand complete nodes |
 
-`null`, scalar/object values, non-string entries, invalid relative paths and
-duplicate paths are errors. A missing field must not be serialized as `null`.
-The shared Rust deserializer is
-`analyzers/common/src/selection.rs::deserialize_files`; the field uses
-`default` plus this custom deserializer, and public serialization skips `None`.
-Runtime `AnalysisInput.files` is `Option<Vec<PathBuf>>`.
-
-The explicit-empty fast path validates the public package identity and repository
-boundary, then returns a validated empty graph without preparing target SDKs,
-loading native control files or starting the private engine.
-
-Private discovery example (the environment and limits retain their existing
-strict schema):
+Null, invalid types, duplicate paths and unsafe POSIX relative paths are rejected.
+Source and installation boundaries are checked even for an empty selection.
 
 ```json
-{
-  "protocol": "codegraph.engine/1",
-  "type": "analyze",
-  "id": "analysis-1",
-  "input": {
-    "repository_root": "/absolute/project",
-    "include_tests": false,
-    "profile": "rust-repository-v1"
-  },
-  "environment": {
-    "scratch_root": "/absolute/scratch",
-    "platforms": []
-  },
-  "limits": {
-    "analysis_timeout_ms": 1800000,
-    "max_result_bytes": 134217728,
-    "max_diagnostic_bytes": 262144
-  }
-}
+{"protocol":"codegraph.analyzer/1","type":"analyze","id":"analysis-1","repository_root":"/absolute/project","options":{"include_tests":false,"rust_dependency_scope":"repository-only"}}
 ```
+
+The following coverage/configuration/origin records describe in-process construction
+checks. They never appear as public result fields. Native component fixtures may
+inspect them through non-shipped test drivers; production has one public entry.
 
 ## One loaded project, one resolved selection
 
@@ -108,17 +77,17 @@ record. A language's supported implicit/default configuration may have empty
 validation. Missing required configuration, malformed configuration, missing SDKs
 and read failures are errors, not configured-empty results.
 
-## Host checks before graph conversion
+## Checks at the language output boundary
 
 Both explicit and discovered coverage is limited to **100,000 files**. The public
 request decoder enforces the same explicit-selection limit. Language engines
 must enforce the discovery limit during collection, before projection; they
-retain the existing result byte, diagnostic, timeout, cancellation and cleanup
-limits. The result line remains limited to 128 MiB.
+retain existing result, diagnostic and internal deadline limits; the caller owns
+cancellation and transport cleanup. The result line remains limited to 128 MiB.
 
-For every returned coverage path the Host validates normalized repository-relative
+For every returned coverage path the language program validates normalized repository-relative
 POSIX syntax, uniqueness, canonical containment, an existing ordinary readable
-file and the existing language-specific physical-alias policy. The Host does not
+file and the existing language-specific physical-alias policy. The language program does not
 infer language membership from file extensions: actual compiler sources can use
 `.inc`, `.def`, `.md` or no extension. Language loaders must establish source
 membership and validate the source through their normal parser/project model.
@@ -280,7 +249,7 @@ Empty selections retain actual or implicit configuration evidence.
 Executable fixtures live in the TypeScript `helper`, `workspace`, `protocol`,
 and `lifecycle` tests under `analyzers/typescript/tests/`, in
 `analyzers/python/src/projection/tests/discovery.rs`, and in both languages'
-registered Host semantic groups.
+registered public integration groups.
 
 ## Go resolution
 
@@ -388,38 +357,31 @@ which it was entered, and the existing declaration/content/conflict union remain
 in force. Explicit lists retain exact selection and their existing TU-context
 coverage requirement. The same Clang run produces membership and graph evidence;
 there is no extension scan, dependency-file subprocess or second compiler pass.
-Configuration loading runs in the cancellable worker alongside parsing; CDB loops,
+Configuration loading runs in the same process as parsing; CDB loops,
 VFS access, participation collection and AST traversal share the request deadline.
-The file limit applies during TU and header collection. Public process supervision
-still bounds native work that cannot immediately cooperate with cancellation.
+The file limit applies during TU and header collection. The caller terminates the complete process tree to bound native work on cancellation or timeout.
 
 The four native suites include directory behavior and lifecycle cases. Their real
-Host semantic fixtures live under `src/native_analyzer/tests/directory/` and are
+Public integration fixtures live under `analyzers/integration-tests/src/tests/directory/` and are
 registered separately for Go, Java, C# and C/C++ on both supported CI platforms.
 Java's existing top-level source glob and C#'s existing `Compile Include="*.cs"`
 include the changed files; the existing Go and Python-unittest discovery commands
 also pick up every new native test file.
 
-## Private cancellation acceptance observation
+## Test-only load observation for caller termination
 
-Installed-entry cancellation acceptance alone sets `CODEGRAPH_TEST_DISCOVERY_PROBE`
-after removing all producer environment hints. This optional observation is absent
-in ordinary consumers and graph checks. It adds no protocol field, public option,
-delay or execution gate. The Host accepts only a fresh `reached.json` destination
-in an empty `codegraph-discovery-probe-*` directory under the system temporary
-directory, canonicalized outside the input repository and installed package.
-The production adapter retains the complete package root separately from executable
-trust roots; Python's executable trust remains restricted to the package's `bin`.
-Existing destinations, direct parent links and canonical repository/package
-overlap are rejected. Native
-writers publish a bounded complete marker atomically without replacing a target.
+Installed-entry acceptance removes producer environment hints, then sets only
+`CODEGRAPH_TEST_DISCOVERY_PROBE` for a requested termination probe. The optional
+marker is absent in ordinary consumers and adds no protocol field, public option,
+delay or execution gate. Its destination is bounded, fresh, atomic and outside
+both the source root and installation; native writers never replace an existing file.
 
-Each marker binds the actual private request, fixed helper identity, process ID
-and one completed loading operation. The cancellation reader validates the marker
-against the still-running owned process tree before sending public cancellation;
-process startup, ready, an expired deadline or an already completed request cannot
-satisfy it. Logs record the loading milestone separately from the cancelled
-terminal, exit code and bounded descendant cleanup.
+Each marker binds the public request ID, the language's fixed observation identity,
+its actual PID and one completed load operation. The test caller closes stdin
+normally, validates the marker against its still-running owned tree and terminates
+the entire tree. Startup alone or an already completed request cannot satisfy it.
+The log records actual root/descendant exit. There is no cancel frame or cancelled
+result, and normal EOF remains successful input completion.
 
 | Engine | Completed work before observation | Work continuing in the same request |
 | --- | --- | --- |

@@ -38,6 +38,11 @@ elseif(UNIX)
   set_target_properties(codegraph-c-cpp PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "$ORIGIN/runtime/lib;$ORIGIN/../runtime/lib")
 endif()
 install(TARGETS codegraph-c-cpp RUNTIME DESTINATION bin)
+# 分发器读取 CMake 的实际 DLL 闭包，不能把旧 build 目录内的 DLL 当成当前依赖。
+if(WIN32)
+  file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/runtime-dlls-$<CONFIG>.txt"
+    CONTENT "$<JOIN:$<TARGET_RUNTIME_DLLS:codegraph-c-cpp>,\n>")
+endif()
 # Windows 动态依赖放在程序旁边；静态 SDK 不引入多余 DLL。
 if(WIN32 AND TARGET clang-cpp)
   get_target_property(CODEGRAPH_CLANG_LIBRARY_TYPE clang-cpp TYPE)

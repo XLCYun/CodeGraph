@@ -1,696 +1,997 @@
 [
   {
     "language": "go",
-    "source": "src/native_analyzer/tests/directory/go.rs",
-    "name": "native_analyzer::tests::directory::go::workspace_discovery_preserves_exact_selection_and_test_roles",
+    "source": "analyzers/integration-tests/src/tests/directory/go.rs",
+    "name": "tests::directory::go::workspace_discovery_preserves_exact_selection_and_test_roles",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::directory::go::workspace_discovery_preserves_exact_selection_and_test_roles"
+    ],
+    "command": "public-integration:go"
   },
   {
     "language": "java",
-    "source": "src/native_analyzer/tests/directory/java.rs",
-    "name": "native_analyzer::tests::directory::java::source_root_discovery_preserves_exact_selection_and_test_roles",
+    "source": "analyzers/integration-tests/src/tests/directory/java.rs",
+    "name": "tests::directory::java::source_root_discovery_preserves_exact_selection_and_test_roles",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::directory::java::source_root_discovery_preserves_exact_selection_and_test_roles"
+    ],
+    "command": "public-integration:java"
   },
   {
     "language": "csharp",
-    "source": "src/native_analyzer/tests/directory/csharp.rs",
-    "name": "native_analyzer::tests::directory::csharp::compile_discovery_preserves_exact_selection_and_test_roles",
+    "source": "analyzers/integration-tests/src/tests/directory/csharp.rs",
+    "name": "tests::directory::csharp::compile_discovery_preserves_exact_selection_and_test_roles",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::directory::csharp::compile_discovery_preserves_exact_selection_and_test_roles"
+    ],
+    "command": "public-integration:csharp"
   },
   {
     "language": "c-cpp",
-    "source": "src/native_analyzer/tests/directory/clang.rs",
-    "name": "native_analyzer::tests::directory::clang::participation_discovery_preserves_headers_and_exact_selection",
+    "source": "analyzers/integration-tests/src/tests/directory/clang.rs",
+    "name": "tests::directory::clang::participation_discovery_preserves_headers_and_exact_selection",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::directory::clang::participation_discovery_preserves_headers_and_exact_selection"
+    ],
+    "command": "public-integration:c-cpp"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_graph.rs",
-    "name": "native_analyzer::tests::python_graph::directory_discovery_preserves_members_context_and_explicit_selection",
+    "source": "analyzers/integration-tests/src/tests/python_graph.rs",
+    "name": "tests::python_graph::directory_discovery_preserves_members_context_and_explicit_selection",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_graph::directory_discovery_preserves_members_context_and_explicit_selection"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::directory_discovery_preserves_config_members_and_explicit_selection",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::directory_discovery_preserves_config_members_and_explicit_selection",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::directory_discovery_preserves_config_members_and_explicit_selection"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_graph.rs",
-    "name": "native_analyzer::tests::python_graph::receiver_fields_follow_lexical_bindings",
+    "source": "analyzers/integration-tests/src/tests/python_graph.rs",
+    "name": "tests::python_graph::receiver_fields_follow_lexical_bindings",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_graph::receiver_fields_follow_lexical_bindings"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_graph.rs",
-    "name": "native_analyzer::tests::python_graph::receiver_fields_distinguish_expression_scopes_and_outer_walrus",
+    "source": "analyzers/integration-tests/src/tests/python_graph.rs",
+    "name": "tests::python_graph::receiver_fields_distinguish_expression_scopes_and_outer_walrus",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_graph::receiver_fields_distinguish_expression_scopes_and_outer_walrus"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_graph.rs",
-    "name": "native_analyzer::tests::python_graph::internal_links_preserve_selected_paths_and_distinct_identities",
+    "source": "analyzers/integration-tests/src/tests/python_graph.rs",
+    "name": "tests::python_graph::internal_links_preserve_selected_paths_and_distinct_identities",
     "platforms": [
       "darwin"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_graph::internal_links_preserve_selected_paths_and_distinct_identities"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_graph.rs",
-    "name": "native_analyzer::tests::python_graph::project_requires_python_controls_native_syntax",
+    "source": "analyzers/integration-tests/src/tests/python_graph.rs",
+    "name": "tests::python_graph::project_requires_python_controls_native_syntax",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_graph::project_requires_python_controls_native_syntax"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_graph.rs",
-    "name": "native_analyzer::tests::python_graph::escaping_context_links_fail_native_loading",
+    "source": "analyzers/integration-tests/src/tests/python_graph.rs",
+    "name": "tests::python_graph::escaping_context_links_fail_native_loading",
     "platforms": [
       "darwin"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_graph::escaping_context_links_fail_native_loading"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_graph.rs",
-    "name": "native_analyzer::tests::python_graph::test_filter_and_input_failures_never_hide_invalid_source_paths",
+    "source": "analyzers/integration-tests/src/tests/python_graph.rs",
+    "name": "tests::python_graph::test_filter_and_input_failures_never_hide_invalid_source_paths",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_graph::test_filter_and_input_failures_never_hide_invalid_source_paths"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_graph.rs",
-    "name": "native_analyzer::tests::python_graph::invalid_versions_and_encodings_fail_native_analysis",
+    "source": "analyzers/integration-tests/src/tests/python_graph.rs",
+    "name": "tests::python_graph::invalid_versions_and_encodings_fail_native_analysis",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_graph::invalid_versions_and_encodings_fail_native_analysis"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_graph.rs",
-    "name": "native_analyzer::tests::python_graph::first_valid_utf8_cookie_controls_source_decoding",
+    "source": "analyzers/integration-tests/src/tests/python_graph.rs",
+    "name": "tests::python_graph::first_valid_utf8_cookie_controls_source_decoding",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_graph::first_valid_utf8_cookie_controls_source_decoding"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_graph.rs",
-    "name": "native_analyzer::tests::python_graph::python_helper_preserves_historical_complete_graphs",
+    "source": "analyzers/integration-tests/src/tests/python_graph.rs",
+    "name": "tests::python_graph::python_helper_preserves_historical_complete_graphs",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_graph::python_helper_preserves_historical_complete_graphs"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_graph.rs",
-    "name": "native_analyzer::tests::python_graph::python_helper_timeout_and_caller_panic_reap_actual_process",
+    "source": "analyzers/integration-tests/src/tests/python_graph.rs",
+    "name": "tests::python_graph::python_helper_timeout_and_caller_panic_reap_actual_process",
     "platforms": [
       "darwin"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_graph::python_helper_timeout_and_caller_panic_reap_actual_process"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_repository_stdlib_and_missing_dependency_relations",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_repository_stdlib_and_missing_dependency_relations",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_repository_stdlib_and_missing_dependency_relations"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_aliases_require_single_unconditional_binding",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_aliases_require_single_unconditional_binding",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_aliases_require_single_unconditional_binding"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_properties_overloads_and_explicit_aliases_keep_source_ownership",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_properties_overloads_and_explicit_aliases_keep_source_ownership",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_properties_overloads_and_explicit_aliases_keep_source_ownership"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_union_with_unknown_decorator_stays_unresolved",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_union_with_unknown_decorator_stays_unresolved",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_union_with_unknown_decorator_stays_unresolved"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_internal_links_do_not_rewrite_definition_ownership",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_internal_links_do_not_rewrite_definition_ownership",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_internal_links_do_not_rewrite_definition_ownership"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_property_chains_require_current_lexical_binding",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_property_chains_require_current_lexical_binding",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_property_chains_require_current_lexical_binding"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_all_supported_minors_preserve_local_and_stdlib_navigation",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_all_supported_minors_preserve_local_and_stdlib_navigation",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_all_supported_minors_preserve_local_and_stdlib_navigation"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_field_type_relations_and_nested_calls_have_distinct_owners",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_field_type_relations_and_nested_calls_have_distinct_owners",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_field_type_relations_and_nested_calls_have_distinct_owners"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_alias_chains_do_not_erase_rebinding_evidence",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_alias_chains_do_not_erase_rebinding_evidence",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_alias_chains_do_not_erase_rebinding_evidence"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_projects_keep_module_search_and_selected_identity_separate",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_projects_keep_module_search_and_selected_identity_separate",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_projects_keep_module_search_and_selected_identity_separate"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_unicode_bom_and_python_line_endings_preserve_definitions",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_unicode_bom_and_python_line_endings_preserve_definitions",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_unicode_bom_and_python_line_endings_preserve_definitions"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_stubs_and_shadowed_decorators_keep_separate_declarations",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_stubs_and_shadowed_decorators_keep_separate_declarations",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_stubs_and_shadowed_decorators_keep_separate_declarations"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_descriptor_writes_and_exception_receivers_do_not_create_fields",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_descriptor_writes_and_exception_receivers_do_not_create_fields",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_descriptor_writes_and_exception_receivers_do_not_create_fields"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_user_environment_and_repository_configuration_cannot_add_dependencies",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_user_environment_and_repository_configuration_cannot_add_dependencies",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_user_environment_and_repository_configuration_cannot_add_dependencies"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_cancellation_finishes_promptly",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_cancellation_finishes_promptly",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_cancellation_finishes_promptly"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_cross_project_configuration_conflicts_remain_unresolved",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_cross_project_configuration_conflicts_remain_unresolved",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_cross_project_configuration_conflicts_remain_unresolved"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_cross_project_modern_decorator_and_base_remain_unproven",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_cross_project_modern_decorator_and_base_remain_unproven",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_cross_project_modern_decorator_and_base_remain_unproven"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_cross_project_selected_target_still_validates_own_syntax",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_cross_project_selected_target_still_validates_own_syntax",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_cross_project_selected_target_still_validates_own_syntax"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_cross_project_context_still_validates_own_syntax",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_cross_project_context_still_validates_own_syntax",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_cross_project_context_still_validates_own_syntax"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_multifile_performance_records_cold_and_warm_sessions",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_multifile_performance_records_cold_and_warm_sessions",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_multifile_performance_records_cold_and_warm_sessions"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_test_filter_hides_targets_until_enabled",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_test_filter_hides_targets_until_enabled",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_test_filter_hides_targets_until_enabled"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "python",
-    "source": "src/native_analyzer/tests/python_native.rs",
-    "name": "native_analyzer::tests::python_native::native_windows_junction_escape_is_rejected",
+    "source": "analyzers/integration-tests/src/tests/python_native.rs",
+    "name": "tests::python_native::native_windows_junction_escape_is_rejected",
     "platforms": [
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::python_native::native_windows_junction_escape_is_rejected"
+    ],
+    "command": "public-integration:python"
   },
   {
     "language": "rust",
-    "source": "src/native_analyzer/tests/rust_graph.rs",
-    "name": "native_analyzer::tests::rust_graph::rust_helper_discovers_modules_without_promoting_context_files",
+    "source": "analyzers/integration-tests/src/tests/rust_graph.rs",
+    "name": "tests::rust_graph::rust_helper_discovers_modules_without_promoting_context_files",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::rust_graph::rust_helper_discovers_modules_without_promoting_context_files"
+    ],
+    "command": "public-integration:rust"
   },
   {
     "language": "rust",
-    "source": "src/native_analyzer/tests/rust_graph.rs",
-    "name": "native_analyzer::tests::rust_graph::rust_helper_excludes_test_attributes_with_glob_imports",
+    "source": "analyzers/integration-tests/src/tests/rust_graph.rs",
+    "name": "tests::rust_graph::rust_helper_excludes_test_attributes_with_glob_imports",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::rust_graph::rust_helper_excludes_test_attributes_with_glob_imports"
+    ],
+    "command": "public-integration:rust"
   },
   {
     "language": "rust",
-    "source": "src/native_analyzer/tests/rust_graph.rs",
-    "name": "native_analyzer::tests::rust_graph::rust_helper_describes_external_symbols",
+    "source": "analyzers/integration-tests/src/tests/rust_graph.rs",
+    "name": "tests::rust_graph::rust_helper_describes_external_symbols",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::rust_graph::rust_helper_describes_external_symbols"
+    ],
+    "command": "public-integration:rust"
   },
   {
     "language": "rust",
-    "source": "src/native_analyzer/tests/rust_graph.rs",
-    "name": "native_analyzer::tests::rust_graph::rust_helper_recognizes_custom_and_empty_crate_roots",
+    "source": "analyzers/integration-tests/src/tests/rust_graph.rs",
+    "name": "tests::rust_graph::rust_helper_recognizes_custom_and_empty_crate_roots",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::rust_graph::rust_helper_recognizes_custom_and_empty_crate_roots"
+    ],
+    "command": "public-integration:rust"
   },
   {
     "language": "rust",
-    "source": "src/native_analyzer/tests/rust_graph.rs",
-    "name": "native_analyzer::tests::rust_graph::rust_helper_deduplicates_aliases_with_stable_graph_content",
+    "source": "analyzers/integration-tests/src/tests/rust_graph.rs",
+    "name": "tests::rust_graph::rust_helper_deduplicates_aliases_with_stable_graph_content",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::rust_graph::rust_helper_deduplicates_aliases_with_stable_graph_content"
+    ],
+    "command": "public-integration:rust"
   },
   {
     "language": "rust",
-    "source": "src/native_analyzer/tests/rust_graph.rs",
-    "name": "native_analyzer::tests::rust_graph::rust_helper_loads_project_shapes_and_preserves_standalone_failure",
+    "source": "analyzers/integration-tests/src/tests/rust_graph.rs",
+    "name": "tests::rust_graph::rust_helper_loads_project_shapes_and_preserves_standalone_failure",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::rust_graph::rust_helper_loads_project_shapes_and_preserves_standalone_failure"
+    ],
+    "command": "public-integration:rust"
   },
   {
     "language": "rust",
-    "source": "src/native_analyzer/tests/rust_graph.rs",
-    "name": "native_analyzer::tests::rust_graph::rust_helper_cancellation_uses_common_process_ownership",
+    "source": "analyzers/integration-tests/src/tests/rust_graph.rs",
+    "name": "tests::rust_graph::rust_helper_cancellation_uses_common_process_ownership",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::rust_graph::rust_helper_cancellation_uses_common_process_ownership"
+    ],
+    "command": "public-integration:rust"
   },
   {
     "language": "rust",
-    "source": "src/native_analyzer/tests/rust_graph.rs",
-    "name": "native_analyzer::tests::rust_graph::rust_helper_runtime_toolchain_selection_reaches_real_cargo_and_rustc",
+    "source": "analyzers/integration-tests/src/tests/rust_graph.rs",
+    "name": "tests::rust_graph::rust_helper_runtime_toolchain_selection_reaches_real_cargo_and_rustc",
     "platforms": [
       "darwin"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::rust_graph::rust_helper_runtime_toolchain_selection_reaches_real_cargo_and_rustc"
+    ],
+    "command": "public-integration:rust"
   },
   {
     "language": "rust",
-    "source": "src/native_analyzer/tests/rust_graph.rs",
-    "name": "native_analyzer::tests::rust_graph::rust_helper_multiple_project_toolchains_keep_scope_boundary",
+    "source": "analyzers/integration-tests/src/tests/rust_graph.rs",
+    "name": "tests::rust_graph::rust_helper_multiple_project_toolchains_keep_scope_boundary",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::rust_graph::rust_helper_multiple_project_toolchains_keep_scope_boundary"
+    ],
+    "command": "public-integration:rust"
   },
   {
     "language": "rust",
-    "source": "src/native_analyzer/tests/rust_graph.rs",
-    "name": "native_analyzer::tests::rust_graph::rust_helper_escaping_context_link_is_not_promoted_to_repository_symbol",
+    "source": "analyzers/integration-tests/src/tests/rust_graph.rs",
+    "name": "tests::rust_graph::rust_helper_escaping_context_link_is_not_promoted_to_repository_symbol",
     "platforms": [
       "darwin"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::rust_graph::rust_helper_escaping_context_link_is_not_promoted_to_repository_symbol"
+    ],
+    "command": "public-integration:rust"
   },
   {
     "language": "rust",
-    "source": "src/native_analyzer/tests/rust_graph.rs",
-    "name": "native_analyzer::tests::rust_graph::rust_helper_cancellation_reaps_active_toolchain_probe",
+    "source": "analyzers/integration-tests/src/tests/rust_graph.rs",
+    "name": "tests::rust_graph::rust_helper_cancellation_reaps_active_toolchain_probe",
     "platforms": [
       "darwin"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::rust_graph::rust_helper_cancellation_reaps_active_toolchain_probe",
+      "adapters::rust::tests::production_cancellation_reaps_toolchain_probe"
+    ],
+    "command": "public-integration:rust"
   },
   {
     "language": "rust",
-    "source": "src/native_analyzer/tests/rust_graph.rs",
-    "name": "native_analyzer::tests::rust_graph::rust_helper_lifecycle_native_failure_remains_error",
+    "source": "analyzers/integration-tests/src/tests/rust_graph.rs",
+    "name": "tests::rust_graph::rust_helper_lifecycle_native_failure_remains_error",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::rust_graph::rust_helper_lifecycle_native_failure_remains_error"
+    ],
+    "command": "public-integration:rust"
   },
   {
     "language": "rust",
-    "source": "src/native_analyzer/tests/rust_syntax.rs",
-    "name": "native_analyzer::tests::rust_syntax::source_ranges_keep_complete_declarations_without_neighboring_items",
+    "source": "analyzers/integration-tests/src/tests/rust_syntax.rs",
+    "name": "tests::rust_syntax::source_ranges_keep_complete_declarations_without_neighboring_items",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::rust_syntax::source_ranges_keep_complete_declarations_without_neighboring_items"
+    ],
+    "command": "public-integration:rust"
   },
   {
     "language": "rust",
-    "source": "src/native_analyzer/tests/rust_syntax.rs",
-    "name": "native_analyzer::tests::rust_syntax::closure_references_belong_to_the_nearest_modeled_declaration",
+    "source": "analyzers/integration-tests/src/tests/rust_syntax.rs",
+    "name": "tests::rust_syntax::closure_references_belong_to_the_nearest_modeled_declaration",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::rust_syntax::closure_references_belong_to_the_nearest_modeled_declaration"
+    ],
+    "command": "public-integration:rust"
   },
   {
     "language": "rust",
-    "source": "src/native_analyzer/tests/rust_syntax.rs",
-    "name": "native_analyzer::tests::rust_syntax::preserves_cfg_declarations_and_rejects_parse_failures",
+    "source": "analyzers/integration-tests/src/tests/rust_syntax.rs",
+    "name": "tests::rust_syntax::preserves_cfg_declarations_and_rejects_parse_failures",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::rust_syntax::preserves_cfg_declarations_and_rejects_parse_failures"
+    ],
+    "command": "public-integration:rust"
   },
   {
     "language": "rust",
-    "source": "src/native_analyzer/tests/rust_syntax.rs",
-    "name": "native_analyzer::tests::rust_syntax::source_line_breaks_keep_complete_declarations",
+    "source": "analyzers/integration-tests/src/tests/rust_syntax.rs",
+    "name": "tests::rust_syntax::source_line_breaks_keep_complete_declarations",
     "platforms": [
       "darwin",
       "win32"
-    ]
-  },
-  {
-    "language": "rust",
-    "source": "src/adapters/rust/tests/production.rs",
-    "name": "adapters::rust::tests::production_cancellation_reaps_toolchain_probe",
-    "platforms": [
-      "darwin"
-    ]
+    ],
+    "historicalNames": [
+      "native_analyzer::tests::rust_syntax::source_line_breaks_keep_complete_declarations"
+    ],
+    "command": "public-integration:rust"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_parameter_properties_keep_field_types_and_default_calls",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_parameter_properties_keep_field_types_and_default_calls",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_parameter_properties_keep_field_types_and_default_calls"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_unverified_relative_imports_do_not_abort_analysis",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_unverified_relative_imports_do_not_abort_analysis",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_unverified_relative_imports_do_not_abort_analysis"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_cross_language_alias_barrel_and_callbacks",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_cross_language_alias_barrel_and_callbacks",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_cross_language_alias_barrel_and_callbacks"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_file_modules_keep_merged_execution_calls",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_file_modules_keep_merged_execution_calls",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_file_modules_keep_merged_execution_calls"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_named_function_values_and_omitted_initializers_keep_calls",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_named_function_values_and_omitted_initializers_keep_calls",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_named_function_values_and_omitted_initializers_keep_calls"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_runtime_wrappers_node_modules_and_jsdoc",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_runtime_wrappers_node_modules_and_jsdoc",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_runtime_wrappers_node_modules_and_jsdoc"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_jsx_properties_heritage_and_function_values",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_jsx_properties_heritage_and_function_values",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_jsx_properties_heritage_and_function_values"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_assignments_omit_writes_and_keep_calls_and_function_values",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_assignments_omit_writes_and_keep_calls_and_function_values",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_assignments_omit_writes_and_keep_calls_and_function_values"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_missing_dynamic_ambiguous_and_type_only_are_unresolved",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_missing_dynamic_ambiguous_and_type_only_are_unresolved",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_missing_dynamic_ambiguous_and_type_only_are_unresolved"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_overloads_and_merged_fragments",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_overloads_and_merged_fragments",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_overloads_and_merged_fragments"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_type_only_alias_chains_do_not_become_runtime_calls",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_type_only_alias_chains_do_not_become_runtime_calls",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_type_only_alias_chains_do_not_become_runtime_calls"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_project_conflicts_keep_unknown_calls_and_local_targets",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_project_conflicts_keep_unknown_calls_and_local_targets",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_project_conflicts_keep_unknown_calls_and_local_targets"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_workspace_references_without_built_dist",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_workspace_references_without_built_dist",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_workspace_references_without_built_dist"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_unicode_default_namespace_alias_and_union_evidence",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_unicode_default_namespace_alias_and_union_evidence",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_unicode_default_namespace_alias_and_union_evidence"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_repository_ambient_functions_and_nonambient_signature_boundary",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_repository_ambient_functions_and_nonambient_signature_boundary",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_repository_ambient_functions_and_nonambient_signature_boundary"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_async_member_calls_keep_concrete_targets",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_async_member_calls_keep_concrete_targets",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_async_member_calls_keep_concrete_targets"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_heterogeneous_union_members_follow_definition_navigation",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_heterogeneous_union_members_follow_definition_navigation",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_heterogeneous_union_members_follow_definition_navigation"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_repository_relative_test_classification_ignores_checkout_ancestors",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_repository_relative_test_classification_ignores_checkout_ancestors",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_repository_relative_test_classification_ignores_checkout_ancestors"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::graph_config_dir_templates_retain_local_call",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::graph_config_dir_templates_retain_local_call",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::graph_config_dir_templates_retain_local_call"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::typescript_real_helper_cancellation_reaps_before_return",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::typescript_real_helper_cancellation_reaps_before_return",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::typescript_real_helper_cancellation_reaps_before_return"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::typescript_historical_identity_and_source_contract",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::typescript_historical_identity_and_source_contract",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::typescript_historical_identity_and_source_contract"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "typescript-javascript",
-    "source": "src/adapters/tests/typescript_graph.rs",
-    "name": "adapters::typescript_graph::typescript_aliases_merge_canonical_nodes_and_keep_boundary_and_test_policy",
+    "source": "analyzers/integration-tests/src/tests/typescript_graph.rs",
+    "name": "tests::typescript_graph::typescript_aliases_merge_canonical_nodes_and_keep_boundary_and_test_policy",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::typescript_graph::typescript_aliases_merge_canonical_nodes_and_keep_boundary_and_test_policy"
+    ],
+    "command": "public-integration:typescript-javascript"
   },
   {
     "language": "csharp",
-    "source": "src/adapters/tests/csharp_graph.rs",
-    "name": "adapters::csharp_graph::factory_preserves_source_and_local_calls",
+    "source": "analyzers/integration-tests/src/tests/csharp_graph.rs",
+    "name": "tests::csharp_graph::factory_preserves_source_and_local_calls",
     "platforms": [
       "darwin",
       "win32"
-    ]
+    ],
+    "historicalNames": [
+      "adapters::csharp_graph::factory_preserves_source_and_local_calls"
+    ],
+    "command": "public-integration:csharp"
   }
 ]

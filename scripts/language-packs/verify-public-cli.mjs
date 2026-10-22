@@ -3,13 +3,16 @@ import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { publicEnvironment } from './public-cli-session.mjs';
 import { nativeTarget, releaseIdentity } from './distribution.mjs';
 import { selectedNativePacks } from './native-migration.mjs';
 import { verifyAndExtract } from './verify-distribution.mjs';
 import { verifyNativePackPolicy } from './verify-native-pack-policy.mjs';
 import { verifyAnalyzerDistribution } from './verify-analyzer-package.mjs';
 import { preparePublicProject, writePublicProject, prepareCancellationProject, assertPublicProjectUnchanged } from './public-cli-projects.mjs';
-import { exchangeCli } from './public-cli-session.mjs';
+import { exchangeCli as exchangePublic } from './public-cli-session.mjs';
+import { writeLocalCandidates } from './local-candidates.mjs';
 export { fixtures, preparePublicProject, assertPublicProjectUnchanged } from './public-cli-projects.mjs';
 export { exchangeCli } from './public-cli-session.mjs';
 
@@ -68,6 +71,22 @@ function assertExactGraph(graph, testRole) {
   assert.ok(calls.some(ref => graph.external_symbols.some(symbol => symbol.symbol === ref.target.symbol && symbol.name === 'target' && symbol.scope === 'repository')), 'Outside target is not a repository external symbol');
 }
 
+/** 对实际安装字节检查帮助、版本和旧入口拒绝；不借构建环境或运行时命令替身。 */
+async function verifyFixedCli(executable, id, identity, trace) {
+  const records = [];
+  for (const args of [['--version'], ['--help'], ['analyze', '--help'], ['__worker'], ['--pack', id], ['analyze', 'analyze']]) {
+    const result = spawnSync(executable, args, { cwd: os.tmpdir(), env: publicEnvironment(), encoding: 'utf8', timeout: 30_000, maxBuffer: 256 * 1024, windowsHide: true });
+    assert.equal(result.signal, null, result.stderr);
+    const usageError = args.includes('__worker') || args.includes('--pack') || args.length === 2 && args[1] === 'analyze';
+    assert.equal(result.status, usageError ? 2 : 0, result.stderr);
+    if (args[0] === '--version') assert.equal(result.stdout.trim(), `codegraph-${id} ${identity.version}`);
+    if (usageError) assert.equal(result.stdout, '');
+    records.push({ args, status: result.status, stdout: result.stdout, stderr: result.stderr });
+  }
+  await fs.mkdir(path.dirname(trace), { recursive: true });
+  await fs.writeFile(trace, `${JSON.stringify(records, null, 2)}\n`, { flag: 'wx' });
+}
+
 /** 对实际归档的唯一固定入口做配置发现、精确边界、失败、取消和只读验收。 */
 export async function verifyPublicCli(artifacts, language = 'all') {
   const target = nativeTarget(), identity = await releaseIdentity();
@@ -75,12 +94,21 @@ export async function verifyPublicCli(artifacts, language = 'all') {
   const emptyGraph = { root_contains: [], nodes: [], external_symbols: [] };
   try {
     await runPublicPackAcceptances(selectedNativePacks(language), async id => {
+      let sequence = 0;
+      const exchangeCli = (executable, packId, input, version, failure, options = {}) => exchangePublic(executable, packId, input, version, failure, { ...options, trace: path.join(artifacts, 'public-acceptance', id, String(++sequence).padStart(3, '0')) });
       const pack = path.join(scratch, id), directory = path.join(artifacts, id, identity.version, target);
       await verifyAnalyzerDistribution(directory, { id, target, version: identity.version, sourceCommit: identity.sourceCommit, sourceDirty: identity.sourceDirty });
       await verifyAndExtract(directory, pack, { id, target, version: identity.version });
       await verifyNativePackPolicy(id, pack);
       const executable = path.join(pack, 'bin', `codegraph-${id}${process.platform === 'win32' ? '.exe' : ''}`);
+      await verifyFixedCli(executable, id, identity, path.join(artifacts, 'public-acceptance', id, 'cli.json'));
       const fixture = await preparePublicProject(id, path.join(scratch, `${id}-source`));
+      const vectors = JSON.parse(await fs.readFile(new URL('../../analyzers/common/src/tests/public-conformance.json', import.meta.url), 'utf8'));
+      for (const vector of vectors) {
+        const base = { ...request(identity, id, fixture.root, 'conformance', []), id: '公共-é-😀', ...vector.patch };
+        const graph = await exchangeCli(executable, id, base, identity, vector.error_code, { rawInput: JSON.stringify(base) + vector.suffix });
+        if (vector.outcome === 'ok') assert.deepEqual(graph, emptyGraph);
+      }
       const scopes = id === 'rust' ? ['repository-only', 'standard-library', 'all-dependencies'] : ['repository-only'];
       for (const scope of scopes) for (const includeTests of [false, true]) for (const discovery of [false, true]) {
         const graph = await exchangeCli(executable, id, request(identity, id, fixture.root, `${scope}-${includeTests}-${discovery}`, discovery ? undefined : fixture.files, includeTests, scope), identity);
@@ -104,11 +132,11 @@ export async function verifyPublicCli(artifacts, language = 'all') {
       // TS/Python 支持无配置项目；其它语言缺少必需项目模型必须明确失败。
       const missingContent = fixture.missing ?? (fixture.implicit ? fixture.configless : Object.fromEntries(Object.entries(fixture.content).filter(([name]) => name !== fixture.prerequisite)));
       const missing = await writePublicProject(path.join(scratch, `${id}-missing`), missingContent);
-      const missingError = fixture.missing || !fixture.implicit ? 'analysis_failed' : undefined;
+      const missingError = fixture.missing || !fixture.implicit ? ['analysis_failed', 'invalid_input'] : undefined;
       const missingResult = await exchangeCli(executable, id, request(identity, id, missing.root, 'missing'), identity, missingError);
       if (!missingError) assertGraph(missingResult);
       // 保留原 Java/C++ 公开负例：显式选集也不能绕过必需配置。
-      if (['java', 'c-cpp'].includes(id)) await exchangeCli(executable, id, request(identity, id, missing.root, 'missing-explicit', fixture.files), identity, 'analysis_failed');
+      if (['java', 'c-cpp'].includes(id)) await exchangeCli(executable, id, request(identity, id, missing.root, 'missing-explicit', fixture.files), identity, ['analysis_failed', 'invalid_input']);
       assert.deepEqual(await exchangeCli(executable, id, request(identity, id, missing.root, 'missing-empty', []), identity), emptyGraph);
       await assertPublicProjectUnchanged(missing);
       if (fixture.implicit && fixture.missing) {
@@ -120,17 +148,18 @@ export async function verifyPublicCli(artifacts, language = 'all') {
       const malformed = await preparePublicProject(id, path.join(scratch, `${id}-malformed`));
       malformed.content[fixture.prerequisite] = id === 'c-cpp' ? '[]' : '! invalid configuration [';
       await fs.writeFile(path.join(malformed.root, fixture.prerequisite), malformed.content[fixture.prerequisite]);
-      await exchangeCli(executable, id, request(identity, id, malformed.root, 'malformed'), identity, 'analysis_failed');
+      await exchangeCli(executable, id, request(identity, id, malformed.root, 'malformed'), identity, ['analysis_failed', 'invalid_input']);
       assert.deepEqual(await exchangeCli(executable, id, request(identity, id, malformed.root, 'malformed-empty', []), identity), emptyGraph);
       await assertPublicProjectUnchanged(malformed);
 
       const cancellation = await prepareCancellationProject(id, path.join(scratch, `${id}-cancellation`));
       await exchangeCli(executable, id, request(identity, id, cancellation.root, 'directory-cancel'), identity, undefined, { cancel: true });
       await assertPublicProjectUnchanged(cancellation);
-      console.log(`Public CLI verified: ${id}; configured discovery, explicit/external boundary, native test roles, []/configured empty, missing/invalid configuration, read-only, normal EOF, real directory cancellation and descendant exit; scopes=${scopes.join(',')}`);
+      console.log(`Public CLI verified: ${id}; configured discovery, explicit/external boundary, native test roles, []/configured empty, missing/invalid configuration, read-only, normal EOF, real caller tree termination and descendant exit; shared conformance=21; no final newline; scopes=${scopes.join(',')}`);
       // 每语言检查完成后释放临时解包；最终候选及 smoke-installed 保留供消费者交接。
       await fs.rm(pack, { recursive: true, force: true });
     });
+    if (language === 'all') await writeLocalCandidates(artifacts);
   } finally { await fs.rm(scratch, { recursive: true, force: true }); }
 }
 

@@ -33,13 +33,13 @@ test('Python pack preserves its native executable, fixed control file and standa
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codegraph-python-engine-pack-test-'));
   try {
     for (const directory of ['bin', 'control', 'licenses']) await fs.mkdir(path.join(root, 'payload', directory), { recursive: true });
-    await fs.writeFile(path.join(root, 'payload/bin/codegraph-python-engine'), 'fixed native Python fixture');
+    await fs.writeFile(path.join(root, 'payload/bin/codegraph-python'), 'fixed native Python fixture');
     await fs.writeFile(path.join(root, 'payload/control/native.json'), '{}');
     await fs.writeFile(path.join(root, 'payload/licenses/typeshed-LICENSE'), 'typeshed license fixture');
     const result = await packageDirectory({ id: 'python', version: '0.1.0', target: 'aarch64-apple-darwin' }, path.join(root, 'payload'), path.join(root, 'output'));
     const manifest = JSON.parse(await fs.readFile(path.join(result, 'manifest.json')));
     assert.equal(manifest.id, 'python');
-    assert.deepEqual(manifest.files.map(file => [file.path, file.executable]), [['bin/codegraph-python-engine', true], ['control/native.json', false], ['licenses/typeshed-LICENSE', false]]);
+    assert.deepEqual(manifest.files.map(file => [file.path, file.executable]), [['bin/codegraph-python', true], ['control/native.json', false], ['licenses/typeshed-LICENSE', false]]);
     assert.equal(manifest.files.find(file => file.path === 'control/native.json').size, 2);
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });

@@ -9,13 +9,11 @@ export function analyzerPackageFiles(id, target) {
   if (!packIds.includes(id) || !targets.includes(target)) throw new Error('Invalid analyzer package identity');
   const suffix = target.includes('windows') ? '.exe' : '';
   const runtime = {
-    rust: [`bin/codegraph-rust-engine${suffix}`],
-    python: [`bin/codegraph-python-engine${suffix}`],
-    go: [`bin/codegraph-go-engine${suffix}`],
-    'typescript-javascript': [`bin/node${suffix}`, ...['main', 'request', 'analyze', 'projection', 'workspace', 'config', 'syntax', 'observation'].map(name => `runtime/helper/${name}.mjs`), 'runtime/typescript/lib/typescript.js', 'runtime/@types/node/index.d.ts', 'runtime/undici-types/index.d.ts'],
-    java: [`runtime/jdk/bin/java${suffix}`, 'runtime/helper/classes/dev/codegraph/java/Main.class'],
-    csharp: [`bin/dotnet${suffix}`, 'runtime/helper/CodeGraph.CSharp.Engine.dll', 'runtime/helper/CodeGraph.CSharp.Engine.deps.json', 'runtime/helper/CodeGraph.CSharp.Engine.runtimeconfig.json', 'runtime/helper/Microsoft.CodeAnalysis.dll', 'runtime/helper/Microsoft.CodeAnalysis.CSharp.dll'],
-    'c-cpp': [`bin/codegraph-clang-engine${suffix}`, 'runtime/platform/clang-resource/include/stddef.h', ...(suffix ? [] : ['runtime/lib/libclang-cpp.dylib'])],
+    rust: [], python: [], go: [],
+    'typescript-javascript': [`bin/node${suffix}`, ...['main', 'request', 'runtime', 'analyze', 'graph', 'projection', 'workspace', 'config', 'syntax', 'observation'].map(name => `runtime/analyzer/${name}.mjs`), 'runtime/typescript/lib/typescript.js', 'runtime/@types/node/index.d.ts', 'runtime/undici-types/index.d.ts'],
+    java: [`runtime/jdk/bin/java${suffix}`, 'runtime/analyzer/classes/dev/codegraph/java/Main.class', 'licenses/Java-dependencies.json'],
+    csharp: ['bin/codegraph-csharp.dll', 'bin/codegraph-csharp.deps.json', 'bin/codegraph-csharp.runtimeconfig.json', 'bin/Microsoft.CodeAnalysis.dll', 'bin/Microsoft.CodeAnalysis.CSharp.dll', 'bin/System.Private.CoreLib.dll', ...(suffix ? ['bin/hostfxr.dll', 'bin/hostpolicy.dll', 'bin/coreclr.dll'] : ['bin/libhostfxr.dylib', 'bin/libhostpolicy.dylib', 'bin/libcoreclr.dylib']), 'licenses/Runtime-LICENSE.TXT', 'licenses/Runtime-THIRD-PARTY-NOTICES.TXT'],
+    'c-cpp': ['runtime/platform/clang-resource/include/stddef.h', ...(suffix ? [] : ['runtime/lib/libclang-cpp.dylib'])],
   }[id];
   return [`bin/codegraph-${id}${suffix}`, 'control/codegraph.json', 'control/native.json', ...runtime];
 }
@@ -26,19 +24,21 @@ export function validateAnalyzerPackage(manifest) {
   const required = analyzerPackageFiles(id, target), files = new Map(manifest.files.map(file => [file.path, file]));
   for (const name of required) {
     const file = files.get(name);
-    if (!file?.size || ((name.startsWith('bin/') || name === `runtime/jdk/bin/java${suffix}`) && !file.executable)) throw new Error(`Missing package dependency or executable: ${name}`);
+    if (!file?.size || ((name === `bin/codegraph-${id}${suffix}` || name === `bin/node${suffix}` || name === `runtime/jdk/bin/java${suffix}`) && !file.executable)) throw new Error(`Missing package dependency or executable: ${name}`);
   }
   const regions = {
     rust: [], python: [], go: [],
-    'typescript-javascript': ['runtime/helper/', 'runtime/typescript/', 'runtime/@types/node/', 'runtime/undici-types/'],
-    java: ['runtime/jdk/', 'runtime/helper/classes/', 'runtime/helper/lib/'],
-    csharp: ['bin/host/', 'bin/shared/Microsoft.NETCore.App/', 'runtime/helper/'],
+    'typescript-javascript': ['runtime/analyzer/', 'runtime/typescript/', 'runtime/@types/node/', 'runtime/undici-types/'],
+    java: ['runtime/jdk/', 'runtime/analyzer/classes/', 'runtime/analyzer/lib/'],
+    csharp: [],
     'c-cpp': ['runtime/lib/', 'runtime/platform/clang-resource/'],
   }[id];
   for (const name of files.keys()) {
     const basename = name.split('/').at(-1).toLowerCase();
+    if (name.startsWith('runtime/helper/') || /(?:ComponentDriver|CodeGraph\.CSharp\.Components|codegraph-clang-components|test-classes)/i.test(name) || /^codegraph-.*-engine(?:\.exe)?$/.test(basename)) throw new Error(`Unexpected package file: ${name}`);
     const codegraphEntry = /^codegraph(?:-[\w-]+)?(?:\.exe)?$/.test(basename);
-    const allowed = required.includes(name) || !codegraphEntry && (name.startsWith('licenses/') || regions.some(prefix => name.startsWith(prefix)) || id === 'c-cpp' && suffix && /^bin\/[^/]+\.dll$/i.test(name));
+    const csharpSidecar = id === 'csharp' && !codegraphEntry && (/^bin\/[^/]+\.(dll|json|pdb|dylib|so)$/.test(name) || /^bin\/[a-z]{2}(?:-[A-Za-z0-9]+)*\/[^/]+\.resources\.dll$/.test(name) || name === 'bin/createdump' || name === 'bin/createdump.exe') && !/^bin\/codegraph-(?!csharp\.)/.test(name);
+    const allowed = required.includes(name) || !codegraphEntry && (name.startsWith('licenses/') || regions.some(prefix => name.startsWith(prefix)) || csharpSidecar || id === 'c-cpp' && suffix && /^bin\/[^/]+\.dll$/i.test(name));
     if (!allowed) throw new Error(`Unexpected package file: ${name}`);
   }
   if (!manifest.files.some(file => file.path.startsWith('licenses/') && file.size)) throw new Error('Missing package dependency: licenses');

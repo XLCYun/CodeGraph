@@ -6,8 +6,9 @@ namespace CodeGraph.CSharp.Engine;
 internal static class ComponentDriver
 {
     /// <summary>将测试数据直接转换为进程内类型，继续核对语义、来源和 SDK 拒绝策略。</summary>
-    private static int Main()
+    private static int Main(string[] args)
     {
+        if (args.SequenceEqual(new[] { "--sdk-discovery-tests" })) return SdkDiscoveryTests.Run();
         object result;
         try
         {

@@ -1,6 +1,6 @@
 # TS/JS 与 Java 薄入口
 
-此独立 Cargo crate 只生成 `codegraph-typescript-javascript` 和 `codegraph-java`。
+此只负责薄入口的 Cargo crate 只生成 `codegraph-typescript-javascript` 和 `codegraph-java`。
 两个目标在编译期绑定语言，从真实可执行文件位置找到包根，固定启动随包运行时。
 它不链接旧 Host，不读取 JSON、项目配置、SDK、catalog 或 Code Graph。
 
@@ -21,4 +21,5 @@ scripts/cargo-agent.sh build --manifest-path launchers/Cargo.toml --bins --locke
 ```
 
 资源必须位于同一真实安装根内；不搜索 PATH 或旧 `runtime/helper` 目录。调用方仍验证
-正式包清单和哈希。完整构建器/自动 CI 的接线由后续迁移完成。
+正式包清单和哈希。完整构建器通过本 manifest 生成入口；根 workspace 只包含此 crate。
+原生组件测试与七包公开验收由 scripts/language-packs/verify-native-analyzers.mjs 接线。

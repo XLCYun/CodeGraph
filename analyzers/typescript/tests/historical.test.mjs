@@ -19,7 +19,7 @@ test('historical public identity and source fixture remains exact in the direct 
   for (const [file, source] of Object.entries(sources)) { fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true }); fs.writeFileSync(path.join(root, file), source); }
   const { platforms } = runtimeContext(runtime);
   const { graph } = analyze(ts, { id: 'history', input: { repository_root: root, files: Object.keys(sources), include_tests: false, profile: 'typescript-static-v1' }, environment: { platforms } });
-  const expected = JSON.parse(fs.readFileSync(new URL('../../../src/adapters/tests/fixtures/typescript-historical-identity.json', import.meta.url)));
+  const expected = JSON.parse(fs.readFileSync(new URL('./fixtures/typescript-historical-identity.json', import.meta.url)));
   const category = { container: 'Container', type: 'Type', callable: 'Callable', value: 'Value', execution_region: 'ExecutionRegion', extension: 'Extension' };
   /** 历史 fixture 保持 POSIX 路径；只沿用既有 Windows 分隔符转义差异。 */
   const platformId = id => process.platform === 'win32' ? id.replaceAll('%2F', '%5C') : id;

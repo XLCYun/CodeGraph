@@ -1,3 +1,28 @@
+# Direct-program amendment (2026-10-22)
+
+Current production has no root `src/`, cross-language Host, private wire protocol,
+worker or root graph conversion. Each `analyzers/<language>` program implements
+[the public protocol](protocol.md) directly. The root Cargo workspace contains only
+TS/Java thin launchers; all native libraries remain language-local and unpublished.
+
+Preserved historical semantic assertions now execute real one-shot public entries
+from `analyzers/integration-tests`. Its graph view only deserializes and indexes
+returned data; it never regenerates, repairs, changes IDs/content/edges or enlarges
+selection. Frozen TypeScript/Python/PR31 source fixtures retain their original bytes.
+Language-native component tests retain private construction-evidence assertions;
+those test drivers are never shipped. Caller process utilities and pre-resume Job
+regressions moved into `analyzers/windows-process-probe`, outside production packages.
+
+[Direct test migration](direct-test-migration.md) records every old root test family,
+replacement command and control-only retirement. The machine-readable semantic
+inventory points to current runnable source paths and preserves historical names.
+Narrant still owns every difference/application/Review test listed below; none
+became producer functionality during this amendment.
+
+The remainder of this document is the **historical extraction record** from before
+the direct-program amendment. Its root paths, Host/worker descriptions and old test
+counts describe that historical state, not current architecture or fresh CI evidence.
+
 # Migration provenance
 Source: `XLCYun/narrant` at `890ae4960aba2fc64946423093ff064c41d6ebf7`.
 CodeGraph base: `def716c4e1244e440be374e35b56660e44405922`.

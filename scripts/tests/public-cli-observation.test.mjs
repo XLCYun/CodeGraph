@@ -8,7 +8,7 @@ import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { cancelLoadedProject } from '../language-packs/public-cli-session.mjs';
 
-const request = { protocol: 'codegraph/1', id: 'public-request' };
+const request = { protocol: 'codegraph.analyzer/1', id: 'public-request' };
 
 /** 真子进程提供可观察身份，初始化由夹具控制，测试不用睡眠冒充加载证据。 */
 async function fixture(t, mode) {
@@ -47,13 +47,11 @@ test('delayed initialization cannot satisfy loading cancellation; a later matchi
   const item = await fixture(t, 'delayed');
   await assert.rejects(item.cancel({ timeout: 200 }), /discovery\/load milestone was not observed/);
   assert.equal((await item.message('state', 'state')).phase, 'initializing');
-  assert.ok(!item.messages.some(value => value.type === 'cancelled'));
+  assert.ok(!item.messages.some(value => value.type === 'unexpected-stdin'));
   await item.message('loaded', 'load');
   const marker = await item.cancel();
-  const cancelled = await item.message('cancelled');
   assert.equal(marker.pid, item.child.pid);
-  assert.equal(cancelled.phase, 'module-configurations-loaded');
-  assert.deepEqual(cancelled.request, { protocol: request.protocol, type: 'cancel', id: request.id });
+  assert.ok(!item.messages.some(value => value.type === 'unexpected-stdin'));
   await item.exit;
 });
 
@@ -61,8 +59,8 @@ test('delayed initialization cannot satisfy loading cancellation; a later matchi
 test('ready helper without a discovery milestone fails without sending cancellation', { timeout: 15_000 }, async t => {
   const item = await fixture(t, 'never');
   await assert.rejects(item.cancel({ timeout: 200 }), /discovery\/load milestone was not observed/);
-  assert.equal((await item.message('state', 'state')).phase, 'ready-without-loading');
-  assert.ok(!item.messages.some(value => value.type === 'cancelled'));
+  assert.equal((await item.message('state', 'state')).phase, 'waiting-without-loading');
+  assert.ok(!item.messages.some(value => value.type === 'unexpected-stdin'));
 });
 
 /** 标记不能冒用其它请求、非所属进程或启动阶段；严格失败后仍不发送取消。 */
@@ -71,7 +69,7 @@ for (const mode of ['wrong-request', 'foreign-pid', 'wrong-phase']) {
     const item = await fixture(t, mode);
     await item.message('loaded', 'load');
     await assert.rejects(item.cancel(), mode === 'foreign-pid' ? /outside the owned process tree/ : { code: 'ERR_ASSERTION' });
-    assert.ok(!item.messages.some(value => value.type === 'cancelled'));
+    assert.ok(!item.messages.some(value => value.type === 'unexpected-stdin'));
   });
 }
 

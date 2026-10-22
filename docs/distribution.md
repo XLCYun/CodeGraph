@@ -1,29 +1,15 @@
 # CodeGraph 0.1.0 distribution contract
 
-Status: **not published**. This repository prepares artifacts and CI; it does not
-claim that `v0.1.0` or any download URL below exists. The first release is an
-immutable prerelease after review, merge and successful complete CI. Existing
-Narrant language-pack releases are a separate channel and are never overwritten.
+Status: **not published**. No `v0.1.0` download is claimed by local development
+artifacts. First publication requires human merge and successful exact-main complete
+CI. Existing Narrant language-pack releases are a separate channel.
 
-## Public identities and assets
+## Fixed assets and provenance
 
-Repository: `XLCYun/CodeGraph`. Engine, package and Node build-project versions are
-all `0.1.0`; tag is `v0.1.0`; protocol is `codegraph.analyzer/1`.
-Supported targets are `aarch64-apple-darwin` and `x86_64-pc-windows-msvc`.
-Pack IDs are `rust`, `typescript-javascript`, `python`, `java`, `go`, `csharp`, `c-cpp`.
-Private engines use CodeGraph identities; third-party versions and pins remain unchanged.
-
-For each target the release contains seven analyzer archive/manifest pairs:
-
-```text
-<id>-<target>-pack.tar.gz
-<id>-<target>-manifest.json
-SHA256SUMS
-```
-
-One release therefore has 29 assets: 14 analyzer archives, 14
-language manifests and one checksum file covering the other 28 assets. Exact URL
-rules for downstream configuration (templates, currently unavailable):
+Repository `XLCYun/CodeGraph`, tag `v0.1.0`, package/engine version `0.1.0`, protocol
+`codegraph.analyzer/1`. Targets are `aarch64-apple-darwin` and
+`x86_64-pc-windows-msvc`. Each target has seven archive/manifest pairs for `rust`,
+`typescript-javascript`, `python`, `java`, `go`, `csharp`, `c-cpp`.
 
 ```text
 https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/<id>-<target>-pack.tar.gz
@@ -31,197 +17,115 @@ https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/<id>-<target>-manif
 https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/SHA256SUMS
 ```
 
-Every language archive includes its separately built `bin/codegraph-<id>[.exe]`,
-the five-field public `control/codegraph.json`, private engine/runtime files and
-dependency license texts. There is no standalone umbrella CLI archive. Each binary
-binds its language adapter at compile time and derives the package root from its
-actual executable location. Shared lifecycle, protocol and graph logic live in the
-unpublished `codegraph-runtime` library.
+One release contains 29 assets: 14 archives, 14 manifests and `SHA256SUMS` covering
+the other 28. Each archive contains one direct public entry, descriptor, its runtime
+resources and licenses according to [pack-layout.md](pack-layout.md).
 
-Language manifests retain `schemaVersion: 1`, `id`, `version`, `target`,
-`archiveSize`, `archiveSha256` and `files` (`path`, `size`, `sha256`, `executable`).
-They add mandatory `engineVersion`, `protocol`, `sourceCommit` (full Git SHA),
-`sourceDirty` (boolean). Published manifests always have `sourceDirty: false` and
-`version == engineVersion == 0.1.0`. Canonical compact JSON plus a final newline
-rejects duplicate keys in the build verifier. The public pack descriptor remains
-exactly the five snake_case fields documented in [pack-layout.md](pack-layout.md).
-Consumers must update their manifest reader for these explicit additions.
+Manifest fields are exactly `schemaVersion`, `id`, `version`, `target`,
+`engineVersion`, `protocol`, full `sourceCommit`, boolean `sourceDirty`,
+`archiveSize`, `archiveSha256`, and `files` (`path`, `size`, `sha256`, `executable`).
+Published bytes require `sourceDirty: false` and equal engine/package versions.
+Canonical compact JSON plus a newline rejects duplicate manifest keys. Limits are
+256 MiB compressed, 1 GiB summed file bytes and 2 MiB manifest. Verification rejects
+unsafe or case-colliding paths, device names, links, collisions, duplicate/missing/
+extra entries, mode drift and byte/hash mismatches. Archives use epoch timestamps
+and explicit 0755/0644 modes. Fixed source/channel trust is required; a manifest is
+not a signature. Existing artifact paths are never overwritten by the builder.
 
-The unchanged consumer limits are 256 MiB compressed archive, 1 GiB summed file
-bytes, 2 MiB manifest. Both packaging and verification fail on overflow. Verification
-also rejects unknown manifest fields, unsafe/case-colliding paths, device names,
-links, duplicate/extra/missing files, byte/hash mismatches and executable-mode
-mismatches. Archive entries use fixed timestamps and 0755/0644 modes. An integrity
-manifest is not a signature: consumers must trust the fixed release/source channel,
-then verify the checksum and manifest before executing a pack.
+## Local candidates and consumer use
 
-## Consumer installation and local candidates
-
-After publication, download a chosen manifest, archive and `SHA256SUMS` from the
-same fixed tag; verify the SHA-256 of both downloaded files, then manifest identity,
-archive size/hash, bounded unpacking, every file hash and executable permissions.
-Extract into a new directory outside the analyzed repository, and only promote that
-complete verified directory to a trusted installation. Never merge with an old
-Narrant `1.1.0` pack or another engine version. Keep the installation alive for the
-whole CLI process and its descendants; an active pack cannot be removed mid-analysis.
-
-Invoke `<verified-root>/bin/codegraph-<id>[.exe] analyze` and use
-[protocol.md](protocol.md). Verify ready `engine_version`, `pack_id` and `protocol`,
-then require a valid completed graph and successful exit.
-Do not inspect or invoke private helper argv/environment/SDK configuration.
-
-Local builds are under `<output>/<id>/0.1.0/<target>/{manifest.json,pack.tar.gz}`;
-Build-time engine acceptance extracts language packs to
-`<output>/smoke-installed/<id>/0.1.0/<target>`. This is a public pack root because it
-contains the descriptor and packaged CLI. A consumer fixture can record only:
+Builds use `<output>/<id>/0.1.0/<target>/{manifest.json,pack.tar.gz}`. Verified extracted
+copies are `<output>/smoke-installed/<id>/0.1.0/<target>`. An unrelated-cwd public
+acceptance run removes all producer-only `CODEGRAPH_*` environment variables and
+executes the real packaged entry. Successful clean-source all-seven acceptance
+writes `candidates.json` with exactly the public six-field rows:
 
 ```json
 {"id":"typescript-javascript","version":"0.1.0","engineVersion":"0.1.0","protocol":"codegraph.analyzer/1","target":"aarch64-apple-darwin","root":"/absolute/output/smoke-installed/typescript-javascript/0.1.0/aarch64-apple-darwin"}
 ```
 
-The absolute `root` is local fixture configuration, not a release-manifest field.
-`analyzers-config.json` is CodeGraph's private semantic-test fixture and is
-not uploaded or consumed by Narrant. Builds before a commit carry
-`sourceDirty: true`; they are useful development fixtures and cannot satisfy the
-release evidence gate. Rebuild after the final clean commit for production evidence.
+`candidate-receipt.json` separately binds archive/manifest SHA256, all seven installed
+file identities, exact clean source and upstream lock/pin hashes. It says
+`releaseEvidence: false`: local candidates do not substitute for complete dual-platform
+CI. `public-acceptance/` retains actual request, stdout, bounded stderr and exit
+records, including expected errors and caller tree termination. Build a fresh output
+from each committed HEAD; never relabel historical bytes.
 
-## Build and acceptance
+Consumers verify fixed-tag checksums, manifest identity, bounded unpacking and each
+file before atomically installing a new trusted root outside source. Keep package
+and workspace leases until the root and descendants exit. Invoke only the fixed
+`bin/codegraph-<id>[.exe] analyze`, write one UTF-8 JSON and close stdin. A trailing
+newline is optional. Verify final protocol/engine version/pack ID/request ID/outcome,
+complete graph and successful exit. Missing/malformed output, abnormal status and
+forced termination cannot become success. The caller drains pipes and owns entire
+process-tree termination on cancel/deadline/transport failure.
 
-Use Node 24.18.0 and pnpm 11.13.1 (`pnpm install --frozen-lockfile`). The only Node
-build dependency is pinned `tar@7.5.22`. All Cargo commands use
-`scripts/cargo-agent.sh`; use `--lib` for the private runtime and `--bin codegraph-<id>` for a fixed entry.
-Language engine manifests retain separate targets, `+1.98.0`, upstream revisions and locks.
-Keep incremental and each worktree's own targets. The wrapper uses `lockf` or
-`flock` when available; if neither exists, it prints a warning and runs without a
-repository lock. When `sccache` is absent and no custom `RUSTC_WRAPPER` is set, it
-prints a warning and falls back to ordinary Cargo compilation. A custom wrapper
-is preserved. Calling the wrapper alone therefore proves neither lock acquisition
-nor cache use. Hosted jobs still run their build/test groups serially; GitHub's
-artifact/cache restore is separate from this compiler-cache behavior.
+## Build and validation
 
-For the light checks and a real TypeScript pack on a supported native host:
+Use Node 24.18.0, pnpm 11.13.1 and pinned tools. `pnpm install --frozen-lockfile`
+installs only `tar@7.5.22`. The root Cargo workspace contains only `launchers`;
+Rust/Python/common and non-shipped tests use their own manifests and locks. All Cargo
+commands use `scripts/cargo-agent.sh`. Preserve incremental and separate worktree
+targets. The wrapper warns and falls back if repository-lock tools or sccache are
+unavailable; invoking it alone does not prove cache use.
 
 ```sh
 pnpm test
 pnpm check:scripts
-bash scripts/cargo-agent.sh fmt --all --check
-bash scripts/cargo-agent.sh check --locked --lib --bins
-node scripts/language-packs/build-language-support-packs.mjs --native --id typescript-javascript --output artifacts
-node scripts/language-packs/verify-native-analyzers.mjs artifacts --language typescript-javascript
+scripts/cargo-agent.sh fmt --all --check
+scripts/cargo-agent.sh check --locked --workspace --lib --bins
+node scripts/language-packs/provision-native-toolchains.mjs /empty/isolated-tools --language all
+node scripts/language-packs/verify-native-analyzers.mjs artifacts --build --language all
 ```
 
-The build command includes each selected package’s own fixed public entry and
-defaults to all seven packages if `--id` is absent. Rust/Python need installed helper compiler 1.98.0.
-Java, Go, C#, C/C++ need their fixed build SDKs; install official checksum-pinned
-inputs with `provision-native-toolchains.mjs <empty-directory> --language <id|all>`.
-It writes `environment.json` and, in Actions, `GITHUB_ENV`; local callers must load
-those environment entries into subsequent commands. Java dependencies are fetched
-by the full verifier before building. `resources/native-toolchains.json` is the
-exact upstream pin inventory. Do not replace pins with the current system version.
+Provisioning writes fixed build and test SDK locations to `environment.json` and
+`GITHUB_ENV`; local callers load those values before subsequent commands. It is a
+producer build operation, never project SDK installation. Existing tools should be
+reused locally. Rust/Python use Rust 1.98.0; all other build/runtime and source pins
+remain in `resources/language-support-packs.json`, `resources/native-toolchains.json`,
+Java's dependency lock and native manifests. C# runtime 10.0.0 RID nupkg bytes are
+SHA512-verified from the official NuGet catalog before offline self-contained restore;
+the full publish directory and both SDK/runtime notice variants are copied.
 
-Target analysis prerequisites are separate from helper build tools: Rust uses the
-project's installed Cargo/rustc and rust-src for std scopes; Java discovers local
-JDK declarations; Go discovers installed SDK sources; C# discovers .NET reference
-packs; C/C++ uses approved macOS SDK or Windows SDK/MSVC headers. TS/JS and Python
-carry their required runtime/declarations. SDK discovery does not install tools.
+Target SDKs are independent of execution runtimes. Standard discovery inputs include
+Java `JAVA_HOME`, `JDK_HOME`, real PATH binaries, bundled JDK and installed roots;
+Go `GOROOT`, real PATH binaries and installed roots; C# `DOTNET_ROOT` variants,
+user `.dotnet` and installed reference-pack roots; C/C++ approved installed macOS or
+Windows/MSVC headers. The highest stable patch is selected per Java major, Go minor
+or modern .NET TFM. Runtime-only .NET installs cannot provide target references.
+No language installs target SDKs or runs project build scripts. Rust retains its
+three dependency scopes and explicit network policy.
 
-Consumers can expose already-installed target SDKs through these standard entry
-points before starting the public CLI; no private `CODEGRAPH_*` variables or helper
-configuration file is needed:
+Complete Rust tests additionally require explicit absolute `CARGO_HOME`,
+`CODEGRAPH_PROJECT_RUST_TOOLCHAIN=stable`, stable rust-src and installed historical
+1.81.0/1.94.0/1.96.0 fixtures. `prepare-rust-native-tests.mjs --prepare` prepares only
+locked test metadata. These versions are fixtures, not a product allowlist.
 
-- Java reads `JAVA_HOME`, `JDK_HOME`, every `java` executable on `PATH`, and
-  conventional JDK install directories. Put each custom installation's `bin` on
-  `PATH` to discover multiple versions. `JAVA_HOME_17_X64` and similar CI-specific
-  variable names are not scanned; map one to `JAVA_HOME` or add its `bin` to `PATH`.
-  Discovery keeps the highest stable patch per Java major version; the project's
-  declared release selects the target declarations.
-- Go reads `GOROOT`, every `go` executable on `PATH`, and conventional SDK install
-  directories. Multiple custom SDK `bin` directories may appear on `PATH`.
-  Discovery keeps the highest stable patch per major/minor version; project
-  declarations and the helper's supported semantics determine the selected target.
-- C# reads `DOTNET_ROOT`, `DOTNET_ROOT_ARM64`, `DOTNET_ROOT_X64`, `DOTNET_ROOT_X86`,
-  `DOTNET_ROOT(x86)`, the user's `.dotnet`, and conventional .NET install directories.
-  Each root must contain installed `packs/Microsoft.NETCore.App.Ref/<version>/ref/<tfm>`
-  declarations; a runtime-only install is insufficient. Discovery keeps the highest
-  stable patch for each supported modern TFM and the project chooses its TFM. These
-  variables locate target references; the pack still uses its own private runtime.
+The hosted PR/main CI runs both native targets, Windows pre-resume Job/descendant
+probes before tool provisioning, all native component/public suites, preserved
+semantic integration names and actual seven-package public acceptance. Non-shipped
+Java/C#/Clang test drivers are built separately and never copied into payloads.
+The semantic inventory maps each historical name to a real source, command and
+platform; a successful process missing required named-test output fails the gate.
+[direct-test-migration.md](direct-test-migration.md) records each old root family.
 
-These entry points add discovery candidates rather than restricting discovery to
-one installation. Equal versions retain the first discovered candidate. Analysis
-reads installed declarations and project metadata without installing SDKs or
-running project builds.
+Public package acceptance covers the shared 21 conformance vectors, no-final-newline
+EOF, final compiled identity, configured discovery, exact selection and graph-outside
+references, test roles, configured empty and explicit empty graphs, required/malformed
+models, six graph categories and read-only inputs. Rust covers all scopes. C/C++
+preserves its native test-role policy and requires a nonempty CDB. Expected negative
+results require exit 1, an error and no graph. Actual loaded requests are terminated
+by the caller's complete tree ownership and observed descendants must exit; Unix
+process groups are not Windows evidence. Format/script tests cannot substitute for
+these native runs.
 
-Full Rust acceptance additionally requires `CODEGRAPH_PROJECT_RUST_TOOLCHAIN=stable`,
-an isolated absolute `CARGO_HOME`, stable `rust-src` and historical 1.81.0, 1.94.0,
-1.96.0 toolchains; run `prepare-rust-native-tests.mjs --prepare` to prepare only
-locked test metadata and verify its offline availability. These fixture versions
-are not a product target-version allowlist.
-
-`.github/workflows/ci.yml` runs on hosted `macos-15` ARM64 and `windows-2022` x64.
-Host architecture is independently checked by native builders. Windows runs the
-shared process probe before expensive downloads, then selects exact MSVC/SDK/redist
-from the unchanged pins. macOS selects Xcode 16.4 / SDK 15.5. All seven helper suites,
-77 named real-pack tests on macOS (71 on Windows; 78 unique cases), including
-all 71 original records with their retained platform scopes and seven directory
-discovery additions, the full engine and public CLI lifecycle suites, and real unpacked
-public CLI graph acceptance run serially by group.
-The C# factory group exercises the packaged runtime through the production factory
-and standard SDK discovery; its internal assertion retains diagnostics without
-changing the public protocol's redacted errors. Public acceptance continues with
-later languages after a package failure, then reports all original failures and
-exits unsuccessfully. No partial run emits a successful receipt.
-CodeGraph also checks its private SDK packaging policy on the verified extracted
-Go, Java and C# archives: `target_sdk.kind` is respectively `go`, `java`, `dotnet`,
-`platforms` is empty, and `runtime/platform` is absent. This producer acceptance
-retains the former install-test guarantees without making private layout a
-consumer dependency.
-Public acceptance verifies each installed fixed entry and its version-matched
-package policy, from an unrelated cwd with producer-only environment removed.
-Every language exercises configured directory discovery, exact selection with
-outside targets represented as repository external symbols, explicit empty
-selection, test options, original source/local calls, normal stdin EOF and read-only
-input. Rust covers all three dependency scopes. Native test roles remain unchanged:
-C/C++ has no test-role metadata and keeps identical membership for both option values.
-Zero-source configured discovery is checked where supported; C/C++ instead uses a
-valid empty translation unit and rejects an empty CDB. Missing required models and
-malformed configurations return `analysis_failed`, while explicit `[]` still avoids
-loading them. TS/JS and Python additionally retain valid configuration-free projects;
-TS missing referenced configuration is a failure.
-The seven real installed engines also receive omitted-files requests over enlarged
-configured projects. The harness observes the actual worker/helper subtree before
-sending cancellation, requires one `cancelled` terminal result and exit 130 within
-the cleanup bound, and verifies that all observed descendants exit. These checks
-complement the existing native, blocked-output, parent-kill and Windows Job suites.
-No fake helper or startup-only success substitutes for installed package evidence.
-Per-test inventory is
-[semantic-acceptance.json](../resources/semantic-acceptance.json).
-
-Archive commands use the explicit system bsdtar (`SystemRoot/System32/tar.exe` on
-Windows, `/usr/bin/tar` on macOS), including Node ZIP and npm tgz inputs. They do
-not select Git Bash's GNU tar from PATH; paths with drive letters and spaces are
-covered by the real archive tests.
-
-Only successful complete clean-source acceptance emits
-`verification-<target>.json`. Focused/local passes never stand in for this evidence.
-The shared [command specification](../scripts/language-packs/verification-commands.mjs)
-defines all 21 macOS / 20 Windows groups, including their argv, working directories, environment
-parameters and required semantic names. Before recording evidence, the writer
-compares the actual executed command list with that full specification. The
-receipt stores portable identities using tool/repository path placeholders; the
-release validator compares the complete platform-specific list exactly. Missing,
-replaced or duplicate commands cannot substitute for any helper, engine, CLI or
-public acceptance group. These receipt identities are internal CI metadata, not
-an executable configuration or a consumer pack contract.
-The platform lists follow the original test `cfg`: seven shell/file-symlink probe
-cases exist only on Unix, and one Python junction-escape case exists only on
-Windows. The Unix-only production-probe group is not sent to Windows as a zero-test
-command. Windows still runs real helper cancellation, directory alias ownership,
-junction escape, shared process Job tests and public CLI cancellation/parent-kill
-acceptance. Junction command output is captured for assertion diagnostics so it
-cannot split libtest's required named-success lines. Zero-test Cargo groups and
-missing named results remain failures.
-Failed/cancelled jobs upload no release artifacts. `Complete CI` requires both
-platform jobs. No manual quality-gate workflow exists or is dispatched here.
+Only the full exact command specification in `verification-commands.mjs`, all named
+semantic successes and clean matching archive bytes can write
+`verification-<target>.json`. Missing/replaced/skipped groups fail. Release validation
+compares the complete platform-specific command identities and both receipts. Failed
+or cancelled CI jobs upload no release artifacts. `Complete CI` requires both native
+jobs; no manual quality-gate is dispatched. Release publication uses those exact CI
+bytes and never rebuilds a replacement during promotion.
 
 ## Release operation after approval and merge
 

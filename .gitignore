@@ -6,8 +6,6 @@
 **/node_modules/
 **/__pycache__/
 **/bin/
-!/src/bin/
-!/src/bin/*.rs
 **/obj/
 /analyzers/java/build/
 /analyzers/clang/build/

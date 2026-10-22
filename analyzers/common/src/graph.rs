@@ -228,3 +228,7 @@ pub fn validate(graph: &CodeGraph, language: &str) -> Result<()> {
 #[cfg(test)]
 #[path = "tests/graph.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/historical_graph.rs"]
+mod historical_tests;

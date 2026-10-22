@@ -9,8 +9,8 @@ import tempfile
 
 
 def main():
-    """构造受信包身份和固定源码目录，再用公开 CLI 发送一次 NDJSON 请求。"""
-    binary = Path(sys.argv[1] if len(sys.argv) > 1 else "target/debug/codegraph-rust").resolve()
+    """构造受信包身份和固定源码目录，再用公开 CLI 发送一次 JSON 请求。"""
+    binary = Path(sys.argv[1] if len(sys.argv) > 1 else "analyzers/rust/target/release/codegraph-rust").resolve()
     with tempfile.TemporaryDirectory(prefix="codegraph-example-") as temporary:
         root = Path(temporary)
         repository = root / "repository"
@@ -29,9 +29,11 @@ def main():
         result = subprocess.run([str(entry), "analyze"],
                                 input=json.dumps(request) + "\n", text=True, capture_output=True,
                                 timeout=15, check=True, cwd=repository)
-        messages = [json.loads(line) for line in result.stdout.splitlines()]
-        assert len(messages) == 2 and messages[0]["type"] == "ready"
-        assert messages[1]["graph"] == {"root_contains": [], "nodes": [], "external_symbols": []}
+        completed = json.loads(result.stdout)
+        assert completed["protocol"] == "codegraph.analyzer/1" and completed["type"] == "completed"
+        assert completed["engine_version"] == "0.1.0" and completed["pack_id"] == "rust"
+        assert completed["id"] == request["id"] and completed["outcome"] == "ok"
+        assert completed["graph"] == {"root_contains": [], "nodes": [], "external_symbols": []}
         print(result.stdout, end="")
 
 

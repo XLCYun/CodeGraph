@@ -13,6 +13,7 @@
   <ItemGroup>
     <Compile Include="../*.cs" Exclude="../Program.cs" />
     <Compile Include="ComponentDriver.cs" />
+    <Compile Include="SdkDiscoveryTests.cs" />
     <Reference Include="Microsoft.CodeAnalysis"><HintPath>$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.dll</HintPath><Private>true</Private></Reference>
     <Reference Include="Microsoft.CodeAnalysis.CSharp"><HintPath>$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.CSharp.dll</HintPath><Private>true</Private></Reference>
   </ItemGroup>

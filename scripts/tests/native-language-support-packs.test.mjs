@@ -4,12 +4,12 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFile, execFileSync, ChildProcess } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import { packageDirectory } from '../language-packs/build-language-support-packs.mjs';
-import { copyToolTree, smokeNativeHelper, csharpFixturePlatforms, javaFixturePlatforms, goFixturePlatforms } from '../language-packs/native-language-support-packs.mjs';
+import { copyToolTree, smokeAnalyzer, csharpFixturePlatforms, javaFixturePlatforms, goFixturePlatforms } from '../language-packs/native-language-support-packs.mjs';
 import { prepareDotnetFixtureReferences } from '../language-packs/provision-native-toolchains.mjs';
 import { systemTar } from '../language-packs/system-tar.mjs';
 
@@ -72,50 +72,31 @@ test('SDK tree copy materializes internal files and rejects escape', { skip: pro
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
 
-/** ready 中的语言身份是包启动校验的一部分，不能只要求子进程能退出。 */
-test('helper smoke rejects a mismatched implementation identity', async () => {
-  await assert.rejects(smokeNativeHelper({ executable: process.execPath, args: ['-e', `console.log(JSON.stringify({protocol:'codegraph.engine/1',type:'ready',helper_id:'other'})); process.stdin.resume()`], id: 'codegraph-go-engine', projection: 'go-source-v1', languages: ['go'], profile: 'go-static-v1' }), /identity mismatch/);
+/** 最终身份必须来自唯一公共结果，旧 ready 或错语言不能蒙混通过。 */
+test('direct smoke rejects mismatched final identity and old ready transport', async () => {
+  for (const expression of ["{protocol:'codegraph.analyzer/1',engine_version:'0.1.0',pack_id:'other',type:'completed',id:'pack-smoke',outcome:'ok',graph:{root_contains:[],nodes:[],external_symbols:[]}}", "{protocol:'codegraph.engine/1',type:'ready',helper_id:'other'}"]) {
+    await assert.rejects(smokeAnalyzer({ executable: process.execPath, args: ['-e', `process.stdin.resume();process.stdin.on('end',()=>console.log(JSON.stringify(${expression})))`], id: 'go' }), /identity mismatch/);
+  }
 });
 
-/** smoke 失败后必须等进程 close，才能删除它仍在使用的 scratch。 */
-test('smoke waits for killed child close before rejecting and removing cwd', async (t) => {
-  // 模拟异步终止延迟，让提前 reject 的旧实现稳定暴露清理竞态。
-  const originalKill = ChildProcess.prototype.kill;
-  const markerRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'narrant-smoke-close-test-'));
-  t.after(() => fs.rm(markerRoot, { recursive: true, force: true }));
-  const marker = path.join(markerRoot, 'cwd');
-  let child, closed = false;
-  t.mock.method(ChildProcess.prototype, 'kill', function (signal) {
-    // eslint-disable-next-line @typescript-eslint/no-this-alias -- 保留真实进程以验证 close 屏障。
-    child = this;
-    this.once('close', () => { closed = true; });
-    setTimeout(() => originalKill.call(this, signal), 150);
-    return true;
-  });
-  await assert.rejects(smokeNativeHelper({ executable: process.execPath,
-    args: ['-e', `require('node:fs').writeFileSync(${JSON.stringify(marker)}, process.cwd()); console.log(JSON.stringify({protocol:'codegraph.engine/1',type:'ready',helper_id:'other'})); process.stdin.resume()`],
-    id: 'codegraph-go-engine', projection: 'go-source-v1', languages: ['go'], profile: 'go-static-v1' }), /identity mismatch/);
-  try { assert.equal(closed, true, 'smoke rejected before child close'); }
-  finally { if (!closed && child) await new Promise(resolve => child.once('close', resolve)); }
-  await assert.rejects(fs.stat(await fs.readFile(marker, 'utf8')), { code: 'ENOENT' });
+/** 真实 EOF 后仍不退出的入口须被调用方终止，close 后才能删除其 cwd。 */
+test('smoke waits for killed child close before rejecting and removing cwd', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'codegraph-smoke-close-'));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const marker = path.join(directory, 'cwd');
+  await assert.rejects(smokeAnalyzer({ executable: process.execPath, args: ['-e', `require('node:fs').writeFileSync(${JSON.stringify(marker)},JSON.stringify({cwd:process.cwd(),pid:process.pid}));process.stdin.resume();setInterval(()=>{},1000)`], id: 'go', timeoutMs: 300 }), /timed out/);
+  const observed = JSON.parse(await fs.readFile(marker, 'utf8'));
+  await assert.rejects(fs.stat(observed.cwd), { code: 'ENOENT' });
+  assert.throws(() => process.kill(observed.pid, 0), { code: 'ESRCH' });
 });
 
-/** 清理失败不能遮盖原始 ready 故障；无主故障时保留准确清理错误。 */
+/** 清理异常保留原始最终身份故障，无主故障时报告真实清理错误。 */
 test('smoke preserves primary failure and reports cleanup-only failure', async t => {
-  const cleanupError = new Error('fixture cleanup failure');
-  const remove = fs.rm;
-  t.mock.method(fs, 'rm', async (root, options) => {
-    // 先真正清理本夹具，再模拟清理故障，测试本身不遗留目录。
-    await remove(root, options);
-    throw cleanupError;
-  });
-  const identity = { id: 'codegraph-go-engine', projection: 'go-source-v1', languages: ['go'], profile: 'go-static-v1' };
-  await assert.rejects(smokeNativeHelper({ ...identity, executable: process.execPath,
-    args: ['-e', `console.log(JSON.stringify({protocol:'codegraph.engine/1',type:'ready',helper_id:'other'})); process.stdin.resume()`] }),
-  error => /identity mismatch; scratch cleanup failed: fixture cleanup failure/.test(error.message) && error !== cleanupError);
-  await assert.rejects(smokeNativeHelper({ ...identity, executable: process.execPath,
-    args: ['-e', `console.log(JSON.stringify({protocol:'codegraph.engine/1',type:'ready',helper_id:'codegraph-go-engine',helper_version:'0.1.0',projection_revision:'go-source-v1',languages:['go'],profiles:['go-static-v1']})); process.stdin.resume()`] }),
-  error => error === cleanupError);
+  const cleanupError = new Error('fixture cleanup failure'), remove = fs.rm;
+  t.mock.method(fs, 'rm', async (root, options) => { await remove(root, options); throw cleanupError; });
+  const smoke = pack => smokeAnalyzer({ executable: process.execPath, id: 'go', args: ['-e', `process.stdin.resume();process.stdin.on('end',()=>console.log(JSON.stringify({protocol:'codegraph.analyzer/1',engine_version:'0.1.0',pack_id:'${pack}',type:'completed',id:'pack-smoke',outcome:'ok',graph:{root_contains:[],nodes:[],external_symbols:[]}})))`] });
+  await assert.rejects(smoke('other'), error => /identity mismatch/.test(error.message) && /scratch cleanup failed: fixture cleanup failure/.test(error.message));
+  await assert.rejects(smoke('go'), error => error === cleanupError);
 });
 
 /** 本地开发产物没有通过真实双平台验收前不会被发布脚本纳入。 */
@@ -166,34 +147,17 @@ test('Java and Go fixtures describe actual SDKs without a bundled target list', 
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
 
-/** 已完成 helper 的入口身份固定；TS 暂存与未知身份拒绝不触发无关语言编译。 */
-test('migration build entry preserves completed helpers, rejects missing binaries and stages TypeScript', async t => {
-  const { migratingHelperEntry, buildMigratingNativeHelper } = await import('../language-packs/build-migrating-native-helper.mjs');
-  assert.equal(migratingHelperEntry('rust', true).entry, 'bin/codegraph-rust-engine.exe');
-  assert.equal(migratingHelperEntry('python', false).binary, 'codegraph-python-engine');
-  assert.equal(migratingHelperEntry('typescript-javascript', false).entry, 'runtime/helper/main.mjs');
-  assert.throws(() => migratingHelperEntry('../project'), /Unknown/);
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'native-migration-build-'));
+/** 生产 TS 模块完整暂存，新 runtime 和 graph 不能遗漏；测试文件不进入包。 */
+test('TypeScript staging preserves every production module and no test driver', async () => {
+  const { stageTypeScript } = await import('../language-packs/stage-typescript.mjs');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'direct-typescript-staging-'));
   try {
-    for (const id of ['rust', 'python']) {
-      const manifest = await fs.readFile(new URL(`../../analyzers/${id}/Cargo.toml`, import.meta.url), 'utf8');
-      assert.ok(manifest.includes(`name = "codegraph-${id}-engine"`), `${id} protocol binary`);
-    }
-    // 仅替换读取到的临时清单内容，保留“缺协议 binary 在编译/产物创建前失败”的真实入口契约。
-    const readFile = fs.readFile;
-    const manifests = ['rust', 'python'].map(id => fileURLToPath(new URL(`../../analyzers/${id}/Cargo.toml`, import.meta.url)));
-    const incomplete = t.mock.method(fs, 'readFile', async (file, ...args) => manifests.includes(file)
-      ? '[package]\nname = "core-only"\n'
-      : readFile(file, ...args));
-    try {
-      for (const id of ['rust', 'python']) await assert.rejects(buildMigratingNativeHelper(id, path.join(root, id)), /only a core proof/);
-    } finally { incomplete.mock.restore(); }
-    await assert.rejects(buildMigratingNativeHelper('../project', root), /Unknown/);
-    assert.deepEqual(await fs.readdir(root), []);
-    await buildMigratingNativeHelper('typescript-javascript', root);
-    for (const name of ['main.mjs', 'analyze.mjs', 'projection.mjs', 'workspace.mjs', 'config.mjs', 'syntax.mjs', 'observation.mjs']) {
-      assert.deepEqual(await fs.readFile(path.join(root, 'runtime/helper', name)), await fs.readFile(new URL(`../../analyzers/typescript/${name}`, import.meta.url)));
-    }
+    await stageTypeScript(root);
+    const expected = (await fs.readdir(new URL('../../analyzers/typescript', import.meta.url))).filter(name => name.endsWith('.mjs')).sort();
+    assert.deepEqual((await fs.readdir(path.join(root, 'runtime/analyzer'))).sort(), expected);
+    for (const name of expected) assert.deepEqual(await fs.readFile(path.join(root, 'runtime/analyzer', name)), await fs.readFile(new URL(`../../analyzers/typescript/${name}`, import.meta.url)));
+    assert.ok(expected.includes('graph.mjs') && expected.includes('runtime.mjs'));
+    await assert.rejects(fs.stat(path.join(root, 'runtime/helper')), { code: 'ENOENT' });
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
 
@@ -219,7 +183,7 @@ test('Cargo license packaging excludes unreachable development dependencies and 
     for (const name of ['source', 'development']) {
       await fs.mkdir(path.join(root, name));
       await fs.writeFile(path.join(root, name, 'lib.rs'), '');
-      await fs.writeFile(path.join(root, name, 'Cargo.toml'), `[package]\nname="license_${name}"\nversion="0.1.0"\nedition="2021"\nlicense="MIT"\n[lib]\npath="lib.rs"\n${name === 'source' ? '[dev-dependencies]\nlicense_development={path="../development"}\n' : ''}`);
+      await fs.writeFile(path.join(root, name, 'Cargo.toml'), `[package]\nname="license_${name}"\nversion="0.1.0"\nedition="2021"\nlicense="MIT"\n[workspace]\n[lib]\npath="lib.rs"\n${name === 'source' ? '[dev-dependencies]\nlicense_development={path="../development"}\n' : ''}`);
       await fs.writeFile(path.join(root, name, 'LICENSE'), `actual ${name} license bytes`);
     }
     await fs.writeFile(path.join(root, 'source/Cargo.lock'), 'version = 4\n[[package]]\nname = "license_source"\nversion = "0.1.0"\ndependencies = ["license_development"]\n[[package]]\nname = "license_development"\nversion = "0.1.0"\n');
@@ -245,10 +209,10 @@ test('Cargo license packaging fetches uncached locked metadata without distribut
     for (const directory of [source, cargoHome, crate]) await fs.mkdir(directory);
     await fs.writeFile(path.join(source, 'lib.rs'), '');
     await fs.writeFile(path.join(source, 'LICENSE'), 'actual distributed source license');
-    await fs.writeFile(path.join(source, 'Cargo.toml'), '[package]\nname="license_source"\nversion="0.1.0"\nedition="2021"\nlicense="MIT"\n[lib]\npath="lib.rs"\n[dev-dependencies]\nlicense_development="=0.1.0"\n');
+    await fs.writeFile(path.join(source, 'Cargo.toml'), '[package]\nname="license_source"\nversion="0.1.0"\nedition="2021"\nlicense="MIT"\n[workspace]\n[lib]\npath="lib.rs"\n[dev-dependencies]\nlicense_development="=0.1.0"\n');
     await fs.writeFile(path.join(crate, 'lib.rs'), '');
     await fs.writeFile(path.join(crate, 'LICENSE'), 'development license must not be distributed');
-    await fs.writeFile(path.join(crate, 'Cargo.toml'), '[package]\nname="license_development"\nversion="0.1.0"\nedition="2021"\nlicense="MIT"\n[lib]\npath="lib.rs"\n');
+    await fs.writeFile(path.join(crate, 'Cargo.toml'), '[package]\nname="license_development"\nversion="0.1.0"\nedition="2021"\nlicense="MIT"\n[workspace]\n[lib]\npath="lib.rs"\n');
     const archive = path.join(root, 'development.crate');
     execFileSync(systemTar(), ['-czf', archive, '-C', root, 'license_development-0.1.0'], { env: { ...process.env, COPYFILE_DISABLE: '1' } });
     const bytes = await fs.readFile(archive), checksum = createHash('sha256').update(bytes).digest('hex');

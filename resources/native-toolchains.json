@@ -219,5 +219,25 @@
       "msvc_runtime_version": "14.44.35211",
       "windows_sdk": "10.0.26100.0"
     }
+  },
+  "runtime_packs": {
+    "aarch64-apple-darwin": {
+      "id": "Microsoft.NETCore.App.Runtime.osx-arm64",
+      "version": "10.0.0",
+      "rid": "osx-arm64",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.netcore.app.runtime.osx-arm64/10.0.0/microsoft.netcore.app.runtime.osx-arm64.10.0.0.nupkg",
+      "algorithm": "sha512",
+      "digest": "6b1a3a62eeaefed1df3defc6b6fe1ea37fcbf5139872601ac569bcc3a6376a4dc986092e1d961ec42c9729d9eb2a23176fb2c34b6c75f7aee09ba826920e39fc",
+      "metadata_source": "https://api.nuget.org/v3/catalog0/data/2026.10.13.20.53.06/microsoft.netcore.app.runtime.osx-arm64.10.0.0.json"
+    },
+    "x86_64-pc-windows-msvc": {
+      "id": "Microsoft.NETCore.App.Runtime.win-x64",
+      "version": "10.0.0",
+      "rid": "win-x64",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.netcore.app.runtime.win-x64/10.0.0/microsoft.netcore.app.runtime.win-x64.10.0.0.nupkg",
+      "algorithm": "sha512",
+      "digest": "51c5253e97a140fb7beff66cfc9c3210d5ed8e7394ed877033b29c7edd7621a8b9a687cae03302e2440b0632908821bc4384449549c45be0d01e61064747f3fd",
+      "metadata_source": "https://api.nuget.org/v3/catalog0/data/2026.10.13.20.45.28/microsoft.netcore.app.runtime.win-x64.10.0.0.json"
+    }
   }
 }

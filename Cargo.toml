@@ -1,47 +1,7 @@
-[package]
-name = "codegraph-runtime"
+[workspace]
+resolver = "2"
+members = ["launchers"]
+exclude = ["analyzers/common", "analyzers/rust", "analyzers/python", "analyzers/windows-process-probe", "analyzers/integration-tests"]
+
+[workspace.package]
 version = "0.1.0"
-description = "Private runtime for fixed CodeGraph language analyzers"
-license = "Apache-2.0"
-edition = "2021"
-publish = false
-autobins = false
-
-[dependencies]
-dunce = "=1.0.5"
-libc = "0.2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tempfile = "3"
-tokio = { version = "1", features = ["process"] }
-
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem", "Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_Diagnostics_ToolHelp", "Win32_System_IO", "Win32_System_SystemServices", "Win32_System_Console", "Win32_System_Pipes"] }
-
-[[bin]]
-name = "codegraph-rust"
-path = "src/bin/rust.rs"
-
-[[bin]]
-name = "codegraph-typescript-javascript"
-path = "src/bin/typescript-javascript.rs"
-
-[[bin]]
-name = "codegraph-python"
-path = "src/bin/python.rs"
-
-[[bin]]
-name = "codegraph-java"
-path = "src/bin/java.rs"
-
-[[bin]]
-name = "codegraph-go"
-path = "src/bin/go.rs"
-
-[[bin]]
-name = "codegraph-csharp"
-path = "src/bin/csharp.rs"
-
-[[bin]]
-name = "codegraph-c-cpp"
-path = "src/bin/c-cpp.rs"
