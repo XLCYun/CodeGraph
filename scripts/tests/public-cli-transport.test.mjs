@@ -82,7 +82,10 @@ async function descendantFixture(t, inherited, final = result) {
   };
   t.after(async () => { await cleanup(); await fs.rm(directory, { recursive: true, force: true }); });
   const descendant = `require('node:fs').writeFileSync(${JSON.stringify(marker)},JSON.stringify({pid:process.pid,parent:process.ppid}));setInterval(()=>{},1000);`;
-  const body = `process.stdin.resume();process.stdin.on('end',()=>{const fs=require('node:fs');const child=require('node:child_process').spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{stdio:${JSON.stringify(inherited ? ['ignore', 'inherit', 'inherit'] : 'ignore')}});child.unref();const timer=setInterval(()=>{if(fs.existsSync(${JSON.stringify(marker)})){clearInterval(timer);${inherited ? 'process.stderr.write("root-exited-before-caller-deadline",()=>process.exit(0));' : `process.stdout.write(${JSON.stringify(JSON.stringify(final) + '\n')},()=>process.exit(0));`}}},5);});`;
+  // Windows 的 unref 不会避开 libuv 内层 kill-on-close Job；detached 不设 breakaway，仍归 native owner 的外层 Job。
+  // Unix 保留同一进程组，否则会绕过本用例要验证的真实树回收。
+  const spawnOptions = `stdio:${JSON.stringify(inherited ? ['ignore', 'inherit', 'inherit'] : 'ignore')}${process.platform === 'win32' ? ',detached:true' : ''}`;
+  const body = `process.stdin.resume();process.stdin.on('end',()=>{const fs=require('node:fs');const child=require('node:child_process').spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{${spawnOptions}});child.unref();const timer=setInterval(()=>{if(fs.existsSync(${JSON.stringify(marker)})){clearInterval(timer);${inherited ? 'process.stderr.write("root-exited-before-caller-deadline",()=>process.exit(0));' : `process.stdout.write(${JSON.stringify(JSON.stringify(final) + '\n')},()=>process.exit(0));`}}},5);});`;
   return { body, marker, cleanup, usedFallback: () => fallback };
 }
 
@@ -106,6 +109,20 @@ async function waitForRootExit(pid) {
     assert.ok(Date.now() < deadline, 'Fixture root did not exit before the caller deadline');
     await delay(10);
   }
+}
+
+/** 两条超时路径都先观察真实根退、后代持管道且调用未结束，再等待同一个完整调用预算。 */
+async function observeHeldDescendant(t, fixture, pending, started) {
+  let settled = false;
+  pending.finally(() => { settled = true; }).catch(() => {});
+  const record = await readDescendant(fixture.marker);
+  await waitForRootExit(record.parent);
+  process.kill(record.pid, 0);
+  assert.equal(settled, false, 'Descendant must still hold the inherited pipes after root exit');
+  const elapsed = Date.now() - started;
+  assert.ok(elapsed < 2000, 'Root exit must precede the caller deadline');
+  t.diagnostic(`Real inherited-pipe milestone: ${JSON.stringify({ platform: process.platform, root: record.parent, descendant: record.pid, rootExited: true, descendantLive: true, callSettled: settled, elapsedMs: elapsed, startupObservationBudgetMs: 2000, rootExitObservationBudgetMs: 1000, fullCallBudgetMs: 2000 })}`);
+  return record;
 }
 
 /** 正常成功也必须在返回前回收已退出根留下的闭管道后代。 */
@@ -135,13 +152,7 @@ test('one-shot exchange bounds inherited descendant pipes after root exit at cal
   const fixture = await descendantFixture(t, true);
   const started = Date.now();
   const pending = exchangeCli(process.execPath, 'go', request, identity, undefined, { args: ['-e', fixture.body], timeoutMs: 2000 });
-  let settled = false;
-  pending.finally(() => { settled = true; }).catch(() => {});
-  const record = await readDescendant(fixture.marker);
-  await waitForRootExit(record.parent);
-  process.kill(record.pid, 0);
-  assert.equal(settled, false, 'Descendant must still hold the inherited pipes after root exit');
-  assert.ok(Date.now() - started < 2000, 'Root exit must precede the caller deadline');
+  const record = await observeHeldDescendant(t, fixture, pending, started);
   const watchdog = setTimeout(() => fixture.cleanup().catch(() => {}), 4000);
   try { await assert.rejects(pending, /Public CLI acceptance timed out.*root-exited-before-caller-deadline/s); }
   finally { clearTimeout(watchdog); }
@@ -154,23 +165,29 @@ test('one-shot exchange bounds inherited descendant pipes after root exit at cal
 test('one-shot exchange preserves primary failure alongside a cleanup failure', async t => {
   const fixture = await descendantFixture(t, true);
   const cleanupFailure = new Error('fixture cleanup receipt failure');
-  await assert.rejects(exchangeCli(process.execPath, 'go', request, identity, undefined, {
+  const started = Date.now();
+  const pending = exchangeCli(process.execPath, 'go', request, identity, undefined, {
     args: ['-e', fixture.body], timeoutMs: 2000,
     createOwner: async (...args) => {
       const owner = await spawnOwnedCli(...args);
       return { ...owner, reap: async () => { await owner.reap(); throw cleanupFailure; } };
     },
-  }), error => {
-    assert.ok(error instanceof AggregateError);
-    assert.match(error.cause.message, /Public CLI acceptance timed out/);
-    assert.equal(error.errors[0], error.cause);
-    assert.ok(error.errors.includes(cleanupFailure));
-    assert.match(error.message, /fixture cleanup receipt failure/);
-    assert.match(error.message, /root-exited-before-caller-deadline/);
-    return true;
   });
-  const record = await readDescendant(fixture.marker);
+  const record = await observeHeldDescendant(t, fixture, pending, started);
+  const watchdog = setTimeout(() => fixture.cleanup().catch(() => {}), 4000);
+  try {
+    await assert.rejects(pending, error => {
+      assert.ok(error instanceof AggregateError);
+      assert.match(error.cause.message, /Public CLI acceptance timed out/);
+      assert.equal(error.errors[0], error.cause);
+      assert.ok(error.errors.includes(cleanupFailure));
+      assert.match(error.message, /fixture cleanup receipt failure/);
+      assert.match(error.message, /root-exited-before-caller-deadline/);
+      return true;
+    });
+  } finally { clearTimeout(watchdog); }
   assert.throws(() => process.kill(record.parent, 0), { code: 'ESRCH' });
   assert.throws(() => process.kill(record.pid, 0), { code: 'ESRCH' });
   assert.equal(fixture.usedFallback(), false);
+  assert.ok(Date.now() - started < 5000);
 });
