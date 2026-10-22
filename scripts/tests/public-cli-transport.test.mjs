@@ -97,6 +97,17 @@ async function readDescendant(marker) {
   }
 }
 
+/** 按真实 PID 有界确认根已退出，不能用固定睡眠假设 Windows 的启动/退出调度。 */
+async function waitForRootExit(pid) {
+  const deadline = Date.now() + 1000;
+  while (true) {
+    try { process.kill(pid, 0); }
+    catch (error) { if (error.code === 'ESRCH') return; throw error; }
+    assert.ok(Date.now() < deadline, 'Fixture root did not exit before the caller deadline');
+    await delay(10);
+  }
+}
+
 /** 正常成功也必须在返回前回收已退出根留下的闭管道后代。 */
 test('one-shot exchange reaps a closed-stdio descendant after valid final and root exit', async t => {
   const fixture = await descendantFixture(t, false);
@@ -123,11 +134,14 @@ test('one-shot exchange reaps a closed-stdio descendant before rejecting an inva
 test('one-shot exchange bounds inherited descendant pipes after root exit at caller deadline', async t => {
   const fixture = await descendantFixture(t, true);
   const started = Date.now();
-  const pending = exchangeCli(process.execPath, 'go', request, identity, undefined, { args: ['-e', fixture.body], timeoutMs: 700 });
-  pending.catch(() => {});
+  const pending = exchangeCli(process.execPath, 'go', request, identity, undefined, { args: ['-e', fixture.body], timeoutMs: 2000 });
+  let settled = false;
+  pending.finally(() => { settled = true; }).catch(() => {});
   const record = await readDescendant(fixture.marker);
-  await delay(100);
-  assert.throws(() => process.kill(record.parent, 0), { code: 'ESRCH' });
+  await waitForRootExit(record.parent);
+  process.kill(record.pid, 0);
+  assert.equal(settled, false, 'Descendant must still hold the inherited pipes after root exit');
+  assert.ok(Date.now() - started < 2000, 'Root exit must precede the caller deadline');
   const watchdog = setTimeout(() => fixture.cleanup().catch(() => {}), 4000);
   try { await assert.rejects(pending, /Public CLI acceptance timed out.*root-exited-before-caller-deadline/s); }
   finally { clearTimeout(watchdog); }
@@ -141,7 +155,7 @@ test('one-shot exchange preserves primary failure alongside a cleanup failure', 
   const fixture = await descendantFixture(t, true);
   const cleanupFailure = new Error('fixture cleanup receipt failure');
   await assert.rejects(exchangeCli(process.execPath, 'go', request, identity, undefined, {
-    args: ['-e', fixture.body], timeoutMs: 700,
+    args: ['-e', fixture.body], timeoutMs: 2000,
     createOwner: async (...args) => {
       const owner = await spawnOwnedCli(...args);
       return { ...owner, reap: async () => { await owner.reap(); throw cleanupFailure; } };
