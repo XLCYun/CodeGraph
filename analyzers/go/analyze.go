@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -1154,13 +1153,6 @@ func analyze(ctx context.Context, req request) completed {
 	base.Outcome = "ok"
 	base.Graph = &result
 	base.Evidence = &ev
-	encoded, err := json.Marshal(base)
-	if err != nil {
-		return returnError(fail("internal_failure", err.Error()))
-	}
-	if len(encoded)+1 > req.Limits.MaxResultBytes {
-		return returnError(fail("resource_limit", "Go graph exceeds max_result_bytes"))
-	}
 	if response, yes := stopped(); yes {
 		return response
 	}

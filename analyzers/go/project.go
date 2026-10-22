@@ -70,6 +70,9 @@ func safeFile(root, filename string) ([]byte, error) {
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("not a regular file: %s", filename)
 	}
+	if err := checkControlSize(filename, info.Size()); err != nil {
+		return nil, err
+	}
 	return os.ReadFile(filename)
 }
 

@@ -1,19 +1,11 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"os"
 	"reflect"
-	"strings"
 )
 
-const protocol = "codegraph.engine/1"
+const protocol = "codegraph.analyzer/1"
 
 // request 是一次分析使用的完整协议输入。
 type request struct {
@@ -158,221 +150,12 @@ func fail(code, message string, paths ...string) *analysisError {
 	return &analysisError{Code: code, Message: message, Paths: append([]string{}, paths...)}
 }
 
-// strictJSON 拒绝未知字段和递归位置上的重复 JSON 键。
-func strictJSON(data []byte, out any) error {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	if err := uniqueValue(decoder); err != nil {
-		return err
-	}
-	decoder = json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(out); err != nil {
-		return err
-	}
-	if decoder.Decode(new(any)) != io.EOF {
-		return errors.New("trailing JSON value")
-	}
-	return nil
-}
-
-// uniqueValue 递归检查对象键唯一，同时保持标准解码器对数字及转义的判断。
-func uniqueValue(decoder *json.Decoder) error {
-	tok, err := decoder.Token()
-	if err != nil {
-		return err
-	}
-	delim, ok := tok.(json.Delim)
-	if !ok {
-		return nil
-	}
-	if delim == '{' {
-		seen := map[string]bool{}
-		for decoder.More() {
-			keyTok, err := decoder.Token()
-			if err != nil {
-				return err
-			}
-			key, ok := keyTok.(string)
-			if !ok {
-				return errors.New("invalid JSON key")
-			}
-			if seen[key] {
-				return fmt.Errorf("duplicate JSON key %q", key)
-			}
-			seen[key] = true
-			if err := uniqueValue(decoder); err != nil {
-				return err
-			}
-		}
-	} else if delim == '[' {
-		for decoder.More() {
-			if err := uniqueValue(decoder); err != nil {
-				return err
-			}
-		}
-	} else {
-		return errors.New("unexpected JSON delimiter")
-	}
-	_, err = decoder.Token()
-	return err
-}
-
-// requiredFields 使缺失字段与零值字段得到不同的协议结果。
-func requiredFields(data []byte, fields ...string) error {
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	for _, field := range fields {
-		if _, ok := raw[field]; !ok {
-			return fmt.Errorf("missing %s", field)
-		}
-	}
-	return nil
-}
-
-// readLines 独立于分析任务读取取消信号，EOF 会取消正在进行的任务。
-func readLines(reader io.Reader, lines chan<- []byte, gone chan<- struct{}) {
-	defer close(lines)
-	defer close(gone)
-	buf := bufio.NewReader(reader)
-	for {
-		line, err := buf.ReadBytes('\n')
-		if err != nil {
-			return
-		}
-		if len(line) > 4*1024*1024 {
-			return
-		}
-		lines <- bytes.TrimSuffix(line, []byte{'\n'})
-	}
-}
-
-// runProtocol 严格执行 ready、一次 analyze、一次 completed 的生命周期。
-func runProtocol(in io.Reader, out io.Writer) error {
-	encoder := json.NewEncoder(out)
-	if err := encoder.Encode(map[string]any{"protocol": protocol, "type": "ready", "helper_id": "codegraph-go-engine", "helper_version": "0.1.0", "projection_revision": "go-source-v1", "languages": []string{"go"}, "profiles": []string{"go-static-v1"}}); err != nil {
-		return err
-	}
-	lines, gone := make(chan []byte, 2), make(chan struct{})
-	go readLines(in, lines, gone)
-	first, ok := <-lines
-	if !ok {
-		return errors.New("stdin closed before analyze")
-	}
-	var req request
-	if err := strictJSON(first, &req); err != nil {
-		return fmt.Errorf("invalid analyze: %w", err)
-	}
-	if err := requiredFields(first, "protocol", "type", "id", "input", "environment", "limits"); err != nil {
-		return err
-	}
-	if req.Protocol != protocol || req.Type != "analyze" || strings.TrimSpace(req.ID) == "" {
-		return errors.New("invalid analyze envelope")
-	}
-	if err := checkRequiredNested(first); err != nil {
-		return err
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	result := make(chan completed, 1)
-	go func() { result <- analyze(ctx, req) }()
-	for {
-		select {
-		case message, ok := <-lines:
-			if !ok {
-				cancel()
-				<-result
-				return errors.New("stdin closed during analyze")
-			}
-			var control struct {
-				Protocol string `json:"protocol"`
-				Type     string `json:"type"`
-				ID       string `json:"id"`
-			}
-			if err := strictJSON(message, &control); err != nil {
-				cancel()
-				<-result
-				return err
-			}
-			if err := requiredFields(message, "protocol", "type", "id"); err != nil {
-				cancel()
-				<-result
-				return err
-			}
-			if control.Protocol != protocol || control.Type != "cancel" || control.ID != req.ID {
-				cancel()
-				<-result
-				return errors.New("invalid cancel")
-			}
-			cancel()
-		case response := <-result:
-			if ctx.Err() != nil && response.Outcome == "ok" {
-				response = completed{Protocol: protocol, Type: "completed", ID: req.ID, Outcome: "cancelled"}
-			}
-			return encoder.Encode(response)
-		case <-gone:
-			cancel()
-			<-result
-			return errors.New("stdin closed during analyze")
-		}
-	}
-}
-
-// checkRequiredNested 检查协议对象每一级必需字段的存在性。
-func checkRequiredNested(data []byte) error {
-	var root map[string]json.RawMessage
-	if err := json.Unmarshal(data, &root); err != nil {
-		return err
-	}
-	for field, names := range map[string][]string{
-		"input":       {"repository_root", "include_tests", "profile"},
-		"environment": {"scratch_root", "platforms"},
-		"limits":      {"analysis_timeout_ms", "max_result_bytes", "max_diagnostic_bytes"},
-	} {
-		if err := requiredFields(root[field], names...); err != nil {
-			return err
-		}
-	}
-	var inputFields map[string]json.RawMessage
-	_ = json.Unmarshal(root["input"], &inputFields)
-	if files, present := inputFields["files"]; present {
-		var values []json.RawMessage
-		if bytes.Equal(bytes.TrimSpace(files), []byte("null")) || json.Unmarshal(files, &values) != nil {
-			return errors.New("files must be a non-null array")
-		}
-		for _, value := range values {
-			if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-				return errors.New("files must contain strings")
-			}
-		}
-	}
-	var env map[string]json.RawMessage
-	_ = json.Unmarshal(root["environment"], &env)
-	var platforms []json.RawMessage
-	_ = json.Unmarshal(env["platforms"], &platforms)
-	for _, p := range platforms {
-		if err := requiredFields(p, "id", "kind", "version", "root", "metadata"); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // stringPtr 将值型字符串用于可空的图字段。
 func stringPtr(value string) *string { return &value }
 
 // sameNodeContent 比较跨配置同身份对象的稳定自身内容。
 func sameNodeContent(a, b node) bool {
 	return a.Category == b.Category && a.Language == b.Language && a.NativeKind == b.NativeKind && reflect.DeepEqual(a.Name, b.Name) && reflect.DeepEqual(a.Signature, b.Signature) && reflect.DeepEqual(a.Code, b.Code) && reflect.DeepEqual(a.Source, b.Source) && reflect.DeepEqual(a.Extensions, b.Extensions)
-}
-
-// main 只通过 stdout 输出协议消息，异常写入 stderr 后退出。
-func main() {
-	if err := runProtocol(os.Stdin, os.Stdout); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
 }
 
 // MarshalJSON 保留省略与显式空数组的差别，测试请求也使用同一私有契约。

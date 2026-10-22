@@ -86,10 +86,6 @@ func TestDiscoveryEmptyInvalidAndCancelled(t *testing.T) {
 	if strings.Contains(string(encoded), `"files"`) {
 		t.Fatal("discovery serialized selection")
 	}
-	bad := strings.Replace(string(encoded), `"input":{`, `"input":{"files":null,`, 1)
-	if checkRequiredNested([]byte(bad)) == nil {
-		t.Fatal("null accepted")
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := scanConfigContext(ctx, []byte("go 1.23.8\n")); !errors.Is(err, context.Canceled) {

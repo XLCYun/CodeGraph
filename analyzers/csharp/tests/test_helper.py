@@ -18,7 +18,7 @@ REFS8 = os.environ.get("CODEGRAPH_TEST_REFS8", "/private/tmp/narrant-dotnet-ref8
 REFS9 = os.environ.get("CODEGRAPH_TEST_REFS9")
 REFS9_VERSION = os.environ.get("CODEGRAPH_TEST_REFS9_VERSION", "9.0.20")
 HELPER = Path(os.environ.get("CODEGRAPH_TEST_HELPER", str(
-    Path(__file__).resolve().parents[1] / "bin/Release/net10.0/CodeGraph.CSharp.Engine.dll")))
+    Path(__file__).resolve().parent / "bin/Release/net10.0/CodeGraph.CSharp.Components.dll")))
 
 
 class HelperTests(unittest.TestCase):
@@ -65,31 +65,15 @@ class HelperTests(unittest.TestCase):
                 "limits": {"analysis_timeout_ms": timeout, "max_result_bytes": 134217728,
                            "max_diagnostic_bytes": 262144}}
 
-    def run_helper(self, request, extra_line=None):
-        """保持 stdin 打开直到终结消息，以模拟真实 Host 生命周期。"""
+    def run_helper(self, request):
+        """历史数据只交给不随包交付的同进程组件驱动；EOF 正常完成分析。"""
         env = {**os.environ, "DOTNET_ROOT": str(Path(DOTNET).parent), "DOTNET_MULTILEVEL_LOOKUP": "0"}
-        proc = subprocess.Popen([DOTNET, str(HELPER)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, text=True, env=env)
-        try:
-            ready = json.loads(proc.stdout.readline())
-            self.assertEqual(ready["type"], "ready")
-            proc.stdin.write(json.dumps(request) + "\n")
-            if extra_line is not None:
-                proc.stdin.write(extra_line + "\n")
-            proc.stdin.flush()
-            completed = json.loads(proc.stdout.readline())
-            self.assertEqual(completed["type"], "completed")
-            proc.stdin.close()
-            self.assertEqual(proc.wait(timeout=10), 0, proc.stderr.read())
-            self.assertEqual(proc.stdout.read(), "")
-            return completed
-        finally:
-            if proc.poll() is None:
-                proc.kill()
-                proc.wait()
-            proc.stdin.close() if not proc.stdin.closed else None
-            proc.stdout.close()
-            proc.stderr.close()
+        result = subprocess.run([DOTNET, str(HELPER)], input=json.dumps(request), capture_output=True,
+                                text=True, encoding="utf-8", env=env, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        completed = json.loads(result.stdout)
+        self.assertEqual(completed["type"], "completed")
+        return completed
 
     def test_partial_overload_and_read_only(self):
         """跨文件 partial 的两个重载应保留不同身份和精确调用。"""
@@ -357,23 +341,6 @@ class OnlyNet10 {}
         self.assertEqual(explicit["outcome"], "ok", explicit.get("error"))
         self.assertIn("Size", [node["name"] for node in explicit["graph"]["nodes"]])
 
-    def test_platform_protocol_rejects_legacy_and_unknown_fields(self):
-        """平台协议不再接受 fingerprint，且仍严格拒绝缺失或未知字段。"""
-        for change in ("fingerprint", "unknown", "missing_root"):
-            with self.subTest(change=change):
-                request = self.request([])
-                platform = request["environment"]["platforms"][0]
-                if change == "missing_root":
-                    del platform["root"]
-                else:
-                    platform[change] = "unexpected"
-                env = {**os.environ, "DOTNET_ROOT": str(Path(DOTNET).parent), "DOTNET_MULTILEVEL_LOOKUP": "0"}
-                result = subprocess.run([DOTNET, str(HELPER)], input=json.dumps(request) + "\n",
-                                        capture_output=True, text=True, env=env, timeout=10)
-                self.assertEqual(result.returncode, 1)
-                self.assertEqual([json.loads(line)["type"] for line in result.stdout.splitlines()], ["ready"])
-                self.assertIn("Invalid analyze message", result.stderr)
-
     def test_modern_targets_are_not_a_fixed_allowlist(self):
         """未预置的现代 TFM 和其默认语言可解析，缺本地引用时统一报告 target_unavailable。"""
         self.write("App/A.cs", "class C {}")
@@ -608,20 +575,14 @@ public sealed class SentinelAnalyzer : DiagnosticAnalyzer {
         self.assertEqual(included["outcome"], "ok")
         self.assertIn("TestCase", [n["name"] for n in included["graph"]["nodes"]])
 
-    def test_missing_binding_and_cancel(self):
-        """缺第三方绑定只产生 Unresolved；显式取消返回 cancelled。"""
+    def test_missing_binding(self):
+        """缺第三方绑定只产生 Unresolved，不影响完整图。"""
         self.write("A.cs", "class A { void F(){ MissingLibrary.Call(); } }")
         self.source_set([self.config("main", ["A.cs"])])
         result = self.run_helper(self.request(["A.cs"]))
         self.assertEqual(result["outcome"], "ok")
         f = next(n for n in result["graph"]["nodes"] if n["name"] == "F")
         self.assertTrue(any(r["target"]["kind"] == "unresolved" for r in f["references"]))
-        cancel = json.dumps({"protocol": "codegraph.engine/1", "type": "cancel", "id": "fixture"})
-        cancelled = self.run_helper(self.request(["A.cs"]), extra_line=cancel)
-        self.assertEqual(cancelled["outcome"], "cancelled")
-        wrong_cancel = json.dumps({"protocol": "codegraph.engine/1", "type": "cancel", "id": "other"})
-        rejected = self.run_helper(self.request(["A.cs"]), extra_line=wrong_cancel)
-        self.assertEqual(rejected["error"]["code"], "invalid_input")
 
     def test_body_and_format_projection(self):
         """方法体变化归自身；纯注释排版变化不更改规范内容。"""

@@ -210,59 +210,58 @@ func TestProtocolCompletion(t *testing.T) {
 	}
 }
 
-// testProtocolCompletion 验证两种选集模式均在输入保持打开时完整退出。
+// testProtocolCompletion 验证 EOF 是输入结束，显式和发现模式都只输出一个公共结果。
 func testProtocolCompletion(t *testing.T, discovery bool) {
 	root := t.TempDir()
 	writeFixture(t, root, "go.mod", "module example.test/app\ngo "+fixtureLanguage(t)+"\n")
 	writeFixture(t, root, "unit.go", "package app\nfunc F(){}\n")
-	req := fixtureRequest(t, root, "unit.go")
-	if discovery {
-		req.Input.Files = nil
+	t.Setenv("CODEGRAPH_GO_TARGET_SDK", runtime.GOROOT())
+	fields := map[string]any{"protocol": protocol, "type": "analyze", "id": "请求-1", "repository_root": root, "options": map[string]any{"include_tests": false, "rust_dependency_scope": "repository-only"}}
+	if !discovery {
+		fields["files"] = []string{"unit.go"}
 	}
-	req.Environment.Platforms = req.Environment.Platforms[2:]
+	encoded, _ := json.Marshal(fields)
 	read, write := io.Pipe()
-	defer write.Close()
 	var output bytes.Buffer
 	finished := make(chan error, 1)
 	go func() { finished <- runProtocol(read, &output) }()
-	encoded, err := json.Marshal(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := write.Write(append(encoded, '\n')); err != nil {
+	if _, err := write.Write(encoded); err != nil {
 		t.Fatal(err)
 	}
 	select {
+	case <-finished:
+		t.Fatal("analysis started before EOF")
+	default:
+	}
+	write.Close()
+	select {
 	case err := <-finished:
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("%v: %s", err, output.String())
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("helper waited for stdin EOF after completed")
+	case <-time.After(10 * time.Second):
+		t.Fatal("EOF did not complete analysis")
 	}
-	lines := bytes.Split(bytes.TrimSpace(output.Bytes()), []byte{'\n'})
-	if len(lines) != 2 {
-		t.Fatalf("expected ready and one completed: %s", output.String())
-	}
-	var response completed
-	if err := json.Unmarshal(lines[1], &response); err != nil {
+	var result publicResult
+	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if response.Outcome != "ok" {
-		t.Fatalf("unexpected completed: %+v", response)
+	if result.Outcome != "ok" || result.PackID != "go" || result.ID == nil || *result.ID != "请求-1" || result.Graph == nil || len(result.Graph.Nodes) == 0 {
+		t.Fatalf("bad final: %s", output.String())
 	}
 }
 
-// TestStrictProtocol 验证递归重复键和未知字段均被拒绝。
+// TestStrictProtocol 验证递归重复键和精确大小写字段检查。
 func TestStrictProtocol(t *testing.T) {
-	for _, raw := range []string{`{"x":1,"x":2}`, `{"protocol":"codegraph.engine/1","type":"cancel","id":"x","extra":1}`} {
-		var value struct {
-			Protocol string `json:"protocol"`
-			Type     string `json:"type"`
-			ID       string `json:"id"`
+	for _, raw := range []string{`{"x":1,"x":2}`, `{"options":{"x":1,"x":2}}`} {
+		var value any
+		if strictJSON([]byte(raw), &value) == nil {
+			t.Fatalf("accepted duplicate keys: %s", raw)
 		}
-		if err := strictJSON([]byte(raw), &value); err == nil {
-			t.Fatalf("accepted invalid protocol: %s", raw)
+	}
+	for _, raw := range []string{`{"protocol":"codegraph.analyzer/1","type":"analyze","id":"x","repository_root":"/tmp","options":{"include_tests":false,"rust_dependency_scope":"repository-only"},"ID":"x"}`, `{"Protocol":"codegraph.analyzer/1","type":"analyze","id":"x","repository_root":"/tmp","options":{"include_tests":false,"rust_dependency_scope":"repository-only"}}`} {
+		if _, _, problem := parsePublic([]byte(raw)); problem == nil || problem.Code != "invalid_request" {
+			t.Fatalf("accepted invalid fields: %s", raw)
 		}
 	}
 }

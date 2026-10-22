@@ -31,100 +31,16 @@ internal sealed record Limits(int AnalysisTimeoutMs, long MaxResultBytes, int Ma
 internal static class Protocol
 {
     public const int MaxFiles = 100000;
-    public const string Version = "codegraph.engine/1";
+    public const string Version = "codegraph.analyzer/1";
+    public const long MaxBytes = 128 * 1024 * 1024;
     public static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         DictionaryKeyPolicy = JsonNamingPolicy.SnakeCaseLower
     };
 
-    /// <summary>解析唯一的 analyze 请求并验证嵌套对象形状。</summary>
-    public static AnalyzeRequest ParseAnalyze(string line)
-    {
-        using var document = JsonDocument.Parse(line, new JsonDocumentOptions { MaxDepth = 32 });
-        var root = document.RootElement;
-        Fields(root, "protocol", "type", "id", "input", "environment", "limits");
-        if (String(root, "protocol") != Version || String(root, "type") != "analyze")
-            throw new HelperException("invalid_input", "Expected v1 analyze message");
-        var id = String(root, "id");
-        if (id.Length == 0) throw new HelperException("invalid_input", "Empty request id");
-        var input = root.GetProperty("input");
-        var explicitFiles = input.TryGetProperty("files", out _);
-        Fields(input, explicitFiles ? ["repository_root", "files", "include_tests", "profile"]
-            : ["repository_root", "include_tests", "profile"]);
-        var environment = root.GetProperty("environment");
-        Fields(environment, "scratch_root", "platforms");
-        var limits = root.GetProperty("limits");
-        Fields(limits, "analysis_timeout_ms", "max_result_bytes", "max_diagnostic_bytes");
-        var platforms = new List<Platform>();
-        foreach (var value in environment.GetProperty("platforms").EnumerateArray())
-        {
-            Fields(value, "id", "kind", "version", "root", "metadata");
-            var metadata = value.GetProperty("metadata");
-            Fields(metadata, "tfm", "reference_pack", "reference_pack_version");
-            platforms.Add(new Platform(String(value, "id"), String(value, "kind"), String(value, "version"),
-                String(value, "root"),
-                new PlatformMetadata(String(metadata, "tfm"), String(metadata, "reference_pack"),
-                    String(metadata, "reference_pack_version"))));
-        }
-        var request = new AnalyzeRequest(id,
-            new Input(String(input, "repository_root"), explicitFiles ? Strings(input, "files") : null,
-                input.GetProperty("include_tests").GetBoolean(), String(input, "profile")),
-            new EnvironmentInput(String(environment, "scratch_root"), platforms.ToArray()),
-            new Limits(limits.GetProperty("analysis_timeout_ms").GetInt32(),
-                limits.GetProperty("max_result_bytes").GetInt64(),
-                limits.GetProperty("max_diagnostic_bytes").GetInt32()));
-        if (request.Limits.AnalysisTimeoutMs <= 0 || request.Limits.MaxResultBytes <= 0 ||
-            request.Limits.MaxDiagnosticBytes <= 0)
-            throw new HelperException("invalid_input", "Limits must be positive");
-        return request;
-    }
-
-    /// <summary>读取取消消息，必须只包含约定字段。</summary>
-    public static string ParseCancel(string line)
-    {
-        using var document = JsonDocument.Parse(line);
-        Fields(document.RootElement, "protocol", "type", "id");
-        if (String(document.RootElement, "protocol") != Version || String(document.RootElement, "type") != "cancel")
-            throw new HelperException("invalid_input", "Expected v1 cancel message");
-        return String(document.RootElement, "id");
-    }
-
     /// <summary>序列化协议响应。</summary>
     public static string Serialize(object value) => JsonSerializer.Serialize(value, Json);
-
-    /// <summary>验证 JSON 对象字段集合并拒绝重复键。</summary>
-    private static void Fields(JsonElement element, params string[] expected)
-    {
-        if (element.ValueKind != JsonValueKind.Object) throw new HelperException("invalid_input", "Expected JSON object");
-        var found = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var property in element.EnumerateObject())
-            if (!expected.Contains(property.Name, StringComparer.Ordinal) || !found.Add(property.Name))
-                throw new HelperException("invalid_input", $"Unknown or duplicate field: {property.Name}");
-        if (found.Count != expected.Length) throw new HelperException("invalid_input", "Missing required field");
-    }
-
-    /// <summary>读取非空 JSON 字符串。</summary>
-    private static string String(JsonElement element, string name)
-    {
-        var value = element.GetProperty(name);
-        if (value.ValueKind != JsonValueKind.String || string.IsNullOrEmpty(value.GetString()))
-            throw new HelperException("invalid_input", $"Expected nonempty string: {name}");
-        return value.GetString()!;
-    }
-
-    /// <summary>读取字符串数组并拒绝重复项。</summary>
-    private static string[] Strings(JsonElement element, string name)
-    {
-        var array = element.GetProperty(name);
-        if (array.ValueKind != JsonValueKind.Array) throw new HelperException("invalid_input", $"Expected array: {name}");
-        if (array.GetArrayLength() > MaxFiles) throw new HelperException("resource_limit", "C# selection exceeds file limit");
-        var values = array.EnumerateArray().Select(value => value.GetString()
-            ?? throw new HelperException("invalid_input", $"Invalid {name}")).ToArray();
-        if (values.Distinct(StringComparer.Ordinal).Count() != values.Length)
-            throw new HelperException("invalid_input", $"Duplicate {name}");
-        return values;
-    }
 }
 
 /// <summary>描述最终图节点。</summary>

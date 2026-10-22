@@ -155,18 +155,13 @@ class DiscoveryTests(unittest.TestCase):
     def test_null_and_nonarray_selection_rejected(self):
         """缺省、null 和数组不能在协议解析时混为一谈。"""
         for files in (None, "Main.cs", {}, [None]):
-            result = subprocess.run([fixtures.DOTNET, str(fixtures.HELPER)], input=json.dumps(self.request(files)) + "\n",
-                                    text=True, capture_output=True, timeout=10)
-            self.assertEqual(result.returncode, 1, result)
-            self.assertIn("Invalid analyze message", result.stderr)
+            result = self.run_helper(self.request(files))
+            self.assertEqual(result["error"]["code"], "invalid_input", result)
 
-    def test_discovery_cancellation_and_timeout(self):
-        """大量目录枚举和项目加载也遵守取消与总分析期限。"""
+    def test_discovery_timeout(self):
+        """大量目录枚举和项目加载仍遵守内部资源期限；调用方终止由公共测试覆盖。"""
         self.write("App.csproj", '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>')
         for index in range(1200):
             self.write(f"source/C{index}.cs", f"class C{index} {{}}")
-        cancel = json.dumps({"protocol": "codegraph.engine/1", "type": "cancel", "id": "fixture"})
-        result = self.run_helper(self.discovery(), extra_line=cancel)
-        self.assertEqual(result["outcome"], "cancelled", result)
         result = self.run_helper(self.discovery(timeout=1))
         self.assertEqual(result["error"]["code"], "resource_limit", result)

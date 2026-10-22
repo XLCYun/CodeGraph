@@ -1,8 +1,10 @@
-# codegraph-clang-engine
+# codegraph-c-cpp
 
-真正的 Clang 21.1.8 LibTooling helper。`src/main.cpp` 直接使用 `ClangTool`、AST visitor、
+Clang 21.1.8 LibTooling 原生分析器。`src/main.cpp` 直接使用 `ClangTool`、AST visitor、
 `SourceManager`、`Lexer`、`PPCallbacks` 和 USR 绑定证据；不运行 clang AST JSON 子进程。
-输入/输出为 `codegraph.engine/1` 的单请求 NDJSON，生产调用不需要额外参数。
+固定 `bin/codegraph-c-cpp[.exe] analyze` 直接读取公共 `codegraph.analyzer/1` JSON 后 EOF，
+输出一个带固定 `engine_version: "0.1.0"` 与 `pack_id: "c-cpp"` 的最终结果。
+调用方负责取消与超时的整棵进程树终止；没有 ready/cancel、分析 worker 或控制监听器。
 
 ## 固定开发环境与构建
 
@@ -10,17 +12,18 @@ macOS ARM64 的固定官方 SDK 及校验和见 `toolchain.json`。SDK 只用于
 不下载被分析项目依赖。将官方 archive 校验并解包到隔离目录后：
 
 ```sh
-analyzers/clang/build.sh /absolute/LLVM-21.1.8-macOS-ARM64
-CODEGRAPH_LLVM_ROOT=/absolute/LLVM-21.1.8-macOS-ARM64 python3 analyzers/clang/tests/test_helper.py
+CODEGRAPH_BUILD_COMPONENT_TESTS=1 analyzers/clang/build.sh /absolute/LLVM-21.1.8-macOS-ARM64
+CODEGRAPH_LLVM_ROOT=/absolute/LLVM-21.1.8-macOS-ARM64 python3 -m unittest discover -s analyzers/clang/tests -v
 ```
 
-产物为 `build/codegraph-clang-engine` 和 `build/runtime/lib/libclang-cpp.dylib`。公开发布包按
-`bin/codegraph-clang-engine`、`runtime/lib/libclang-cpp.dylib` 放置；二进制只使用 executable-relative
-rpath，不含开发机绝对 SDK 路径。resource headers 由独立 `clang-resource` 平台提供。
+产物为 `build/codegraph-c-cpp` 和 `build/runtime/lib/libclang-cpp.dylib`。公开发布包按
+`bin/codegraph-c-cpp`、`runtime/lib/libclang-cpp.dylib` 放置；二进制只使用 executable-relative
+rpath，不含开发机绝对 SDK 路径。resource headers 从安装根的 `runtime/platform/clang-resource` 定位，包含固定 `lib/clang/21` 的全部内容。
+`build/codegraph-clang-components` 是不安装、不随包交付的语义夹具驱动。
 `build/` 被忽略，不提交二进制、动态库或下载的 SDK。当前构建与运行验收为 macOS ARM64；
 Windows 增量由专门原生 CI 验收，不能把本机构建成功当作 Windows 成功。
 
-## 目标 catalog
+## 内部目标模型
 
 - `clang-target`：`root` 为批准的目标 SDK，`version` 为 SDK 版本；metadata 精确包含
   `target_triple`、`system_include_directories`（root 相对目录数组）、`resource_platform_id`。
@@ -30,8 +33,8 @@ Windows 增量由专门原生 CI 验收，不能把本机构建成功当作 Wind
 - C++ `c++` 路径组件下的包装头优先，然后 resource/include，再目标 C headers；其它读取被
   VFS 拒绝。实际验收包含 MacOSX27.0 SDK 的 C `<stdint.h>/<stdio.h>` 和 C++ `<vector>`。
 
-产品 Host 从本机开发工具发现目标 SDK，并读取其实际版本及头文件目录；不再限定 macOS SDK
-版本白名单，也不要求平台指纹。缺少标准头仍明确失败，helper 只读取 Host 传入的具体根。
+本语言程序从本机开发工具发现目标 SDK，并读取其实际版本及头文件目录；不再限定 macOS SDK
+版本白名单，也不要求平台指纹。缺少标准头仍明确失败，程序只读取静态安装发现批准的具体根。
 CI 的固定 SDK 是复现测试样本；用户不必安装相同版本，也不会随支持包下载系统 SDK。
 
 ## 明确的配置边界
@@ -66,8 +69,7 @@ header。普通 C record/C++ record 的同一源 struct 使用 `StructDecl`，�
 分别保留，唯一已证实定义可以成为调用目标；未决调用不按同名猜测。宏定义是 extension，
 宏引用来自真实预处理展开回调；宏内容变化参与比较。模板只保留显式源码声明，不添加隐式实例。
 
-测试脚本创建自身临时源码并核对分析前后完整文件摘要；helper 从原位置读取。取消在分析线程
-之外读取，VFS/AST 检查取消和总期限；Host 仍负责在宽限过后强制回收无法协作中止的原生解析。
+测试脚本创建自身临时源码并核对分析前后完整文件摘要；helper 从原位置读取。VFS/AST 保留资源期限检查；调用方通过整棵进程树终止回收原生解析。
 标准验收同时检查 `__STDC_VERSION__` / `__cplusplus`、GNU 模式和版本专属语法：C99 循环声明、
 C11 `_Generic`、C23 `constexpr`，以及 C++11–C++23 的已实现特性。相同语法在较旧标准下必须失败；
 共享 header 还覆盖 C99、C23、C++11、C++23 四种上下文的并集及顺序稳定性。
@@ -79,15 +81,17 @@ Windows 构建入口已提供，须在实际 Windows 工具链中验证：
 ```powershell
 ./analyzers/clang/build.ps1 -LlvmRoot C:/isolated/clang-llvm-21.1.8
 $env:CODEGRAPH_LLVM_ROOT = 'C:/isolated/clang-llvm-21.1.8'
-$env:CODEGRAPH_CLANG_HELPER = 'C:/repo/analyzers/clang/build/codegraph-clang-engine.exe'
+$env:CODEGRAPH_CLANG_HELPER = 'C:/repo/analyzers/clang/build/codegraph-c-cpp.exe'
 $env:CODEGRAPH_WINDOWS_SDK = 'C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0'
 $env:CODEGRAPH_MSVC_ROOT = 'C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207'
 python analyzers/clang/tests/test_helper.py
 ```
 
 CMake 固定 LLVM 21.1.8，优先 clang-cpp 导出目标，否则链接官方静态 Clang 依赖图；关闭 RTTI、
-开启 helper 自身异常及 UTF-8 源码。输出固定为 `build/codegraph-clang-engine.exe`；若 SDK 提供动态库，
-CMake 将声明的运行 DLL 放在程序旁边，发布包必须保留这种加载关系。
+开启 helper 自身异常及 UTF-8 源码。输出固定为 `build/codegraph-c-cpp.exe`；若 SDK 提供动态库，
+CMake 将声明的运行 DLL 放在程序旁边，发布包必须在 `bin/` 保留这些 DLL。
+macOS 保留 `@executable_path/runtime/lib` 与 `@executable_path/../runtime/lib` rpath，
+发布布局为 `bin/codegraph-c-cpp` 加 `runtime/lib/libclang-cpp.dylib`。
 
 `clang-target.metadata` 新增可选 `additional_system_platform_ids`，只能引用 catalog 内
 `kind: "clang-system-headers"`、`metadata: {}` 的精确批准根。Windows SDK 的 `Include/<版本>`
@@ -108,7 +112,9 @@ LinkageSpec 签名只保留 `extern` 与语言字符串。共用 Var/Field 声�
 
 ## 目录发现
 
-私有 `input.files` 省略时，由本语言配置加载器确定完整选集；`[]` 是明确空选集，
+公共 `files` 省略时，由本语言配置加载器确定完整选集；`[]` 是明确空选集，
 `null` 无效。显式数组保持精确选择。具体成员、排除规则、测试角色与限制见
 [引擎选集政策](../../docs/engine-selection.md)。新增目录发现测试由现有原生验收命令运行，
-Host 来源校验另由 `src/native_analyzer/tests/directory/` 的真实引擎用例覆盖。
+来源、精确选集和图不变量由当前进程检查；公共入口测试覆盖真实 EOF 与调用方终止。
+
+JSON 输入不能提供 catalog、SDK 路径、命令或运行时参数。内部组件的细分失败码映射为公共协议的稳定错误码。

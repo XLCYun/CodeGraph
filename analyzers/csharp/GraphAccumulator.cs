@@ -51,6 +51,9 @@ internal sealed class GraphAccumulator
         var children = new HashSet<string>(StringComparer.Ordinal);
         foreach (var node in nodes.Values)
         {
+            if (!node.Id.StartsWith("csharp:", StringComparison.Ordinal) || node.Language != "csharp" ||
+                node.Category is not "container" and not "type" and not "callable" and not "value" and not "execution_region" and not "extension" ||
+                string.IsNullOrEmpty(node.NativeKind)) throw new HelperException("union_conflict", "Invalid graph node identity");
             node.Contains.Sort(StringComparer.Ordinal);
             foreach (var child in node.Contains)
             {
@@ -63,7 +66,12 @@ internal sealed class GraphAccumulator
         if (roots.Any(id => nodes[id].Category != "container"))
             throw new HelperException("union_conflict", "Orphan declaration in C# graph");
         var visited = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var root in roots) Walk(root);
+        var pendingNodes = new Stack<string>(roots);
+        while (pendingNodes.TryPop(out var id))
+        {
+            if (!visited.Add(id)) throw new HelperException("union_conflict", "Containment cycle in C# graph");
+            foreach (var child in nodes[id].Contains) pendingNodes.Push(child);
+        }
         if (visited.Count != nodes.Count) throw new HelperException("union_conflict", "Containment cycle in C# graph");
         evidence.Origins.AddRange(nodes.Keys.Order(StringComparer.Ordinal).Select(id =>
             new OriginEvidence(id, origins[id].Order(StringComparer.Ordinal).ToArray())));
@@ -72,19 +80,24 @@ internal sealed class GraphAccumulator
             .OfType<Dictionary<string, string>>()
             .Where(target => target.GetValueOrDefault("kind") == "external")
             .Select(target => target["symbol"]).ToHashSet(StringComparer.Ordinal);
+        foreach (var node in nodes.Values)
+        foreach (var reference in node.References)
+        {
+            if (reference.Target is not Dictionary<string, string> target ||
+                target.GetValueOrDefault("kind") switch
+                {
+                    "node" => !nodes.ContainsKey(target.GetValueOrDefault("id", "")),
+                    "external" => !external.ContainsKey(target.GetValueOrDefault("symbol", "")),
+                    "unresolved" => string.IsNullOrEmpty(target.GetValueOrDefault("name")),
+                    _ => true
+                }) throw new HelperException("union_conflict", "Invalid graph reference target");
+        }
         var descriptors = external.Values.Where(e => used.Contains(e.Symbol)).OrderBy(e => e.Symbol, StringComparer.Ordinal).ToArray();
         return new AnalysisOutput(new
         {
             root_contains = roots, nodes = nodes.Values.OrderBy(n => n.Id, StringComparer.Ordinal).ToArray(),
             external_symbols = descriptors
         }, evidence);
-
-        // 递归访问整个包含树，确保每个对象从一个根可达。
-        void Walk(string id)
-        {
-            if (!visited.Add(id)) return;
-            foreach (var child in nodes[id].Contains) Walk(child);
-        }
     }
 
     /// <summary>用所有配置的最终源码成员集合解析待决引用。</summary>

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -355,57 +354,19 @@ func TestNestedModuleBoundary(t *testing.T) {
 	}
 }
 
-// TestProtocolCancelWhileRunning 验证匹配 ID 取消、错 ID 拒绝与入口自行退出。
-func TestProtocolCancelWhileRunning(t *testing.T) {
-	for _, discovery := range []bool{false, true} {
-		t.Run(map[bool]string{false: "explicit", true: "discovery"}[discovery], func(t *testing.T) { testProtocolCancelWhileRunning(t, discovery) })
-	}
-}
-
-// testProtocolCancelWhileRunning 验证配置发现也能被同请求取消帧中断。
-func testProtocolCancelWhileRunning(t *testing.T, discovery bool) {
-	for _, matching := range []bool{true, false} {
-		t.Run(map[bool]string{true: "matching", false: "wrong_id"}[matching], func(t *testing.T) {
-			root := t.TempDir()
-			writeFixture(t, root, "go.mod", "module example.test/app\ngo "+fixtureLanguage(t)+"\n")
-			writeFixture(t, root, "unit.go", "package app\nimport \"strings\"\nfunc F(){_ = strings.Contains(\"a\",\"b\")}\n")
-			req := fixtureRequest(t, root, "unit.go")
-			if discovery {
-				req.Input.Files = nil
-			}
-			req.Environment.Platforms = req.Environment.Platforms[2:]
-			read, write := io.Pipe()
-			defer write.Close()
-			output := &strings.Builder{}
-			done := make(chan error, 1)
-			go func() { done <- runProtocol(read, output) }()
-			payload, _ := json.Marshal(req)
-			if _, err := write.Write(append(payload, '\n')); err != nil {
-				t.Fatal(err)
-			}
-			cancelID := req.ID
-			if !matching {
-				cancelID = "wrong"
-			}
-			control, _ := json.Marshal(map[string]any{"protocol": protocol, "type": "cancel", "id": cancelID})
-			if _, err := write.Write(append(control, '\n')); err != nil {
-				t.Fatal(err)
-			}
-			select {
-			case err := <-done:
-				if matching {
-					if err != nil {
-						t.Fatal(err)
-					}
-					if !strings.Contains(output.String(), `"outcome":"cancelled"`) {
-						t.Fatalf("missing cancelled terminal: %s", output.String())
-					}
-				} else if err == nil {
-					t.Fatalf("wrong ID accepted: %s", output.String())
-				}
-			case <-time.After(5 * time.Second):
-				t.Fatal("cancel did not stop helper")
-			}
-		})
+// TestProtocolRejectsRemovedControl 验证旧取消帧作为第二个 JSON 时始终被公共入口拒绝。
+func TestProtocolRejectsRemovedControl(t *testing.T) {
+	root := t.TempDir()
+	value := map[string]any{"protocol": protocol, "type": "analyze", "id": "test", "repository_root": root, "files": []string{}, "options": map[string]any{"include_tests": false, "rust_dependency_scope": "repository-only"}}
+	payload, _ := json.Marshal(value)
+	for _, id := range []string{"test", "wrong"} {
+		control, _ := json.Marshal(map[string]any{"protocol": protocol, "type": "cancel", "id": id})
+		var output strings.Builder
+		if err := runProtocol(strings.NewReader(string(payload)+"\n"+string(control)), &output); err == nil {
+			t.Fatal("accepted removed control")
+		}
+		if !strings.Contains(output.String(), `"code":"invalid_request"`) || strings.Contains(output.String(), "cancelled") {
+			t.Fatalf("bad result: %s", output.String())
+		}
 	}
 }

@@ -16,29 +16,28 @@
 #include <llvm/Support/VirtualFileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 #include <algorithm>
-#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <future>
 #include <iostream>
 #include <map>
+#include <limits>
+#include <cctype>
 #include <set>
 #include <sstream>
-#include <thread>
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
 #else
-#include <poll.h>
 #include <unistd.h>
 #endif
 
 namespace fs = std::filesystem;
 namespace j = llvm::json;
 using namespace clang;
-static const char *Protocol = "codegraph.engine/1";
+static const char *Protocol = "codegraph.analyzer/1";
+static constexpr size_t MaxPublicBytes = 128 * 1024 * 1024;
 static constexpr size_t MaxFiles = 100000;
 
 // 受控失败保留稳定协议错误码，禁止以空图掩盖错误。
@@ -73,9 +72,24 @@ class UniqueKeys {
   // 读取并解码字符串键，转义后的相同键也会被拒绝。
   std::string string() {
     size_t start = p++; bool closed = false;
-    while (p < s.size()) { char c = s[p++]; if (c == '\\') { if (p < s.size()) ++p; } else if (c == '"') { closed = true; break; } }
+    // LLVM 默认替换孤立代理项；严格输入必须在任何身份解码前拒绝这种有损转换。
+    auto codeUnit=[&]() {
+      require(p+4<=s.size(),"incomplete Unicode escape"); unsigned value=0;
+      for(unsigned count=0;count<4;++count) { char c=s[p++]; unsigned digit=c>='0' && c<='9'?c-'0':c>='a' && c<='f'?c-'a'+10:c>='A' && c<='F'?c-'A'+10:16; require(digit<16,"invalid Unicode escape"); value=value*16+digit; }
+      return value;
+    };
+    while (p < s.size()) {
+      char c=s[p++];
+      if(c=='\\') {
+        require(p<s.size(),"incomplete JSON escape"); char escaped=s[p++];
+        if(escaped=='u') {
+          auto value=codeUnit(); require(value<0xdc00 || value>0xdfff,"unpaired Unicode surrogate");
+          if(value>=0xd800 && value<=0xdbff) { require(p+2<=s.size() && s[p]=='\\' && s[p+1]=='u',"unpaired Unicode surrogate"); p+=2; auto low=codeUnit(); require(low>=0xdc00 && low<=0xdfff,"unpaired Unicode surrogate"); }
+        }
+      } else if(c=='"') { closed=true; break; }
+    }
     require(closed, "unterminated JSON string");
-    auto value = j::parse(s.substr(start,p-start)); require(bool(value), "invalid JSON string");
+    auto value = j::parse(s.substr(start,p-start)); if(!value) throw Failure("invalid_input",llvm::toString(value.takeError()));
     return value->getAsString()->str();
   }
   // 递归检查每个对象的键，容器深度有界。
@@ -100,7 +114,7 @@ public:
 };
 // 解析有界 JSON 文档，协议和 CDB 共用严格键规则。
 static j::Value parse(const std::string &text) {
-  UniqueKeys check(text); auto v=j::parse(text); require(bool(v), "invalid JSON document"); return std::move(*v);
+  UniqueKeys check(text); auto v=j::parse(text); if(!v) throw Failure("invalid_input",llvm::toString(v.takeError())); return std::move(*v);
 }
 // 从磁盘读取小型配置；不执行文件、不写入项目。
 static std::string read(const fs::path &path) {
@@ -136,10 +150,10 @@ struct Config { std::string id, language; fs::path file, directory; std::vector<
 // 单请求状态维护最终并集、来源和协作取消。
 struct Request {
   fs::path root; std::set<std::string> selected; std::vector<Platform> platforms; std::vector<Config> configs;
-  std::string id, language; bool discovery=false; std::atomic<bool> stopped{false}; size_t maxResult=0, maxDiagnostic=0;
-  std::chrono::steady_clock::time_point deadline;
+  std::string id, language; bool discovery=false; size_t maxResult=MaxPublicBytes, maxDiagnostic=262144;
+  std::chrono::steady_clock::time_point deadline=std::chrono::steady_clock::now()+std::chrono::minutes(30);
   // 检查取消和总期限，不被诊断日志延长。
-  void checkpoint() const { if (stopped) throw Failure("cancelled","request cancelled"); if (std::chrono::steady_clock::now()>deadline) throw Failure("resource_limit","analysis deadline exceeded"); }
+  void checkpoint() const { if (std::chrono::steady_clock::now()>deadline) throw Failure("resource_limit","analysis deadline exceeded"); }
 };
 // 文件系统只向 Clang 暴露批准的仓库源码和目标头文件。
 class ReadBoundary : public llvm::vfs::ProxyFileSystem {
@@ -611,26 +625,10 @@ static void observeDiscovery(const std::string &id) {
   } catch(...) { std::error_code ignored; fs::remove_all(pending,ignored); throw; }
   std::error_code ignored; fs::remove_all(pending,ignored);
 }
-// 校验请求、catalog 和静态 CDB；不运行项目发现脚本。
-static void configure(Request &r,const j::Object &message) {
-  keys(message,{"protocol","type","id","input","environment","limits"});
-  require(str(message,"protocol")==Protocol && str(message,"type")=="analyze","invalid analyze envelope"); require(str(message,"id")==r.id && !r.id.empty(),"invalid request id");
-  auto in=message.getObject("input"), env=message.getObject("environment"), limits=message.getObject("limits"); require(in && env && limits,"invalid analyze objects");
-  r.discovery=!in->get("files");
-  auto required=j::Object(*in); required.erase("files");
-  keys(required,{"repository_root","include_tests","profile"}); keys(*env,{"scratch_root","platforms"}); keys(*limits,{"analysis_timeout_ms","max_result_bytes","max_diagnostic_bytes"});
-  require(str(*in,"profile")=="clang-static-v1","unsupported profile"); require(in->getBoolean("include_tests").has_value(),"invalid include_tests");
-  require(fs::u8path(str(*in,"repository_root")).is_absolute(),"repository root must be absolute"); r.root=real(fs::u8path(str(*in,"repository_root"))); require(fs::is_directory(r.root),"repository root must be a directory");
-  auto scratch=real(fs::u8path(str(*env,"scratch_root"))); require(scratch.is_absolute() && !under(scratch,r.root),"scratch must be outside repository");
-  auto timeout=limits->getInteger("analysis_timeout_ms"), result=limits->getInteger("max_result_bytes"), diagnostic=limits->getInteger("max_diagnostic_bytes");
-  require(timeout && *timeout>0 && result && *result>0 && diagnostic && *diagnostic>0,"limits must be positive integers");
-  r.deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(*timeout); r.maxResult=*result; r.maxDiagnostic=*diagnostic;
-  auto files=in->getArray("files"), catalog=env->getArray("platforms"); require((r.discovery || files) && catalog,"invalid files/platforms array");
-  if(files) require(files->size()<=MaxFiles,"Clang selection exceeds file limit","resource_limit");
-  if(files) for(auto &v:*files) { r.checkpoint(); auto s=v.getAsString(); require(s.has_value(),"file must be string"); auto rel=relativePath(s->str()); auto full=real(r.root/rel); require(under(full,r.root) && !excluded(rel) && fs::is_regular_file(full),"source outside allowed repository"); require(r.selected.insert(rel.generic_u8string()).second,"duplicate source file"); }
-  if(files && files->empty()) return;
-  r.checkpoint(); platforms(r,*catalog);
+// 从已经确定的进程内选集与目标加载静态 CDB，不执行其中的命令。
+static void configureProject(Request &r) {
   auto path=r.root/"compile_commands.json"; require(fs::exists(path),"clang-static-v1 requires compile_commands.json","unsupported_configuration"); require(under(real(path),r.root),"CDB symlink escapes repository");
+  require(fs::file_size(path)<=1024*1024,"CDB exceeds control byte limit","resource_limit");
   auto cdb=parse(read(path)); auto entries=cdb.getAsArray(); require(entries && !entries->empty(),"CDB must be a nonempty array","unsupported_configuration");
   if(r.discovery) observeDiscovery(r.id);
   for(auto &v:*entries) { r.checkpoint(); auto o=v.getAsObject(); require(o,"CDB entry must be object"); auto c=configuration(r,*o,r.configs.size()); if(r.discovery) {
@@ -728,7 +726,7 @@ static j::Object finish(Graph &g) {
   j::Array configs,files;
   for(auto &c:r.configs) { auto &p=r.platforms[c.platform]; j::Array ids{p.id,p.resourceId}; for(auto &id:p.additionalIds) ids.push_back(id); configs.push_back(j::Object{{"id",c.id},{"source_paths",j::Array{"compile_commands.json"}},{"platform_ids",std::move(ids)}}); }
   for(auto &file:r.selected) { auto &coverage=g.coverage[file]; require(!coverage.empty(),"selected file has no complete TU context: "+file,"object_extraction_failed"); j::Array ids; for(auto &id:coverage) ids.push_back(id); files.push_back(j::Object{{"path",file},{"disposition","analyzed"},{"configuration_ids",std::move(ids)}}); }
-  return j::Object{{"protocol",Protocol},{"type","completed"},{"id",r.id},{"outcome","ok"},{"graph",j::Object{{"root_contains",std::move(roots)},{"nodes",std::move(nodes)},{"external_symbols",std::move(externals)}}},{"evidence",j::Object{{"configurations",std::move(configs)},{"files",std::move(files)},{"origins",std::move(origins)}}}};
+  return j::Object{{"protocol",Protocol},{"engine_version","0.1.0"},{"pack_id","c-cpp"},{"type","completed"},{"id",r.id},{"outcome","ok"},{"graph",j::Object{{"root_contains",std::move(roots)},{"nodes",std::move(nodes)},{"external_symbols",std::move(externals)}}},{"evidence",j::Object{{"configurations",std::move(configs)},{"files",std::move(files)},{"origins",std::move(origins)}}}};
 }
 // 顺序运行真实 LibTooling TU，禁止冷编译并发和任何子进程工具链查询。
 static j::Object analyze(Request &r) {
@@ -746,23 +744,7 @@ static j::Object analyze(Request &r) {
 }
 // 错误终结不带部分图和证据。
 static j::Object error(const std::string &id,const Failure &f) {
-  return j::Object{{"protocol",Protocol},{"type","completed"},{"id",id},{"outcome","error"},{"error",j::Object{{"code",f.code},{"message",std::string(f.what())},{"paths",j::Array{}}}}};
-}
-// 跨平台非阻塞读取协议管道；-2 表示暂时无数据，0 表示 Host 已关闭。
-static int readProtocol(char *buffer,size_t capacity) {
-#ifdef _WIN32
-  HANDLE pipe=GetStdHandle(STD_INPUT_HANDLE); DWORD available=0;
-  if(!PeekNamedPipe(pipe,nullptr,0,nullptr,&available,nullptr)) return GetLastError()==ERROR_BROKEN_PIPE?0:-1;
-  if(!available) { std::this_thread::sleep_for(std::chrono::milliseconds(10)); return -2; }
-  DWORD readCount=0;
-  if(!ReadFile(pipe,buffer,static_cast<DWORD>(std::min<size_t>(capacity,available)),&readCount,nullptr)) return GetLastError()==ERROR_BROKEN_PIPE?0:-1;
-  return static_cast<int>(readCount);
-#else
-  pollfd descriptor{STDIN_FILENO,POLLIN|POLLHUP,0}; int ready=poll(&descriptor,1,10);
-  if(ready<0) return -1;
-  if(!ready || !(descriptor.revents&(POLLIN|POLLHUP))) return -2;
-  return static_cast<int>(::read(STDIN_FILENO,buffer,capacity));
-#endif
+  return j::Object{{"protocol",Protocol},{"engine_version","0.1.0"},{"pack_id","c-cpp"},{"type","completed"},{"id",id.empty()?j::Value(nullptr):j::Value(id)},{"outcome","error"},{"error",j::Object{{"code",f.code},{"message",std::string(f.what())}}}};
 }
 // 清除可能注入 include、驱动器或配置路径的宿主变量。
 static void clearEnvironment(const char *name) {
@@ -772,39 +754,6 @@ static void clearEnvironment(const char *name) {
   unsetenv(name);
 #endif
 }
-// 单次协议入口独立轮询取消；完成后立即退出，不等待 stdin EOF。
-int main() {
-  for(auto name:{"CPATH","C_INCLUDE_PATH","CPLUS_INCLUDE_PATH","OBJC_INCLUDE_PATH","SDKROOT","MACOSX_DEPLOYMENT_TARGET","CCC_OVERRIDE_OPTIONS","CLANG_CONFIG_FILE_SYSTEM_DIR","CLANG_CONFIG_FILE_USER_DIR","INCLUDE","CL","_CL_"}) clearEnvironment(name);
-  std::cout<<jsonText(j::Object{{"protocol",Protocol},{"type","ready"},{"helper_id","codegraph-clang-engine"},{"helper_version","0.1.0"},{"projection_revision","clang-source-v1"},{"languages",j::Array{"c","cpp"}},{"profiles",j::Array{"clang-static-v1"}}})<<std::endl;
-  Request request; std::future<j::Object> work; std::string buffer; bool started=false,closed=false; size_t inputBytes=0;
-  try {
-    while(true) {
-      if(started && work.wait_for(std::chrono::milliseconds(0))==std::future_status::ready) {
-        auto result=work.get(); auto output=jsonText(j::Value(std::move(result)));
-        if(request.maxResult && output.size()>request.maxResult) output=jsonText(error(request.id,Failure("resource_limit","result byte limit exceeded")));
-        if(!closed) std::cout<<output<<std::endl; return 0;
-      }
-      char chunk[4096]; int count=readProtocol(chunk,sizeof(chunk));
-      if(count==-1) { request.stopped=true; throw Failure("invalid_input","stdin pipe failed"); }
-      if(count!=-2) {
-        if(count<=0) { request.stopped=true; closed=true; if(!started) return 1; if(work.valid()) work.wait(); return 1; }
-        inputBytes+=count; require(inputBytes<=4*1024*1024,"request byte limit exceeded","resource_limit"); buffer.append(chunk,count);
-        size_t newline;
-        while((newline=buffer.find('\n'))!=std::string::npos) {
-          auto line=buffer.substr(0,newline); buffer.erase(0,newline+1); auto value=parse(line); auto object=value.getAsObject(); require(object,"message must be object");
-          if(!started) {
-            require(str(*object,"protocol")==Protocol && str(*object,"type")=="analyze","expected analyze"); request.id=str(*object,"id");
-            // 配置加载也在工作线程中运行，让主线程在 CDB/目录读取期间响应取消。
-            started=true; work=std::async(std::launch::async,[&request,message=j::Object(*object)] {
-              try { configure(request,message); return analyze(request); }
-              catch(const Failure &f) { if(f.code=="cancelled") return j::Object{{"protocol",Protocol},{"type","completed"},{"id",request.id},{"outcome","cancelled"}}; return error(request.id,f); }
-              catch(const std::exception &e) { return error(request.id,Failure("internal_failure",e.what())); }
-            });
-          } else {
-            keys(*object,{"protocol","type","id"}); require(str(*object,"protocol")==Protocol && str(*object,"type")=="cancel" && str(*object,"id")==request.id,"invalid cancel/second analyze"); request.stopped=true;
-          }
-        }
-      }
-    }
-  } catch(const std::exception &e) { request.stopped=true; if(work.valid()) work.wait(); std::cerr<<"protocol failure: "<<e.what()<<'\n'; return 1; }
-}
+#ifndef CODEGRAPH_COMPONENT_TEST
+#include "public.hpp"
+#endif

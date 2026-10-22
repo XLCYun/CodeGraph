@@ -1,18 +1,31 @@
-# Go native analyzer helper
+# Go native analyzer
 
-This standalone module implements `codegraph.engine/1` over stdin/stdout NDJSON. The release build pins its compiler independently of project targets. The helper's language capability comes from its actual compiler (`runtime.Version()` and `go/version`), rather than a product Go-version allowlist. Analysis never invokes the Go command, a project script, a dependency, or a shell.
+The fixed `bin/codegraph-go[.exe] analyze` entry directly implements
+`codegraph.analyzer/1`. It reads one UTF-8 JSON object through EOF, writes one
+final result with `protocol`, `engine_version: "0.1.0"`, and `pack_id: "go"`, then
+exits. EOF completes input normally. The caller owns deadlines and process-tree
+termination; no ready/cancel messages, worker or stdin listener exists.
 
-Build and test with the compiler pinned by the support-pack build configuration:
+The compiler is pinned independently of project targets. Language capability
+comes from `runtime.Version()` and `go/version`. Analysis never executes `go`, a
+project script, a dependency or a shell. See [the public protocol](../../docs/protocol.md).
 
 ```sh
 cd analyzers/go
 GOTOOLCHAIN=local GOPROXY=off "$GO_COMPILER_ROOT/bin/go" test ./...
-GOTOOLCHAIN=local GOPROXY=off "$GO_COMPILER_ROOT/bin/go" build -o bin/codegraph-go-engine .
+GOTOOLCHAIN=local GOPROXY=off "$GO_COMPILER_ROOT/bin/go" build -o bin/codegraph-go .
+CODEGRAPH_GO_TARGET_SDK=/absolute/go1.23.8 \
+  python3 -m unittest discover -s tests -v
 ```
 
-For Windows x64, build `bin/codegraph-go-engine.exe` with the same pinned compiler. The executable takes no arguments. It emits one `ready`, reads one `analyze`, emits one `completed`, and exits without waiting for stdin EOF. A separate stdin reader accepts a matching `cancel` while analysis runs. stdout contains protocol JSON; fatal protocol diagnostics go to stderr.
-
-The Host provides approved, locally installed `go-sdk` entries. Each entry records its actual stable version (for example `1.23.8`), an absolute SDK root containing the matching `VERSION` and complete `src/` tree, and metadata `{ "goos": "darwin|linux|windows", "goarch": "arm64|amd64", "goamd64": "v1" }`. `goamd64` is required only for amd64. The executable needs no installed Go runtime at launch; SDK source is target analysis data and is not bundled with the helper. The Host can supply several installed minor versions and keeps the highest stable patch of each minor.
+On Windows the output is `bin/codegraph-go.exe`. The native executable needs no
+Go runtime. It discovers target standard-library sources from
+`CODEGRAPH_GO_TARGET_SDK`, `CODEGRAPH_GO_SDK`, `GOROOT`, conventional install
+locations, `~/sdk/go*`, Homebrew and resolved PATH entries. Discovery only reads
+files. It freezes the highest stable patch for each installed minor; project
+selection then applies the policies below. SDK roots cannot overlap the source
+repository. Internal typed component fixtures retain explicit targets and source
+evidence; those fields are never public request inputs or result fields.
 
 Version selection follows the repository's static declarations:
 
@@ -42,7 +55,9 @@ The tests also inspect `runtime.GOROOT()` and `/usr/local/go` when present. If r
 
 ## 目录发现
 
-私有 `input.files` 省略时，由本语言配置加载器确定完整选集；`[]` 是明确空选集，
+公共 `files` 省略时，由本语言配置加载器确定完整选集；`[]` 是明确空选集，
 `null` 无效。显式数组保持精确选择。具体成员、排除规则、测试角色与限制见
 [引擎选集政策](../../docs/engine-selection.md)。新增目录发现测试由现有原生验收命令运行，
-Host 来源校验另由 `src/native_analyzer/tests/directory/` 的真实引擎用例覆盖。
+来源、图不变量在本进程输出边界检查；`tests/test_public.py` 验证真实直接入口与调用方终止。
+
+Internal component failures retain their detailed language codes; public failures use the stable codes in `docs/protocol.md`.

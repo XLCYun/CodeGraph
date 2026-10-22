@@ -106,6 +106,7 @@ internal static class Configuration
     private static List<StaticConfiguration> ReadSourceSet(string root, string path, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
+        CheckControlSize(path);
         using var document = JsonDocument.Parse(File.ReadAllText(path));
         var objectRoot = document.RootElement;
         ExactFields(objectRoot, "version", "configurations");
@@ -162,6 +163,7 @@ internal static class Configuration
         if (!documents.TryGetValue(path, out var document)) try
         {
             // 已授权路径交给文件系统；string 重载会把 Windows 的 \\?\ 前缀误解析为 URI 主机名。
+            CheckControlSize(path);
             using var input = File.OpenRead(path);
             document = XDocument.Load(input, LoadOptions.None);
             documents.Add(path, document);
@@ -369,7 +371,7 @@ internal static class Configuration
     /// <summary>校验源码确实位于仓库中且不是越界符号链接。</summary>
     public static string CheckFile(string root, string relative)
     {
-        if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative) || relative.Contains('\\') ||
+        if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative) || relative.Contains('\\') || relative.Contains(':') || relative.Contains('\0') ||
             relative.Split('/').Any(part => part is "" or "." or "..") || !relative.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
             throw new HelperException("invalid_input", "Invalid C# source path", relative);
         var file = ResolvePath(root, relative);
@@ -421,7 +423,7 @@ internal static class Configuration
     }
 
     /// <summary>拒绝仓内源文件、项目和配置的任何符号链接路径段。</summary>
-    private static void CheckRepositoryPath(string root, string path)
+    internal static void CheckRepositoryPath(string root, string path)
     {
         for (var cursor = path; cursor.Length >= root.Length; cursor = Path.GetDirectoryName(cursor)!)
         {
@@ -430,6 +432,12 @@ internal static class Configuration
                     Path.GetRelativePath(root, path).Replace('\\', '/'));
             if (cursor == root) break;
         }
+    }
+
+    /// <summary>项目控制文件最多 1 MiB，不把配置上限套用到普通源码。</summary>
+    private static void CheckControlSize(string path)
+    {
+        if (new FileInfo(path).Length > 1024 * 1024) throw new HelperException("resource_limit", "Control file exceeds byte limit");
     }
 
     /// <summary>拒绝声明式模型中的重复与额外字段。</summary>

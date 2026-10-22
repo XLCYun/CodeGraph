@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 HERE = Path(__file__).resolve().parent.parent
-HELPER = Path(os.environ.get('CODEGRAPH_CLANG_HELPER', HERE / 'build/codegraph-clang-engine'))
+HELPER = Path(os.environ.get('CODEGRAPH_CLANG_HELPER', HERE / 'build/codegraph-clang-components'))
 LLVM = Path(os.environ.get('CODEGRAPH_LLVM_ROOT', '/tmp/codegraph-clang-engine-native/LLVM-21.1.8-macOS-ARM64'))
 PROTOCOL = 'codegraph.engine/1'
 CALLS = '''#if FAST
@@ -92,30 +92,14 @@ class NativeHelperTests(unittest.TestCase):
                 'limits': {'analysis_timeout_ms': 15000, 'max_result_bytes': 8 * 1024 * 1024,
                            'max_diagnostic_bytes': 256 * 1024}}
 
-    def launch(self):
-        """按 NDJSON 的 UTF-8 契约打开三条管道，并校验真实二进制的唯一 ready。"""
-        process = subprocess.Popen([str(HELPER)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='strict')
-        ready = json.loads(process.stdout.readline())
-        self.assertEqual(ready['helper_id'], 'codegraph-clang-engine')
-        self.assertEqual(ready['projection_revision'], 'clang-source-v1')
-        return process
-
     def run_request(self, request):
-        """等待 completed 与退出，stdin 在退出前保持开启以捕捉 EOF 死锁。"""
+        """同进程组件驱动保留内部来源断言，生产入口只接受公共 JSON。"""
         before = snapshot(self.root)
-        process = self.launch()
-        process.stdin.write(json.dumps(request) + '\n')
-        process.stdin.flush()
-        line = process.stdout.readline()
-        self.assertTrue(line, process.stderr.read())
-        result = json.loads(line)
-        self.assertEqual(process.wait(timeout=10), 0, process.stderr.read())
-        self.assertEqual(process.stdout.read(), '')
+        process = subprocess.run([str(HELPER)], input=json.dumps(request), capture_output=True,
+                                 text=True, encoding='utf-8', errors='strict', timeout=30)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        result = json.loads(process.stdout)
         self.assertEqual(snapshot(self.root), before)
-        process.stdin.close()
-        process.stdout.close()
-        process.stderr.close()
         return result
 
     def ok(self, request):
@@ -382,20 +366,8 @@ class NativeHelperTests(unittest.TestCase):
         self.assertTrue(any(n['name'] == '<anonymous>' for n in graph['nodes']))
         self.assertIn('// literal', next(n for n in graph['nodes'] if n['name'] == 'f')['code'])
 
-    def test_cancel_eof_and_result_limit(self):
-        """取消在原生分析外读取，终结自行退出，结果限额没有部分图。"""
-        request = self.prepare({'main.cpp': '\n'.join(f'int f{i}(){{return {i};}}' for i in range(20000))})
-        process = self.launch()
-        process.stdin.write(json.dumps(request) + '\n' + json.dumps({'protocol': PROTOCOL, 'type': 'cancel', 'id': 'test'}) + '\n')
-        process.stdin.flush()
-        result = json.loads(process.stdout.readline())
-        self.assertEqual(result['outcome'], 'cancelled', result)
-        self.assertEqual(process.wait(timeout=5), 0)
-        process.stdin.close(); process.stdout.close(); process.stderr.close()
-        process = self.launch()
-        process.stdin.write(json.dumps(request) + '\n'); process.stdin.flush(); process.stdin.close()
-        self.assertNotEqual(process.wait(timeout=5), 0)
-        process.stdout.close(); process.stderr.close()
+    def test_result_limit(self):
+        """结果超限保留原子错误，不输出部分图；EOF 和调用方终止由公共入口测试覆盖。"""
         request = self.prepare({'main.cpp': 'int f(){return 1;}'})
         request['limits']['max_result_bytes'] = 20
         result = self.run_request(request)
@@ -587,13 +559,6 @@ class NativeHelperTests(unittest.TestCase):
                 self.assertEqual(a['b']['id'], b['b']['id'])
                 self.assertNotEqual(a['a']['code'], b['a']['code'])
 
-    def test_duplicate_protocol_keys(self):
-        """协议拒绝重复键而不是悄悄覆盖。"""
-        process = self.launch()
-        process.stdin.write('{"protocol":"x","protocol":"y"}\n'); process.stdin.flush()
-        self.assertNotEqual(process.wait(timeout=5), 0)
-        self.assertEqual(process.stdout.read(), '')
-        process.stdin.close(); process.stdout.close(); process.stderr.close()
 
 
 if __name__ == '__main__':
