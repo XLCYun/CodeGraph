@@ -256,7 +256,7 @@ test('verification binds every retained semantic name to new public integration 
     const commands = verificationCommands(environment, platform);
     assert.deepEqual(commands.flatMap(command => command.requiredTests ?? []).sort(), inventory.filter(item => item.platforms.includes(platform)).map(item => item.name).sort());
     assert.ok(commands.some(command => command.args.includes('analyzers/go/tests')));
-    assert.ok(commands.some(command => command.args.includes('analyzers/common/Cargo.toml')));
+    assert.ok(commands.some(command => command.args.includes('analyzers/common/Cargo.toml') && command.args[1] === '+1.98.0'));
     assert.ok(commands.some(command => command.args.includes('analyzers/windows-process-probe/Cargo.toml')));
     assert.ok(commands.some(command => command.args.includes('--workspace')));
     assert.ok(commands.some(command => command.environment?.CODEGRAPH_CLANG_HELPER?.includes('codegraph-clang-components')));
@@ -277,6 +277,23 @@ test('verification binds every retained semantic name to new public integration 
   }
   assert.throws(() => verificationCommands({}, 'darwin', 'go'), /Missing fixed toolchain/);
   assert.throws(() => verificationCommands({}, 'darwin', 'typo'), /not enabled/);
+});
+
+/** 混合 Host 家族必须逐例指向可执行断言，不能把模块声明当作已搬迁测试。 */
+test('historical Host family maps facts and retired controls to actual assertions', async () => {
+  const migration = JSON.parse(await fs.readFile(new URL('../../resources/direct-test-migration.json', import.meta.url)));
+  assert.equal(migration.families.length, 42);
+  assert.equal(migration.families.flatMap(family => family.cases).length, 183);
+  const family = migration.families.find(family => family.path === 'src/native_analyzer/tests/mod.rs');
+  assert.equal(family.cases.length, 18);
+  for (const item of family.cases) {
+    assert.ok(item.rationale && item.commands.length && item.newTests.length, item.name);
+    assert.ok(!item.coverage.includes('analyzers/integration-tests/src/tests/mod.rs'));
+    const source = (await Promise.all(item.coverage.map(file => fs.readFile(new URL(`../../${file}`, import.meta.url), 'utf8')))).join('\n');
+    for (const name of item.newTests) assert.ok(source.includes(name), `${item.name}: ${name}`);
+  }
+  assert.equal(migration.additionalFamilies[0].path, 'tests/cli.rs');
+  assert.equal(migration.additionalFamilies[0].cases.length, 16);
 });
 
 /** 不随包组件由源码构建，公共测试必须指向真实包内 apphost/native 程序。 */

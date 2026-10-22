@@ -1647,139 +1647,340 @@
       "cases": [
         {
           "name": "clang_catalog_requires_exact_approved_additional_header_ids",
-          "disposition": "moved",
+          "disposition": "native-covered",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "analyzers/clang/tests/test_helper.py",
+            "analyzers/clang/tests/sdk_discovery.hpp"
+          ],
+          "commands": [
+            "clang",
+            "public"
+          ],
+          "newTests": [
+            "test_additional_system_header_catalog",
+            "sdkDiscoveryTests"
+          ],
+          "rationale": "Approved independent header roots and missing/duplicate IDs remain direct C++ component assertions. Public requests reject every private catalog field; no Host catalog validator or wire shape survives."
         },
         {
           "name": "graph_accepts_complete_coverage_reference_cycles_and_external_descriptors",
-          "disposition": "moved",
+          "disposition": "native-covered",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "analyzers/common/src/tests/historical_evidence.rs"
+          ],
+          "commands": [
+            "common"
+          ],
+          "newTests": [
+            "historical_complete_coverage_reference_cycles_and_external_descriptors"
+          ],
+          "rationale": "Same Unicode, empty-source coverage, internal cycle and external/unresolved descriptors pass the actual finish function in-process."
         },
         {
           "name": "helper_observes_host_stdin_eof_before_terminal",
-          "disposition": "moved",
+          "disposition": "retired-control-only",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "analyzers/common/src/tests/lifecycle.rs",
+            "scripts/tests/public-cli-transport.test.mjs"
+          ],
+          "commands": [
+            "rust",
+            "scripts",
+            "public"
+          ],
+          "newTests": [
+            "waits_for_eof_then_rejects_a_second_request",
+            "one-shot exchange closes stdin and accepts only matching actual stdio and exit"
+          ],
+          "rationale": "Old helper EOF-as-cancellation control is intentionally removed. Complete public JSON plus EOF is normal input completion; second JSON and caller termination while waiting input are tested directly."
         },
         {
           "name": "input_rejects_unsafe_paths_platforms_and_tool_roots",
-          "disposition": "moved",
+          "disposition": "native-covered",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "analyzers/common/src/tests/public_protocol.rs",
+            "analyzers/clang/tests/sdk_discovery.hpp",
+            "analyzers/csharp/tests/SdkDiscoveryTests.cs"
+          ],
+          "commands": [
+            "common",
+            "clang",
+            "csharp",
+            "public"
+          ],
+          "newTests": [
+            "repository_and_package_boundaries_apply_before_the_empty_fast_path",
+            "sdkDiscoveryTests"
+          ],
+          "rationale": "Public paths, duplicates, canonical boundaries and installation overlap remain checked before empty selection. SDK roots are discovered and approved by language components. Caller-provided platform/command/trusted-root fields have no public counterpart and are explicitly rejected as unknown input."
         },
         {
           "name": "protocol_rejects_duplicates_unknown_fields_types_and_missing_nullable",
-          "disposition": "moved",
+          "disposition": "native-covered",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "analyzers/common/src/tests/public_protocol.rs",
+            "analyzers/common/src/tests/initial.rs",
+            "scripts/tests/public-cli-transport.test.mjs"
+          ],
+          "commands": [
+            "common",
+            "rust",
+            "scripts",
+            "public"
+          ],
+          "newTests": [
+            "public_selection_and_recursive_duplicate_keys_are_strict",
+            "malformed_requests_and_private_envelopes_are_rejected"
+          ],
+          "rationale": "Public duplicate keys, unknown request fields/types and invalid final envelopes are rejected. Missing nullable fields in the deleted private result DTO and its duplicate extension-key parser are retired wire-shape checks: language components construct typed output, while public graph validation/serialization remains native. No private parser is retained."
         },
         {
           "name": "rejects_invalid_graphs_and_cross_evidence",
-          "disposition": "moved",
+          "disposition": "native-covered",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "analyzers/common/src/tests/historical_evidence.rs"
+          ],
+          "commands": [
+            "common"
+          ],
+          "newTests": [
+            "historical_invalid_graphs_and_cross_evidence_variants"
+          ],
+          "rationale": "All 19 original graph/source facts remain invalid: duplicate IDs/roots/configurations, missing local/external endpoints, self containment/orphans, unapproved platforms, excluded/missing coverage, outside/missing/duplicate origins, missing configuration/source, foreign language, unscoped extension, unused descriptor and external identity that is actually local. Tests invoke existing finish directly; no private JSON decoder is restored."
         },
         {
           "name": "rejects_outbound_symlinks_and_duplicate_aliases",
-          "disposition": "moved",
+          "disposition": "native-covered",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "analyzers/common/src/tests/public_protocol.rs",
+            "analyzers/go/tests/native_public.py"
+          ],
+          "commands": [
+            "common",
+            "go",
+            "csharp",
+            "clang",
+            "public"
+          ],
+          "newTests": [
+            "repository_and_package_boundaries_apply_before_the_empty_fast_path",
+            "test_source_boundary_and_missing_configuration"
+          ],
+          "rationale": "Actual public programs reject escaping links, duplicate physical aliases and installation/source overlap; native language link assertions remain unchanged."
         },
         {
           "name": "session_drop_and_panic_reap_all_children",
-          "disposition": "moved",
+          "disposition": "native-covered",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "analyzers/windows-process-probe/src/child_process/tests/process_tree.rs",
+            "analyzers/integration-tests/src/tests/python_graph.rs"
+          ],
+          "commands": [
+            "process",
+            "integration"
+          ],
+          "newTests": [
+            "drop_reclaims_parent_and_descendant_matrix",
+            "python_helper_timeout_and_caller_panic_reap_actual_process"
+          ],
+          "rationale": "The original direct-child/descendant Drop matrix is retained and the public caller timeout/panic test runs the actual Python entry; ProcessTree owns cleanup, not an analyzer Session."
         },
         {
           "name": "subprocess_bounds_blocked_stdin_writer",
-          "disposition": "moved",
+          "disposition": "native-covered",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "scripts/tests/public-cli-transport.test.mjs"
+          ],
+          "commands": [
+            "scripts"
+          ],
+          "newTests": [
+            "one-shot exchange bounds a child that never reads stdin"
+          ],
+          "rationale": "New caller sends a real 8 MiB pipe write to a child that never reads stdin; its deadline must terminate/reap the process and release the pending write. No private helper/request loop remains."
         },
         {
           "name": "subprocess_bounds_resources_and_all_timeout_stages",
-          "disposition": "moved",
+          "disposition": "native-covered",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "scripts/tests/native-language-support-packs.test.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs"
+          ],
+          "commands": [
+            "scripts",
+            "rust",
+            "public"
+          ],
+          "newTests": [
+            "smoke waits for killed child close before rejecting and removing cwd",
+            "one-shot exchange bounds a child that never reads stdin",
+            "caller_can_terminate_a_blocked_final_output"
+          ],
+          "rationale": "Real one-shot timeout/close barriers and blocked input/output caller termination replace helper startup/analyze/exit phases. Private per-helper max_result/startup stage controls retire; public analyzers retain their own output/input budgets and callers own transport limits."
         },
         {
           "name": "subprocess_cancel_preserves_observed_backend_and_protocol_failures",
-          "disposition": "moved",
+          "disposition": "retired-control-only",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/language-packs/verify-public-cli.mjs"
+          ],
+          "commands": [
+            "scripts",
+            "public"
+          ],
+          "newTests": [
+            "public decoder rejects missing malformed duplicate lifecycle and nonzero success results"
+          ],
+          "rationale": "Cancellation-message races and cancelled replies have no new wire representation. Actual caller tree termination produces no success JSON; backend public errors and invalid final envelopes remain separately asserted."
         },
         {
           "name": "subprocess_cooperative_and_forced_cancellation",
-          "disposition": "moved",
+          "disposition": "retired-control-only",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "scripts/language-packs/verify-public-cli.mjs",
+            "analyzers/windows-process-probe/src/child_process/tests/process_tree.rs"
+          ],
+          "commands": [
+            "public",
+            "process"
+          ],
+          "newTests": [
+            "finish_reclaims_parent_and_descendant_matrix",
+            "reap_reclaims_parent_and_descendant_matrix"
+          ],
+          "rationale": "Cancel/cancelled message handshake is removed. Each actual package reaches a real load milestone, then its caller kills and verifies the owned tree; ProcessTree tests retain direct-child and inherited-pipe/parent-exit cleanup matrices."
         },
         {
           "name": "subprocess_handles_unicode_fragments_and_drains_stderr",
-          "disposition": "moved",
+          "disposition": "native-covered",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "scripts/tests/public-cli-transport.test.mjs"
+          ],
+          "commands": [
+            "scripts",
+            "public"
+          ],
+          "newTests": [
+            "one-shot exchange preserves fragmented UTF-8 and drains a full stderr pipe"
+          ],
+          "rationale": "Real one-shot child sends Unicode final bytes in one-byte fragments after a 1 MiB stderr write. Caller drains both actual pipes. Private scratch_root and private input serialization assertions retire with the removed Session."
         },
         {
           "name": "subprocess_initializes_crypto_with_explicit_minimal_runtime_environment",
-          "disposition": "moved",
+          "disposition": "native-covered",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "scripts/tests/public-cli-transport.test.mjs",
+            "launchers/src/tests/startup.rs",
+            "scripts/tests/native-language-support-packs.test.mjs"
+          ],
+          "commands": [
+            "scripts",
+            "public"
+          ],
+          "newTests": [
+            "one-shot exchange preserves fragmented UTF-8 and drains a full stderr pipe",
+            "runtime_environment_is_bounded"
+          ],
+          "rationale": "Actual Node child initializes crypto, launchers retain runtime-injection/environment bounds, and each real packaged entry starts in minimal empty-smoke environment. Deleted private scratch_root/explicit-marker transport fields are retired."
         },
         {
           "name": "subprocess_preserves_backend_failure_over_exit_failure",
-          "disposition": "moved",
+          "disposition": "retired-control-only",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/language-packs/verify-public-cli.mjs"
+          ],
+          "commands": [
+            "scripts",
+            "public"
+          ],
+          "newTests": [
+            "public decoder rejects missing malformed duplicate lifecycle and nonzero success results"
+          ],
+          "rationale": "Priority between a private helper failure and a later Host helper-exit stage retires with that Session. A one-shot public failure must have its error, matching final identity and required nonzero exit; missing/invalid output and stderr remain observable. Native handled errors remain language public tests."
         },
         {
           "name": "subprocess_preserves_early_eof_diagnostics",
-          "disposition": "moved",
+          "disposition": "native-covered",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "scripts/tests/public-cli-transport.test.mjs"
+          ],
+          "commands": [
+            "scripts"
+          ],
+          "newTests": [
+            "one-shot exchange retains delayed stderr after stdout EOF"
+          ],
+          "rationale": "Real child closes stdout before a delayed unique stderr diagnostic and nonzero exit; caller waits close, rejects missing result and retains that actual diagnostic."
         },
         {
           "name": "subprocess_reaps_descendants_after_parent_exit",
-          "disposition": "moved",
+          "disposition": "moved-test-utility",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "analyzers/windows-process-probe/src/child_process/tests/process_tree.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "process"
+          ],
+          "newTests": [
+            "finish_reclaims_parent_and_descendant_matrix",
+            "reap_reclaims_parent_and_descendant_matrix",
+            "drop_reclaims_parent_and_descendant_matrix"
+          ],
+          "rationale": "Original actual-process tests move byte-for-byte and retain parent exit plus inherited/closed pipe matrices; Windows handle/Job execution remains automatic Windows CI."
         },
         {
           "name": "subprocess_rejects_invalid_protocol_lifecycle",
-          "disposition": "moved",
+          "disposition": "native-covered",
           "coverage": [
-            "analyzers/integration-tests/src/tests/mod.rs"
-          ]
+            "scripts/tests/public-cli-transport.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs"
+          ],
+          "commands": [
+            "scripts",
+            "rust",
+            "public"
+          ],
+          "newTests": [
+            "public decoder rejects missing malformed duplicate lifecycle and nonzero success results",
+            "waits_for_eof_then_rejects_a_second_request"
+          ],
+          "rationale": "One final JSON with matching compiled identity/id and exit is required; missing/truncated/duplicate/old-ready/nonzero success are rejected. Old ready sequencing and unrequested cancelled state have no production wire counterpart."
         }
       ],
-      "disposition": "moved",
+      "disposition": "native-covered",
       "destinations": [
-        "analyzers/integration-tests/src/tests/mod.rs"
+        "analyzers/clang/tests/sdk_discovery.hpp",
+        "analyzers/clang/tests/test_helper.py",
+        "analyzers/common/src/tests/historical_evidence.rs",
+        "analyzers/common/src/tests/initial.rs",
+        "analyzers/common/src/tests/lifecycle.rs",
+        "analyzers/common/src/tests/public_protocol.rs",
+        "analyzers/csharp/tests/SdkDiscoveryTests.cs",
+        "analyzers/go/tests/native_public.py",
+        "analyzers/integration-tests/src/tests/python_graph.rs",
+        "analyzers/windows-process-probe/src/child_process/tests/process_tree.rs",
+        "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs",
+        "launchers/src/tests/startup.rs",
+        "scripts/language-packs/verify-public-cli.mjs",
+        "scripts/tests/native-language-support-packs.test.mjs",
+        "scripts/tests/public-cli-transport.test.mjs"
       ],
       "commands": [
+        "common",
+        "scripts",
+        "clang",
+        "csharp",
+        "go",
+        "rust",
+        "public",
+        "process",
         "integration"
       ],
-      "rationale": "Original semantic assertions use the real direct public entry and read-only result view. Construction evidence is not emulated.",
+      "rationale": "Mixed old Host family: source/graph facts invoke native components; actual public stdio and caller tree tests replace transport ownership. Each removed private control or DTO-shape assertion has its own explicit retirement reason below; no test is claimed to live in a module-declaration file.",
       "namedCaseCount": 18
     },
     {
@@ -2595,6 +2796,303 @@
       ],
       "rationale": "Entries derive real installation/resources themselves; missing/outbound-link resources and source-install overlap are checked natively. Actual extracted packages run from unrelated cwd; no old root pack locator remains.",
       "namedCaseCount": 2
+    }
+  ],
+  "additionalFamilies": [
+    {
+      "path": "tests/cli.rs",
+      "namedCaseCount": 16,
+      "note": "Additional root CLI suite outside the supplied 42-file/183-name inventory; kept separate to preserve that baseline accounting.",
+      "cases": [
+        {
+          "name": "real_factory_host_graph_and_eof",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Actual all-seven package public acceptance covers fixed identity, discovery/selection, empty/no-SDK, invalid protocol, read-only graph and exit. Native lifecycle tests retain real input/output backpressure; scripts reject malformed transport and old selectors."
+        },
+        {
+          "name": "empty_selection_does_not_start_helper",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Actual all-seven package public acceptance covers fixed identity, discovery/selection, empty/no-SDK, invalid protocol, read-only graph and exit. Native lifecycle tests retain real input/output backpressure; scripts reject malformed transport and old selectors."
+        },
+        {
+          "name": "omitted_selection_reaches_engine_and_null_is_invalid",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Actual all-seven package public acceptance covers fixed identity, discovery/selection, empty/no-SDK, invalid protocol, read-only graph and exit. Native lifecycle tests retain real input/output backpressure; scripts reject malformed transport and old selectors."
+        },
+        {
+          "name": "invalid_protocol_and_pack_inputs_fail",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Actual all-seven package public acceptance covers fixed identity, discovery/selection, empty/no-SDK, invalid protocol, read-only graph and exit. Native lifecycle tests retain real input/output backpressure; scripts reject malformed transport and old selectors."
+        },
+        {
+          "name": "helper_mismatch_and_invalid_graph_fail",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Old helper and private package descriptor gates are removed from the analyzer. Caller archive/descriptor/hash/path/package policy is strict before launch; actual final compiled identities and graph invariants remain independently checked."
+        },
+        {
+          "name": "cancellation_reaps_nested_helpers",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Old worker/Host/cancel/open-stdin control architecture is removed. Normal public completion requires EOF; actual load cancellation belongs to caller tree ownership and Windows pre-resume Job tests. Compiled fixed identity is asserted on every real extracted entry."
+        },
+        {
+          "name": "parent_kill_reaps_worker_helper_and_detached_descendant",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Old worker/Host/cancel/open-stdin control architecture is removed. Normal public completion requires EOF; actual load cancellation belongs to caller tree ownership and Windows pre-resume Job tests. Compiled fixed identity is asserted on every real extracted entry."
+        },
+        {
+          "name": "blocked_stdout_has_bounded_exit",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Actual all-seven package public acceptance covers fixed identity, discovery/selection, empty/no-SDK, invalid protocol, read-only graph and exit. Native lifecycle tests retain real input/output backpressure; scripts reject malformed transport and old selectors."
+        },
+        {
+          "name": "open_consumer_stdin_does_not_hold_completed_process",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Old worker/Host/cancel/open-stdin control architecture is removed. Normal public completion requires EOF; actual load cancellation belongs to caller tree ownership and Windows pre-resume Job tests. Compiled fixed identity is asserted on every real extracted entry."
+        },
+        {
+          "name": "oversized_request_fails_before_helper_start",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Actual all-seven package public acceptance covers fixed identity, discovery/selection, empty/no-SDK, invalid protocol, read-only graph and exit. Native lifecycle tests retain real input/output backpressure; scripts reject malformed transport and old selectors."
+        },
+        {
+          "name": "cancellation_bounds_blocked_factory",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Old worker/Host/cancel/open-stdin control architecture is removed. Normal public completion requires EOF; actual load cancellation belongs to caller tree ownership and Windows pre-resume Job tests. Compiled fixed identity is asserted on every real extracted entry."
+        },
+        {
+          "name": "windows_parent_kill_reaps_nested_jobs",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Old worker/Host/cancel/open-stdin control architecture is removed. Normal public completion requires EOF; actual load cancellation belongs to caller tree ownership and Windows pre-resume Job tests. Compiled fixed identity is asserted on every real extracted entry."
+        },
+        {
+          "name": "compiled_entries_have_fixed_identities_and_empty_graphs",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Actual all-seven package public acceptance covers fixed identity, discovery/selection, empty/no-SDK, invalid protocol, read-only graph and exit. Native lifecycle tests retain real input/output backpressure; scripts reject malformed transport and old selectors."
+        },
+        {
+          "name": "public_entry_rejects_language_and_package_selectors",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Actual all-seven package public acceptance covers fixed identity, discovery/selection, empty/no-SDK, invalid protocol, read-only graph and exit. Native lifecycle tests retain real input/output backpressure; scripts reject malformed transport and old selectors."
+        },
+        {
+          "name": "wrong_package_is_rejected_before_empty_selection",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Old helper and private package descriptor gates are removed from the analyzer. Caller archive/descriptor/hash/path/package policy is strict before launch; actual final compiled identities and graph invariants remain independently checked."
+        },
+        {
+          "name": "private_worker_keeps_compiled_identity",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Old worker/Host/cancel/open-stdin control architecture is removed. Normal public completion requires EOF; actual load cancellation belongs to caller tree ownership and Windows pre-resume Job tests. Compiled fixed identity is asserted on every real extracted entry."
+        }
+      ]
     }
   ]
 }

@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { repository, targets } from './distribution.mjs';
 import { systemTar } from './system-tar.mjs';
 import { safeFilePath } from './verify-distribution.mjs';
@@ -43,6 +44,11 @@ export async function prepareRuntimePack(target, temporary, environment = proces
   return { entry, source, notices, archive };
 }
 
+/** 自包含输出只说明随包的固定框架；SDK 省略无须参与解析的 rollForward 是合法形状。 */
+export function validatePublishedRuntimeConfig(config) {
+  if (config?.tfm !== 'net10.0' || !isDeepStrictEqual(config.includedFrameworks, [{ name: 'Microsoft.NETCore.App', version: '10.0.0' }]) || Object.hasOwn(config, 'framework') || Object.hasOwn(config, 'frameworks') || config.rollForward !== undefined && config.rollForward !== 'Disable') throw new Error('C# publish is not the fixed self-contained runtime');
+}
+
 /** 将完整发布的 CLR/BCL 与已核验 nupkg 逐字比较，缓存或全局运行时不能替换分发字节。 */
 export async function verifyPublishedRuntime(publish, runtime, temporary) {
   const reference = path.join(temporary, 'runtime-byte-reference');
@@ -59,6 +65,6 @@ export async function verifyPublishedRuntime(publish, runtime, temporary) {
     checked++;
   }
   const config = JSON.parse(await fs.readFile(path.join(publish, 'codegraph-csharp.runtimeconfig.json'), 'utf8')).runtimeOptions;
-  if (JSON.stringify(config.includedFrameworks) !== JSON.stringify([{ name: 'Microsoft.NETCore.App', version: '10.0.0' }]) || config.rollForward !== 'Disable') throw new Error('C# publish is not the fixed self-contained runtime');
+  validatePublishedRuntimeConfig(config);
   console.log(`Verified complete fixed CLR/BCL bytes: ${checked}`);
 }

@@ -232,3 +232,7 @@ mod tests;
 #[cfg(test)]
 #[path = "tests/historical_graph.rs"]
 mod historical_tests;
+
+#[cfg(test)]
+#[path = "tests/historical_evidence.rs"]
+mod historical_evidence_tests;

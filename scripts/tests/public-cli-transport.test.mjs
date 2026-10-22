@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { decodePublicResult, exchangeCli } from '../language-packs/public-cli-session.mjs';
 
 const identity = { protocol: 'codegraph.analyzer/1', engineVersion: '0.1.0' };
@@ -22,4 +25,30 @@ test('one-shot exchange closes stdin and accepts only matching actual stdio and 
   const code = `const chunks=[];process.stdin.on('data',c=>chunks.push(c));process.stdin.on('end',()=>{const input=JSON.parse(Buffer.concat(chunks));if(Buffer.concat(chunks).at(-1)===10)process.exit(9);process.stderr.write('bounded diagnostic');console.log(JSON.stringify({...${JSON.stringify(result)},id:input.id}));});`;
   assert.deepEqual(await exchangeCli(process.execPath, 'go', request, identity, undefined, { args: ['-e', code] }), graph);
   for (const body of ['process.stdin.resume();process.stdin.on("end",()=>process.exit(0))', `process.stdin.resume();process.stdin.on('end',()=>{console.log(JSON.stringify(${JSON.stringify(result)}));process.exit(7);})`, 'process.stdin.resume();process.stdin.on("end",()=>console.log("{truncated"))']) await assert.rejects(exchangeCli(process.execPath, 'go', request, identity, undefined, { args: ['-e', body] }));
+});
+
+/** 排空完整 stderr 管道并按原字节拼接被拆开的 Unicode，运行时随机源也须可用。 */
+test('one-shot exchange preserves fragmented UTF-8 and drains a full stderr pipe', async () => {
+  const input = { ...request, id: '片段-é-😀' };
+  const code = `require('node:crypto').randomBytes(16);process.stdin.resume();process.stdin.on('end',()=>{process.stderr.write(Buffer.alloc(1024*1024,120),()=>{const bytes=Buffer.from(JSON.stringify({...${JSON.stringify(result)},id:${JSON.stringify(input.id)}})+'\\n');for(const byte of bytes)process.stdout.write(Buffer.from([byte]));});});`;
+  assert.deepEqual(await exchangeCli(process.execPath, 'go', input, identity, undefined, { args: ['-e', code] }), graph);
+});
+
+/** stdout 结束不能提前丢弃随后到达的真实启动诊断。 */
+test('one-shot exchange retains delayed stderr after stdout EOF', async () => {
+  const code = 'process.stdin.resume();process.stdout.end();setTimeout(()=>{process.stderr.write("late-startup-diagnostic-é");process.exit(9)},30);';
+  await assert.rejects(exchangeCli(process.execPath, 'go', request, identity, undefined, { args: ['-e', code] }), /late-startup-diagnostic-é/);
+});
+
+/** 子进程完全不读 stdin 时，调用方仍须终止实际进程并释放未完成的大写入。 */
+test('one-shot exchange bounds a child that never reads stdin', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codegraph-blocked-input-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const marker = path.join(root, 'pid');
+  const code = `require('node:fs').writeFileSync(${JSON.stringify(marker)},String(process.pid));setInterval(()=>{},1000)`;
+  const started = Date.now();
+  await assert.rejects(exchangeCli(process.execPath, 'go', request, identity, undefined, { args: ['-e', code], rawInput: Buffer.alloc(8 * 1024 * 1024, 32), timeoutMs: 300 }), /timed out/);
+  assert.ok(Date.now() - started < 5000);
+  const pid = Number(await fs.readFile(marker, 'utf8'));
+  assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
 });

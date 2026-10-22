@@ -32,7 +32,7 @@ export function verificationCommands(environment, platform = process.platform, l
     ...(ids.includes('python') ? [{ executable: 'bash', args: ['scripts/cargo-agent.sh', '+1.98.0', 'test', '--manifest-path', 'analyzers/python/Cargo.toml', '--locked', '--lib', '--test', 'initial_protocol', '--test', 'lifecycle', '--', '--test-threads=1'] }] : []),
     // 每个旧语义断言绑定到实际可运行的新公共入口测试；未成功逐名输出即失败。
     ...ids.map(id => ({ executable: 'bash', args: [...cargo, '--manifest-path', 'analyzers/integration-tests/Cargo.toml', '--lib', '--', '--ignored', '--test-threads=1'], requiredTests: semanticTests.filter(test => test.language === id && test.platforms.includes(platform)).map(test => test.name), environment: { CODEGRAPH_INTEGRATION_LANGUAGE: id } })),
-    { executable: 'bash', args: [...cargo, '--manifest-path', 'analyzers/common/Cargo.toml', '--lib'] },
+    { executable: 'bash', args: ['scripts/cargo-agent.sh', '+1.98.0', 'test', '--locked', '--manifest-path', 'analyzers/common/Cargo.toml', '--lib'] },
     { executable: 'bash', args: [...cargo, '--workspace', '--', '--test-threads=1'] },
     { executable: 'bash', args: [...cargo, '--manifest-path', 'analyzers/windows-process-probe/Cargo.toml', '--lib', 'child_process::', '--', '--test-threads=1'] },
     { executable: node, args: ['scripts/language-packs/verify-public-cli.mjs', environment.CODEGRAPH_NATIVE_PACKS ?? 'artifacts', language] },

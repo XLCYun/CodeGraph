@@ -182,7 +182,7 @@ export async function buildNativePack({ id, target, output, definition, packageD
       if (execFileSync(tool, ['--version'], { encoding: 'utf8', env, cwd: path.join(repository, 'analyzers/csharp') }).trim() !== definition.dotnetSdk) throw new Error('.NET SDK version mismatch');
       const runtime = await prepareRuntimePack(target, temporary, env);
       const publish = path.join(temporary, 'publish');
-      execFileSync(tool, ['publish', path.join(repository, 'analyzers/csharp/CodeGraph.CSharp.Engine.csproj'), '-c', 'Release', '-r', runtime.entry.rid, '--self-contained', 'true', '-p:RuntimeFrameworkVersion=10.0.0', '-p:TargetLatestRuntimePatch=false', '--source', runtime.source, '-o', publish, '--nologo'], { stdio: 'inherit', env });
+      execFileSync(tool, ['publish', path.join(repository, 'analyzers/csharp/CodeGraph.CSharp.Engine.csproj'), '-c', 'Release', '-r', runtime.entry.rid, '--self-contained', 'true', '-p:RuntimeFrameworkVersion=10.0.0', '-p:TargetLatestRuntimePatch=false', '-p:DisableTransitiveFrameworkReferenceDownloads=true', '--source', runtime.source, '-o', publish, '--nologo'], { stdio: 'inherit', env });
       await verifyPublishedRuntime(publish, runtime, temporary);
       await copyToolTree(publish, path.join(payload, 'bin'));
       for (const name of ['LICENSE.txt', 'ThirdPartyNotices.txt']) await fs.copyFile(path.join(sdk, name), path.join(payload, 'licenses', name));
