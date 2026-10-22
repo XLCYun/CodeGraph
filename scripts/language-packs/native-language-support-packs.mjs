@@ -2,6 +2,7 @@ import { migratedNativePacks } from './native-migration.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { stageAnalyzer } from './build-analyzer.mjs';
 import { nativeTarget, repository, releaseIdentity } from './distribution.mjs';
@@ -86,7 +87,7 @@ export async function smokeAnalyzer({ executable, args = ['analyze'], id, enviro
   let primaryError;
   try {
     const graph = await exchangeCli(executable, id, { protocol: 'codegraph.analyzer/1', type: 'analyze', id: 'pack-smoke', repository_root: root, files: [], options: { include_tests: false, rust_dependency_scope: 'repository-only' } }, await releaseIdentity(), undefined, { args, timeoutMs, cwd: root, environment: { ...(process.platform === 'win32' ? { SystemRoot: process.env.SystemRoot } : {}), TMPDIR: root, TMP: root, TEMP: root, ...environment } });
-    if (JSON.stringify(graph) !== JSON.stringify({ root_contains: [], nodes: [], external_symbols: [] })) throw new Error('Empty public graph mismatch');
+    assert.deepEqual(graph, { root_contains: [], nodes: [], external_symbols: [] }, 'Empty public graph mismatch');
   } catch (error) { primaryError = error; }
   try { await fs.rm(root, { recursive: true, force: true }); }
   catch (error) { if (primaryError) primaryError.message += `; scratch cleanup failed: ${error.message}`; else primaryError = error; }

@@ -79,6 +79,13 @@ test('direct smoke rejects mismatched final identity and old ready transport', a
   }
 });
 
+/** JSON 对象字段顺序不影响空图语义，任何多余节点仍须明确拒绝。 */
+test('direct smoke accepts reordered empty fields and rejects nonempty graphs', async () => {
+  const smoke = graph => smokeAnalyzer({ executable: process.execPath, args: ['-e', `process.stdin.resume();process.stdin.on('end',()=>console.log(JSON.stringify({protocol:'codegraph.analyzer/1',engine_version:'0.1.0',pack_id:'go',type:'completed',id:'pack-smoke',outcome:'ok',graph:${graph}})))`], id: 'go' });
+  await smoke('{external_symbols:[],nodes:[],root_contains:[]}');
+  await assert.rejects(smoke('{external_symbols:[],nodes:[{}],root_contains:[]}'), /Empty public graph mismatch/);
+});
+
 /** 真实 EOF 后仍不退出的入口须被调用方终止，close 后才能删除其 cwd。 */
 test('smoke waits for killed child close before rejecting and removing cwd', async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'codegraph-smoke-close-'));
