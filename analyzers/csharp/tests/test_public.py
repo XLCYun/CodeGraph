@@ -13,3 +13,12 @@ class PublicTests(native_public.NativePublicTests):
     PACK = 'csharp'
     ANALYZER = Path(os.environ.get('CODEGRAPH_CSHARP_ANALYZER', str(ANALYZERS / ('csharp/publish/win-x64/codegraph-csharp.exe' if os.name == 'nt' else 'csharp/publish/osx-arm64/codegraph-csharp'))))
     SDK = Path(os.environ.get('CODEGRAPH_TEST_TARGET_SDK', os.environ.get('CODEGRAPH_DOTNET_SDK', str(Path(os.environ.get('CODEGRAPH_TEST_DOTNET', str(ANALYZERS.parent / '.tools/csharp-factory-target/dotnet'))).parent))))
+
+    def test_filesystem_root_source_installation_overlap(self):
+        """实际安装卷根包含程序，即使显式空选集也必须拒绝；Windows CI 使用真实卷根。"""
+        request = self.request()
+        request['repository_root'] = self.ANALYZER.resolve().anchor
+        result = self.run_public(request)
+        self.assertEqual(result['outcome'], 'error', result)
+        self.assertEqual(result['error']['code'], 'invalid_input', result)
+        self.assertEqual(result['id'], request['id'])

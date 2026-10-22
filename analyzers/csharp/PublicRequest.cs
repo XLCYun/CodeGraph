@@ -126,6 +126,8 @@ internal static class PublicRequest
     internal static bool Under(string candidate, string root)
     {
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        return candidate.Equals(root, comparison) || candidate.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar, comparison);
+        var prefix = Path.TrimEndingDirectorySeparator(root);
+        if (!Path.EndsInDirectorySeparator(prefix)) prefix += Path.DirectorySeparatorChar;
+        return candidate.Equals(root, comparison) || candidate.StartsWith(prefix, comparison);
     }
 }
