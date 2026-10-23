@@ -19,10 +19,11 @@ type analysisPlan struct {
 
 // analysisConfiguration 绑定独立项目的源码索引、唯一 SDK 和实际选中的包及文件。
 type analysisConfiguration struct {
-	Sources  *sourceAdmission
-	SDK      platform
-	Packages []string
-	Selected map[string]bool
+	Sources     *sourceAdmission
+	SourcePaths []string
+	SDK         platform
+	Packages    []string
+	Selected    map[string]bool
 }
 
 // prepareAnalysis 先完成各项目的导入闭包登记，再冻结配置来源和文件角色。
@@ -61,8 +62,8 @@ func prepareAnalysis(ctx context.Context, req request) (*analysisPlan, *analysis
 			if len(groups) > 1 {
 				id = fmt.Sprintf("go-%d-%s", index+1, config.SDK.ID)
 			}
-			// 替换模块已在完整导入闭包中登记，证据不依赖后续 importer 的调用顺序。
-			plan.Evidence = append(plan.Evidence, configurationEvidence{ID: id, SourcePaths: config.Sources.sourcePaths(), PlatformIDs: []string{config.SDK.ID}})
+			// 每个配置的来源按原有加载顺序取快照，提取阶段不再改变它。
+			plan.Evidence = append(plan.Evidence, configurationEvidence{ID: id, SourcePaths: config.SourcePaths, PlatformIDs: []string{config.SDK.ID}})
 			for _, rel := range group.Files {
 				owned[rel] = append(owned[rel], id)
 				if config.Selected[rel] {
@@ -114,8 +115,13 @@ func prepareProjectSelection(group projectSelection, includeTests bool, catalog 
 	}
 	configs := []analysisConfiguration{}
 	for _, sdk := range sdks {
-		config := analysisConfiguration{Sources: sources, SDK: sdk, Selected: map[string]bool{}}
+		// 保留旧证据时序：本轮 SDK 间接上下文只为后续配置增加来源，不改变目标发现。
+		sourcePaths := sources.sourcePaths()
+		config := analysisConfiguration{Sources: sources, SourcePaths: sourcePaths, SDK: sdk, Selected: map[string]bool{}}
 		if problem := config.selectPackages(group.Files, includeTests); problem != nil {
+			return nil, problem
+		}
+		if problem := sources.admitSemanticImports(sdk, config.Packages, includeTests); problem != nil {
 			return nil, problem
 		}
 		configs = append(configs, config)

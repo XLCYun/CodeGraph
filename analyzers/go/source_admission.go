@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"go/build"
 	"go/parser"
 	"go/token"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -155,7 +157,7 @@ func (s *sourceAdmission) contextFiles(selected []string, includeTests bool, sdk
 	return files, nil
 }
 
-// sourcePaths 在导入闭包登记完成后冻结实际影响配置的来源。
+// sourcePaths 在每轮语义准入前取快照，保留旧配置来源随加载顺序增长的证据。
 func (s *sourceAdmission) sourcePaths() []string {
 	p := s.Project
 	paths := []string{}
@@ -170,4 +172,134 @@ func (s *sourceAdmission) sourcePaths() []string {
 	}
 	sort.Strings(paths)
 	return paths
+}
+
+// admitSemanticImports 按实际目标遍历 SDK 与仓内混合导入，补齐配置发现之外的包语言索引。
+func (s *sourceAdmission) admitSemanticImports(sdk platform, packages []string, includeTests bool) *analysisError {
+	p := s.Project
+	target := standardTarget(sdk)
+	selected := map[string]bool{}
+	for _, name := range packages {
+		selected[name] = true
+	}
+	queue := append([]string{}, packages...)
+	visited := map[string]bool{}
+packageLoop:
+	for len(queue) > 0 {
+		if problem := p.checkpoint(); problem != nil {
+			return problem
+		}
+		name := queue[0]
+		queue = queue[1:]
+		if visited[name] || name == "unsafe" && !selected[name] || name == "C" || path.Clean(name) != name || strings.HasPrefix(name, "/") || strings.Contains(name, "\\") {
+			continue
+		}
+		visited[name] = true
+		dir, local, err := p.importDirectory(name)
+		if err != nil {
+			return fail("unsupported_configuration", err.Error())
+		}
+		allowed := p.Root
+		if !local {
+			first := strings.Split(name, "/")[0]
+			if strings.Contains(first, ".") || first == "cmd" {
+				continue
+			}
+			allowed = filepath.Join(sdk.Root, "src")
+			dir = filepath.Join(allowed, filepath.FromSlash(name))
+		}
+		if err := within(allowed, dir); err != nil {
+			if local {
+				return fail("object_extraction_failed", err.Error())
+			}
+			continue
+		}
+		tests := includeTests && selected[name]
+		if local && s.Packages[dir] == nil {
+			if problem := s.validateSemanticSources(dir, tests); problem != nil {
+				return problem
+			}
+		}
+		meta, err := target.ImportDir(dir, build.IgnoreVendor)
+		if err != nil {
+			if local {
+				return fail("object_extraction_failed", fmt.Sprintf("package %s: %v", name, err))
+			}
+			continue
+		}
+		files := append([]string{}, meta.GoFiles...)
+		if tests {
+			files = append(files, meta.TestGoFiles...)
+		}
+		sort.Strings(files)
+		imports := []string{}
+		for _, filename := range files {
+			if problem := p.checkpoint(); problem != nil {
+				return problem
+			}
+			filename = filepath.Join(dir, filename)
+			data, err := safeFile(allowed, filename)
+			if err != nil {
+				if local {
+					return fail("object_extraction_failed", err.Error())
+				}
+				continue packageLoop
+			}
+			parsed, err := parser.ParseFile(token.NewFileSet(), filename, data, parser.SkipObjectResolution)
+			if err != nil {
+				if local {
+					return fail("object_extraction_failed", err.Error())
+				}
+				continue packageLoop
+			}
+			for _, imported := range parsed.Imports {
+				value, _ := strconv.Unquote(imported.Path.Value)
+				imports = append(imports, value)
+			}
+		}
+		if local {
+			m, err := s.registerPackage(dir)
+			if err != nil {
+				return fail("unsupported_configuration", err.Error())
+			}
+			if problem := m.validateSDKVersion(sdk); problem != nil {
+				return problem
+			}
+		}
+		queue = append(queue, imports...)
+	}
+	return nil
+}
+
+// validateSemanticSources 保留原 importer 对全部仓内候选源码的路径和标签检查，不扩展配置目标。
+func (s *sourceAdmission) validateSemanticSources(dir string, includeTests bool) *analysisError {
+	p := s.Project
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fail("object_extraction_failed", err.Error())
+	}
+	files := []string{}
+	for _, entry := range entries {
+		if problem := p.checkpoint(); problem != nil {
+			return problem
+		}
+		if entry.IsDir() || !goSourceName(entry.Name()) || !includeTests && strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		filename := filepath.Join(dir, entry.Name())
+		if _, err := safeFile(p.Root, filename); err != nil {
+			return fail("object_extraction_failed", err.Error())
+		}
+		rel, _ := filepath.Rel(p.Root, filename)
+		files = append(files, filepath.ToSlash(rel))
+	}
+	for _, rel := range files {
+		if problem := p.checkpoint(); problem != nil {
+			return problem
+		}
+		if _, problem := hasTargetConstraint(p.Root, rel); problem != nil {
+			return problem
+		}
+	}
+	return nil
 }
