@@ -1,5 +1,6 @@
 """用真实 JDT 验证配置驱动的目录发现与精确显式选集。"""
 
+import json
 import os
 import pathlib
 import sys
@@ -94,6 +95,45 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(run(discover(self.root, platforms=[]))["error"]["code"], "target_unavailable")
         write(self.root, "pom.xml", "<invalid")
         self.assertEqual(run(discover(self.root))["error"]["code"], "unsupported_configuration")
+
+    def test_overlapping_roles_keep_active_selection_and_excluded_evidence(self):
+        """重叠根保持生产归属，跨配置测试选集保留原配置证据与仓内上下文。"""
+        main = "shared/p/Main.java"
+        helper = "shared/p/Helper.java"
+        excluded = "tests/p/Only.java"
+        write(self.root, main, "package p; class Main { void run(){ Helper.ping(); } }")
+        write(self.root, helper, "package p; class Helper { static void ping(){} }")
+        write(self.root, excluded, "package p; class Only {}")
+        configs = [
+            {"id": "production", "release": "17", "source_roots": [
+                {"path": "shared", "role": "main"}, {"path": "shared/p", "role": "test"},
+                {"path": "tests", "role": "test"}]},
+            {"id": "testing", "release": "17", "source_roots": [
+                {"path": "shared", "role": "test"}, {"path": "tests", "role": "test"}]},
+        ]
+        write(self.root, "narrant-java.json", json.dumps({"schema": "java-static-v1", "configurations": configs}))
+        before = snapshot_files(self.root)
+        for include_tests in (False, True):
+            with self.subTest(include_tests=include_tests):
+                result = run(request(self.root, [main, excluded], include_tests=include_tests))
+                self.assertEqual(result["outcome"], "ok", result)
+                evidence = {item["path"]: item for item in result["evidence"]["files"]}
+                all_ids = ["java-config:metadata:production", "java-config:metadata:testing"]
+                self.assertEqual(evidence[main]["configuration_ids"], all_ids if include_tests else all_ids[:1])
+                self.assertEqual(evidence[main]["disposition"], "analyzed")
+                self.assertEqual(evidence[excluded]["configuration_ids"], all_ids)
+                self.assertEqual(evidence[excluded]["disposition"], "analyzed" if include_tests else "excluded_test")
+                paths = {origin["selected_paths"][0] for origin in result["evidence"]["origins"]}
+                self.assertEqual(paths, {main, excluded} if include_tests else {main})
+                self.assertFalse(any(node["id"].startswith("java:" + helper) for node in result["graph"]["nodes"]))
+                self.assertTrue(any(item["scope"] == "repository" and "Helper" in item["symbol"]
+                                    for item in result["graph"]["external_symbols"]))
+        only_tests = run(request(self.root, [excluded]))
+        self.assertEqual(only_tests["outcome"], "ok", only_tests)
+        self.assertEqual(only_tests["graph"], {"root_contains": [], "nodes": [], "external_symbols": []})
+        self.assertEqual(only_tests["evidence"]["files"], [{"path": excluded, "disposition": "excluded_test",
+                         "configuration_ids": ["java-config:metadata:production", "java-config:metadata:testing"]}])
+        self.assertEqual(snapshot_files(self.root), before)
 
     def test_discovery_timeout(self):
         """省略选集时仍遵守加载阶段内部期限，取消由公开入口生命周期测试覆盖。"""

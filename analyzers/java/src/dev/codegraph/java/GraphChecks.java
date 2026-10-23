@@ -15,25 +15,8 @@ final class GraphChecks {
     /** 验证覆盖、来源、六类节点、关系目标和根可达性，不修补失败结果。 */
     static void validate(JsonObject result, ProjectModel model) throws Failure {
         JsonObject graph = Main.object(result, "graph"), evidence = Main.object(result, "evidence");
-        Map<String, JsonObject> configs = indexed(Main.array(evidence, "configurations"), "id");
-        if (model.files.size() > 100000) fail("selection exceeds file limit");
-        Set<String> approved = new HashSet<>();
-        for (ProjectModel.Configuration config : model.configurations) approved.add(config.target.id());
-        for (JsonObject config : configs.values()) {
-            for (String path : strings(Main.array(config, "source_paths"))) ProjectModel.checkedFile(model.repository, path);
-            if (!approved.containsAll(strings(Main.array(config, "platform_ids")))) fail("unknown configuration platform");
-        }
+        model.validateEvidence(evidence);
         Map<String, JsonObject> files = indexed(Main.array(evidence, "files"), "path");
-        if (!files.keySet().equals(new HashSet<>(model.files))) fail("file coverage differs from selection");
-        for (var entry : files.entrySet()) {
-            ProjectModel.validateRelative(entry.getKey());
-            ProjectModel.checkedFile(model.repository, entry.getKey());
-            JsonObject file = entry.getValue();
-            String disposition = Main.string(file, "disposition");
-            if (!Set.of("analyzed", "excluded_test").contains(disposition) || model.includeTests && disposition.equals("excluded_test")) fail("invalid test exclusion");
-            Set<String> ids = strings(Main.array(file, "configuration_ids"));
-            if (ids.isEmpty() || !configs.keySet().containsAll(ids)) fail("missing file configuration");
-        }
         Map<String, JsonObject> nodes = indexed(Main.array(graph, "nodes"), "id");
         Map<String, JsonObject> origins = indexed(Main.array(evidence, "origins"), "node_id");
         if (!nodes.keySet().equals(origins.keySet())) fail("nodes and origins differ");
@@ -96,7 +79,7 @@ final class GraphChecks {
     }
 
     /** 对数组建立唯一索引，重复身份不能被 Map 覆盖。 */
-    private static Map<String, JsonObject> indexed(JsonArray values, String field) throws Failure {
+    static Map<String, JsonObject> indexed(JsonArray values, String field) throws Failure {
         Map<String, JsonObject> result = new HashMap<>();
         for (JsonElement element : values) {
             if (!element.isJsonObject()) { fail("expected graph object"); }
@@ -108,7 +91,7 @@ final class GraphChecks {
     }
 
     /** 字符串数组必须唯一，并且所有值均非空。 */
-    private static Set<String> strings(JsonArray values) throws Failure {
+    static Set<String> strings(JsonArray values) throws Failure {
         Set<String> result = new HashSet<>();
         for (JsonElement value : values) {
             if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) fail("expected string array");
@@ -130,5 +113,5 @@ final class GraphChecks {
     }
 
     /** 统一把内部构图不变量失败标为分析失败。 */
-    private static void fail(String message) throws Failure { throw new Failure("analysis_failed", message); }
+    static void fail(String message) throws Failure { throw new Failure("analysis_failed", message); }
 }

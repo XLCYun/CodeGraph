@@ -3,9 +3,6 @@ package dev.codegraph.java;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -18,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.ToolFactory;
 import org.eclipse.jdt.core.compiler.IScanner;
 import org.eclipse.jdt.core.compiler.ITerminalSymbols;
@@ -51,13 +47,12 @@ final class Analyzer {
 
     /** JDT binding key 只能在创建它的配置语义环境内使用。 */
     private static final class ConfigState {
-        final ProjectModel.Configuration config;
         final Map<String, String> bindingSources = new HashMap<>();
         final Map<String, ASTNode> seen = new HashMap<>();
         final Map<String, String> topLevelTypes = new HashMap<>();
 
         /** 为一次配置解析建立隔离的声明索引。 */
-        ConfigState(ProjectModel.Configuration config) { this.config = config; }
+        ConfigState() {}
     }
 
     /** 已归属到一个源码声明的图节点。 */
@@ -146,16 +141,7 @@ final class Analyzer {
 
     /** 执行配置隔离解析、来源归并与关系终判。 */
     JsonObject run() throws Failure {
-        for (ProjectModel.Configuration config : model.configurations) {
-            checkpoint();
-            boolean needed = model.files.stream().anyMatch(file -> model.activeConfigurations(file).contains(config));
-            if (!needed) continue;
-            List<String> context = model.context(config);
-            for (String file : context) if (file.endsWith("/module-info.java") || file.equals("module-info.java"))
-                throw new Failure("unsupported_configuration", "JPMS module descriptors require a separate profile", List.of(file));
-            if (context.isEmpty()) continue;
-            parseConfiguration(config, context);
-        }
+        model.forEachActiveConfiguration(this::parseConfiguration);
         checkpoint();
         for (GraphNode node : nodes.values()) node.code = projection(node);
         JsonObject result = new JsonObject();
@@ -171,45 +157,23 @@ final class Analyzer {
     }
 
     /** 对一个配置创建独立 JDT 语义环境。 */
-    private void parseConfiguration(ProjectModel.Configuration config, List<String> context) throws Failure {
+    private void parseConfiguration(ProjectModel.ParseConfiguration config) throws Failure {
         try {
-            ConfigState state = new ConfigState(config);
-            ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
-            Map<String, String> options = new HashMap<>();
-            JavaCore.setComplianceOptions(ProjectModel.compilerVersion(config.release), options);
-            options.put(JavaCore.COMPILER_RELEASE, JavaCore.ENABLED);
-            options.put(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.DISABLED);
-            parser.setCompilerOptions(options);
-            parser.setResolveBindings(true);
-            parser.setBindingsRecovery(true);
-            parser.setStatementsRecovery(false);
-            List<String> roots = new ArrayList<>();
-            for (ProjectModel.SourceRoot root : config.roots)
-                if (!root.test || model.includeTests) roots.add(model.repository.resolve(root.path).toString());
-            String[] encodings = new String[roots.size()];
-            java.util.Arrays.fill(encodings, "UTF-8");
-            parser.setEnvironment(config.target.systemLibraries().toArray(String[]::new),
-                                  roots.toArray(String[]::new), encodings, false);
-            String[] sourcePaths = context.stream().map(file -> model.repository.resolve(file).toString()).toArray(String[]::new);
-            String[] sourceEncodings = new String[sourcePaths.length];
-            java.util.Arrays.fill(sourceEncodings, "UTF-8");
+            ConfigState state = new ConfigState();
             final Failure[] callbackFailure = new Failure[1];
-            parser.createASTs(sourcePaths, sourceEncodings, new String[0], new FileASTRequestor() {
+            config.parse(new FileASTRequestor() {
                 /** 不让 JDT 回调异常消失在解析器内部。 */
                 @Override public void acceptAST(String path, CompilationUnit unit) {
                     if (callbackFailure[0] != null) return;
                     try {
                         checkpoint();
-                        String relative = model.repository.relativize(Path.of(path)).toString().replace('\\', '/');
-                        String source = Files.readString(ProjectModel.checkedFile(model.repository, relative), StandardCharsets.UTF_8);
-                        if (source.indexOf('\uFFFD') >= 0) throw new Failure("object_extraction_failed", "invalid UTF-8 source", List.of(relative));
+                        String relative = model.relativePath(path);
+                        String source = model.readSource(relative);
                         FilePart part = new FilePart(relative, source, unit);
                         parts.put(relative, part);
                         rejectMalformed(part);
-                        verifyPackage(config, part);
-                        boolean selected = model.selected.containsKey(relative) &&
-                            model.activeConfigurations(relative).contains(config);
-                        new Visitor(part, selected, state).extract();
+                        config.verifyPackage(relative, unit.getPackage() == null ? "" : unit.getPackage().getName().getFullyQualifiedName());
+                        new Visitor(part, config.selects(relative), state).extract();
                     } catch (Failure problem) { callbackFailure[0] = problem; }
                     catch (DuplicateDeclaration problem) {
                         callbackFailure[0] = new Failure("object_extraction_failed", "duplicate Java declaration: " + problem.getMessage());
@@ -228,8 +192,7 @@ final class Analyzer {
                 }
             });
             if (callbackFailure[0] != null) throw callbackFailure[0];
-            for (String file : context) if (!parts.containsKey(file))
-                throw new Failure("object_extraction_failed", "JDT omitted source", List.of(file));
+            config.requireParsed(parts.keySet());
         } catch (Failure e) { throw e; }
         catch (DuplicateDeclaration e) { throw new Failure("object_extraction_failed", "duplicate Java declaration: " + e.getMessage()); }
         catch (UnionConflict e) { throw new Failure("union_conflict", "incompatible source identity: " + e.getMessage()); }
@@ -261,22 +224,6 @@ final class Analyzer {
             if (duplicates.contains(problem.getID()))
                 throw new Failure("object_extraction_failed", "duplicate Java declaration", List.of(part.path));
         }
-    }
-
-    /** 源码包名须与明确源码根下的真实目录一致。 */
-    private static void verifyPackage(ProjectModel.Configuration config, FilePart part) throws Failure {
-        String expected = null;
-        for (ProjectModel.SourceRoot root : config.roots) {
-            if (!part.path.startsWith(root.path + "/")) continue;
-            String local = part.path.substring(root.path.length() + 1);
-            int slash = local.lastIndexOf('/');
-            expected = slash < 0 ? "" : local.substring(0, slash).replace('/', '.');
-            break;
-        }
-        if (expected == null) throw new Failure("object_extraction_failed", "source outside configuration roots", List.of(part.path));
-        String actual = part.unit.getPackage() == null ? "" : part.unit.getPackage().getName().getFullyQualifiedName();
-        if (!expected.equals(actual))
-            throw new Failure("object_extraction_failed", "package does not match source root", List.of(part.path));
     }
 
     /** 实际选中源码的声明树与关系访问器。 */
@@ -623,27 +570,7 @@ final class Analyzer {
 
     /** 建立与请求文件一一对应的来源证据。 */
     private JsonObject evidence() {
-        JsonObject evidence = new JsonObject();
-        JsonArray configs = new JsonArray();
-        for (ProjectModel.Configuration config : model.configurations) {
-            JsonObject item = new JsonObject();
-            item.addProperty("id", config.id);
-            item.add("source_paths", Main.strings(config.sourcePaths));
-            item.add("platform_ids", Main.strings(List.of(config.target.id())));
-            configs.add(item);
-        }
-        evidence.add("configurations", configs);
-        JsonArray files = new JsonArray();
-        for (String path : model.files) {
-            JsonObject item = new JsonObject();
-            item.addProperty("path", path);
-            item.addProperty("disposition", !model.includeTests && model.isTest(path) ? "excluded_test" : "analyzed");
-            List<ProjectModel.Configuration> relevant = model.activeConfigurations(path);
-            if (relevant.isEmpty()) relevant = model.selected.get(path);
-            item.add("configuration_ids", Main.strings(relevant.stream().map(config -> config.id).toList()));
-            files.add(item);
-        }
-        evidence.add("files", files);
+        JsonObject evidence = model.evidence();
         JsonArray origins = new JsonArray();
         for (GraphNode node : nodes.values()) {
             JsonObject item = new JsonObject();

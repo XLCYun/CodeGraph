@@ -23,6 +23,14 @@ public final class GraphChecksTest {
             reject(result, model, value -> value.getAsJsonObject("graph").getAsJsonArray("nodes").add(value.getAsJsonObject("graph").getAsJsonArray("nodes").get(0).deepCopy()));
             reject(result, model, value -> value.getAsJsonObject("evidence").add("origins", new JsonArray()));
             reject(result, model, value -> value.getAsJsonObject("evidence").add("files", new JsonArray()));
+            reject(result, model, value -> value.getAsJsonObject("evidence").getAsJsonArray("configurations")
+                .get(0).getAsJsonObject().add("platform_ids", Main.strings(List.of("unapproved-jdk"))));
+            reject(result, model, value -> value.getAsJsonObject("evidence").getAsJsonArray("configurations")
+                .get(0).getAsJsonObject().add("source_paths", Main.strings(List.of("missing.json"))));
+            reject(result, model, value -> value.getAsJsonObject("evidence").getAsJsonArray("files")
+                .get(0).getAsJsonObject().addProperty("disposition", "unknown"));
+            reject(result, model, value -> value.getAsJsonObject("evidence").getAsJsonArray("files")
+                .get(0).getAsJsonObject().add("configuration_ids", Main.strings(List.of("missing-config"))));
             reject(result, model, value -> value.getAsJsonObject("graph").add("root_contains", new JsonArray()));
             reject(result, model, value -> value.getAsJsonObject("graph").getAsJsonArray("nodes").get(0).getAsJsonObject().addProperty("category", "unknown"));
             reject(result, model, value -> value.getAsJsonObject("graph").add("external_symbols", new JsonArray()));

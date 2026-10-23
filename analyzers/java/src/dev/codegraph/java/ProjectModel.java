@@ -23,6 +23,10 @@ import java.util.regex.Pattern;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.eclipse.jdt.core.JavaCore;
+import org.eclipse.jdt.core.dom.AST;
+import org.eclipse.jdt.core.dom.ASTParser;
+import org.eclipse.jdt.core.dom.FileASTRequestor;
+import org.eclipse.core.runtime.IProgressMonitor;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -31,11 +35,11 @@ import static dev.codegraph.java.Main.Failure;
 
 /** 仓库内有限静态配置及显式目标 JDK 模型。 */
 final class ProjectModel {
-    final Path repository;
-    final List<Configuration> configurations;
-    final Map<String, List<Configuration>> selected;
-    final List<String> files;
-    final boolean includeTests;
+    private final Path repository;
+    private final List<Configuration> configurations;
+    private final Map<String, List<Configuration>> selected;
+    private final List<String> files;
+    private final boolean includeTests;
     private static final int MAX_FILES = 100000;
     private final Checkpoint checkpoint;
     private final Map<String, List<String>> inventories = new HashMap<>();
@@ -45,7 +49,7 @@ final class ProjectModel {
     interface Checkpoint { void check() throws Failure; }
 
     /** 一份静态配置所控制的源码根及 release。 */
-    static final class Configuration {
+    private static final class Configuration {
         final String id;
         final String release;
         final List<String> sourcePaths;
@@ -68,7 +72,7 @@ final class ProjectModel {
     }
 
     /** 有明确生产/测试归属的源码根。 */
-    static final class SourceRoot {
+    private static final class SourceRoot {
         final String path;
         final boolean test;
 
@@ -476,13 +480,157 @@ final class ProjectModel {
         return result;
     }
 
-    /** 判断所选文件是否来自确证的测试源码根。 */
-    boolean isTest(String file) {
+    /** 将实际需要解析的配置依次交给分析器，保持配置级期限与错误顺序。 */
+    void forEachActiveConfiguration(ConfigurationAction action) throws Failure {
+        for (Configuration config : configurations) {
+            checkpoint.check();
+            if (files.stream().noneMatch(file -> activeConfigurations(file).contains(config))) continue;
+            List<String> context = context(config);
+            for (String file : context) if (file.endsWith("/module-info.java") || file.equals("module-info.java"))
+                throw new Failure("unsupported_configuration", "JPMS module descriptors require a separate profile", List.of(file));
+            if (!context.isEmpty()) action.accept(new ParseConfiguration(config, context));
+        }
+    }
+
+    /** 一次配置解析的调用边界，JDT 绑定索引仍由分析器在此边界内独立创建。 */
+    @FunctionalInterface
+    interface ConfigurationAction { void accept(ParseConfiguration config) throws Failure; }
+
+    /** 封装一份配置的解析环境、上下文及本次选集，不暴露底层集合。 */
+    final class ParseConfiguration {
+        private final Configuration config;
+        private final List<String> context;
+
+        /** 保存已经按角色过滤并验证的本次配置上下文。 */
+        private ParseConfiguration(Configuration config, List<String> context) {
+            this.config = config;
+            this.context = context;
+        }
+
+        /** 用该配置自己的 release、系统库和源码根执行一次 JDT 解析。 */
+        void parse(FileASTRequestor requestor, IProgressMonitor monitor) {
+            ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
+            Map<String, String> options = new HashMap<>();
+            JavaCore.setComplianceOptions(compilerVersion(config.release), options);
+            options.put(JavaCore.COMPILER_RELEASE, JavaCore.ENABLED);
+            options.put(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.DISABLED);
+            parser.setCompilerOptions(options);
+            parser.setResolveBindings(true);
+            parser.setBindingsRecovery(true);
+            parser.setStatementsRecovery(false);
+            List<String> roots = new ArrayList<>();
+            for (SourceRoot root : config.roots)
+                if (!root.test || includeTests) roots.add(repository.resolve(root.path).toString());
+            parser.setEnvironment(config.target.systemLibraries().toArray(String[]::new),
+                roots.toArray(String[]::new), utf8Encodings(roots.size()), false);
+            String[] paths = context.stream().map(file -> repository.resolve(file).toString()).toArray(String[]::new);
+            parser.createASTs(paths, utf8Encodings(paths.length), new String[0], requestor, monitor);
+        }
+
+        /** 只有选中且在当前配置中未被测试过滤的文件才贡献图节点。 */
+        boolean selects(String file) {
+            return selected.containsKey(file) && activeConfigurations(file).contains(config);
+        }
+
+        /** 包名使用第一个匹配的声明根，重叠根仍保留原有顺序语义。 */
+        void verifyPackage(String file, String actual) throws Failure {
+            String expected = null;
+            for (SourceRoot root : config.roots) {
+                if (!file.startsWith(root.path + "/")) continue;
+                String local = file.substring(root.path.length() + 1);
+                int slash = local.lastIndexOf('/');
+                expected = slash < 0 ? "" : local.substring(0, slash).replace('/', '.');
+                break;
+            }
+            if (expected == null) throw new Failure("object_extraction_failed", "source outside configuration roots", List.of(file));
+            if (!expected.equals(actual))
+                throw new Failure("object_extraction_failed", "package does not match source root", List.of(file));
+        }
+
+        /** 保留上下文完整性检查，不允许 JDT 静默遗漏应解析的源码。 */
+        void requireParsed(Set<String> parsed) throws Failure {
+            for (String file : context) if (!parsed.contains(file))
+                throw new Failure("object_extraction_failed", "JDT omitted source", List.of(file));
+        }
+    }
+
+    /** 为所有显式源码与源码根固定 UTF-8，不依赖运行机器默认编码。 */
+    private static String[] utf8Encodings(int count) {
+        String[] encodings = new String[count];
+        java.util.Arrays.fill(encodings, "UTF-8");
+        return encodings;
+    }
+
+    /** 把 JDT 的真实源码路径还原为仓库身份。 */
+    String relativePath(String path) {
+        return repository.relativize(Path.of(path)).toString().replace('\\', '/');
+    }
+
+    /** 每次读取重新检查仓库边界，并拒绝被替换解码的非法源码。 */
+    String readSource(String relative) throws IOException, Failure {
+        String source = Files.readString(checkedFile(repository, relative), StandardCharsets.UTF_8);
+        if (source.indexOf('\uFFFD') >= 0)
+            throw new Failure("object_extraction_failed", "invalid UTF-8 source", List.of(relative));
+        return source;
+    }
+
+    /** 一次生成全部模型来源；纯测试选集没有活动配置时仍列出原匹配配置。 */
+    JsonObject evidence() {
+        JsonObject evidence = new JsonObject();
+        JsonArray configs = new JsonArray();
+        for (Configuration config : configurations) {
+            JsonObject item = new JsonObject();
+            item.addProperty("id", config.id);
+            item.add("source_paths", Main.strings(config.sourcePaths));
+            item.add("platform_ids", Main.strings(List.of(config.target.id())));
+            configs.add(item);
+        }
+        evidence.add("configurations", configs);
+        JsonArray selectedFiles = new JsonArray();
+        for (String path : files) {
+            JsonObject item = new JsonObject();
+            item.addProperty("path", path);
+            item.addProperty("disposition", !includeTests && isTest(path) ? "excluded_test" : "analyzed");
+            List<Configuration> relevant = activeConfigurations(path);
+            if (relevant.isEmpty()) relevant = selected.get(path);
+            item.add("configuration_ids", Main.strings(relevant.stream().map(config -> config.id).toList()));
+            selectedFiles.add(item);
+        }
+        evidence.add("files", selectedFiles);
+        return evidence;
+    }
+
+    /** 在图边界复核模型授权、文件覆盖及来源路径，保留独立于生成过程的检查。 */
+    void validateEvidence(JsonObject evidence) throws Failure {
+        Map<String, JsonObject> configs = GraphChecks.indexed(Main.array(evidence, "configurations"), "id");
+        if (files.size() > MAX_FILES) GraphChecks.fail("selection exceeds file limit");
+        Set<String> approved = new HashSet<>();
+        for (Configuration config : configurations) approved.add(config.target.id());
+        for (JsonObject config : configs.values()) {
+            for (String path : GraphChecks.strings(Main.array(config, "source_paths"))) checkedFile(repository, path);
+            if (!approved.containsAll(GraphChecks.strings(Main.array(config, "platform_ids")))) GraphChecks.fail("unknown configuration platform");
+        }
+        Map<String, JsonObject> covered = GraphChecks.indexed(Main.array(evidence, "files"), "path");
+        if (!covered.keySet().equals(new HashSet<>(files))) GraphChecks.fail("file coverage differs from selection");
+        for (var entry : covered.entrySet()) {
+            validateRelative(entry.getKey());
+            checkedFile(repository, entry.getKey());
+            JsonObject file = entry.getValue();
+            String disposition = Main.string(file, "disposition");
+            if (!Set.of("analyzed", "excluded_test").contains(disposition) || includeTests && disposition.equals("excluded_test"))
+                GraphChecks.fail("invalid test exclusion");
+            Set<String> ids = GraphChecks.strings(Main.array(file, "configuration_ids"));
+            if (ids.isEmpty() || !configs.keySet().containsAll(ids)) GraphChecks.fail("missing file configuration");
+        }
+    }
+
+    /** 判断所选文件在所有匹配配置中是否都仅属于测试根。 */
+    private boolean isTest(String file) {
         return selected.get(file).stream().allMatch(config -> isTest(file, config));
     }
 
-    /** 判断某配置中的文件是否仅来自测试根。 */
-    boolean isTest(String file, Configuration config) {
+    /** 判断某配置中的文件是否仅来自测试根，重叠的生产根优先。 */
+    private boolean isTest(String file, Configuration config) {
         boolean matched = false;
         for (SourceRoot root : config.roots) if (file.startsWith(root.path + "/")) {
             matched = true;
@@ -492,7 +640,7 @@ final class ProjectModel {
     }
 
     /** 返回本次实际分析此文件的配置集合。 */
-    List<Configuration> activeConfigurations(String file) {
+    private List<Configuration> activeConfigurations(String file) {
         return selected.get(file).stream().filter(config -> includeTests || !isTest(file, config)).toList();
     }
 
@@ -555,7 +703,7 @@ final class ProjectModel {
     }
 
     /** 枚举配置允许的上下文源码，测试角色不改变生产配置。 */
-    List<String> context(Configuration config) throws Failure {
+    private List<String> context(Configuration config) throws Failure {
         Set<String> discovered = new HashSet<>();
         for (SourceRoot sourceRoot : config.roots) {
             checkpoint.check();
