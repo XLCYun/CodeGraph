@@ -1,12 +1,12 @@
 //! AST 收集实际引用位置，ty 只提供定义证据；坐标或协议错误不能降级为空关系。
 
 use super::{
-    Result, failure, is_test,
-    project::{self, Project},
+    Result,
+    discovery::AnalysisContext,
+    failure, is_test, project,
     syntax::{self, Document},
 };
 use crate::{DefinitionCandidate, PythonProject, SourceOrigin};
-use anyhow::Context;
 use codegraph_engine_common::model::{
     CodeCategory, CodeReference, ExternalSymbol, NodeId, ReferenceTarget, SymbolScope,
 };
@@ -36,8 +36,7 @@ struct Occurrence {
 struct Resolver<'a> {
     native: &'a PythonProject,
     repository: &'a Path,
-    project: &'a Project,
-    policies: Option<&'a BTreeMap<PathBuf, Project>>,
+    context: &'a AnalysisContext<'a>,
     documents: BTreeMap<PathBuf, Document>,
     definitions: BTreeMap<(PathBuf, usize), Vec<DefinitionCandidate>>,
     externals: BTreeMap<String, ExternalSymbol>,
@@ -48,19 +47,15 @@ struct Resolver<'a> {
 
 /// 每个选中文档按实际 AST 引用建立关系，其他文档只用于验证目标。
 pub(super) fn analyze(
-    native: &PythonProject,
-    repository: &Path,
-    project: &Project,
+    context: &AnalysisContext<'_>,
     documents: BTreeMap<PathBuf, Document>,
     include_tests: bool,
-    policies: Option<&BTreeMap<PathBuf, Project>>,
 ) -> Result<(Vec<Document>, BTreeMap<String, ExternalSymbol>)> {
     let selected = documents.keys().cloned().collect::<Vec<_>>();
     let mut resolver = Resolver {
-        native,
-        repository,
-        project,
-        policies,
+        native: &context.native,
+        repository: context.repository,
+        context,
         documents,
         definitions: BTreeMap::new(),
         externals: BTreeMap::new(),
@@ -507,35 +502,12 @@ impl Resolver<'_> {
             }
         };
         if !self.documents.contains_key(&actual) {
-            let mut target_minor = self.project.minor;
-            if scope == SymbolScope::Repository {
-                // 发现模式的上下文使用已接纳且冻结的项目政策，不能重新启用被排除的配置。
-                let target_project = if let Some(policies) = self.policies {
-                    policies
-                        .iter()
-                        .filter(|(root, _)| actual.starts_with(root))
-                        .max_by_key(|(root, _)| root.components().count())
-                        .context("Python 上下文缺少发现项目")?
-                        .1
-                        .with_source(&location.source)?
-                } else {
-                    Project::for_file(self.repository, &actual, &location.source)?
-                };
-                target_minor = target_project.minor;
-                if target_project.root != self.project.root
-                    && target_project.root != self.repository
-                {
-                    self.conflicting_projects.insert(actual.clone());
-                }
+            // 未选中的上下文仍按目标版本校验；跨项目文档不能提供关系证明。
+            let (ast, conflicting) = self.context.target_ast(location)?;
+            if conflicting {
+                self.conflicting_projects.insert(actual.clone());
             }
-            // 未选中的上下文也按目标自身 minor 校验；跨项目文档不能提供关系证明。
-            let body = self
-                .native
-                .candidate_ast(location, target_minor)
-                .with_context(|| format!("{}：Python 目标语法提取失败", relative.display()))?
-                .syntax()
-                .body
-                .clone();
+            let body = ast.syntax().body.clone();
             self.documents.insert(
                 actual.clone(),
                 Document::from_ast(&relative, &location.source, body)?,

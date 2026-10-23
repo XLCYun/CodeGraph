@@ -19,28 +19,48 @@ fn fixture(contents: &[(&str, &str)]) -> (tempfile::TempDir, tempfile::TempDir, 
 /// 发现结果和另一版本数据库使用同一份原文；上下文并发改变也会明确失败。
 #[test]
 fn discovery_and_version_projection_reuse_one_frozen_source_snapshot() {
-    let (root, _scratch, _request) = fixture(&[("main.py", "def before(): pass\n")]);
+    let (root, _scratch, _request) = fixture(&[
+        ("main.py", "def before(): pass\n"),
+        (
+            "script.py",
+            "# /// script\n# requires-python = '>=3.12'\n# ///\ntype Alias = int\n",
+        ),
+    ]);
     let repository = root.path().canonicalize().unwrap();
     let deadline = Instant::now() + Duration::from_secs(30);
-    let discovered = discovery::load(&repository, deadline, "discovery").unwrap();
-    let native = &discovered.projects[&repository];
+    let (mut prepared, _) =
+        discovery::PreparedProjects::prepare(&repository, None, false, deadline, "discovery")
+            .unwrap();
     fs::write(root.path().join("main.py"), "def after(): pass\n").unwrap();
+    let mut versions = BTreeSet::new();
+    while let Some(mut context) = prepared.next_analysis("stdlib").unwrap() {
+        assert_eq!(
+            context.native.source(Path::new("main.py")).unwrap(),
+            "def before(): pass\n"
+        );
+        versions.insert(
+            context
+                .native
+                .parse(Path::new("main.py"))
+                .unwrap()
+                .module()
+                .python_version(),
+        );
+        assert!(!context.parse_selected().unwrap().0.is_empty());
+    }
     assert_eq!(
-        native.source(Path::new("main.py")).unwrap(),
-        "def before(): pass\n"
+        versions,
+        BTreeSet::from([
+            ruff_python_ast::PythonVersion::PY312,
+            ruff_python_ast::PythonVersion::PY314,
+        ])
     );
-    assert_eq!(
-        native
-            .with_minor(12)
-            .unwrap()
-            .source(Path::new("main.py"))
-            .unwrap(),
-        "def before(): pass\n"
-    );
-    assert!(native.ensure_unchanged(deadline).is_err());
+    assert!(prepared.finish("stdlib", &mut Vec::new()).is_err());
     assert!(
-        discovery::load(
+        discovery::PreparedProjects::prepare(
             &repository,
+            None,
+            false,
             Instant::now() - Duration::from_secs(1),
             "discovery"
         )
@@ -244,20 +264,33 @@ fn admitted_sibling_policy_owns_overlapping_roots_and_versions() {
         ("shared/main.py", "type OwnedAlias = int\n"),
     ]);
     let repository = root.path().canonicalize().unwrap();
-    let discovered = discovery::load(
+    let (mut prepared, _) = discovery::PreparedProjects::prepare(
         &repository,
+        None,
+        false,
         Instant::now() + Duration::from_secs(30),
         "discovery",
     )
     .unwrap();
-    assert_eq!(
-        discovered.owners["shared/main.py"],
-        repository.join("shared")
-    );
-    assert_eq!(
-        discovered.policies[&discovered.owners["shared/main.py"]].minor,
-        12
-    );
+    let mut checked_owner = false;
+    while let Some(mut context) = prepared.next_analysis("stdlib").unwrap() {
+        let (documents, _) = context.parse_selected().unwrap();
+        if documents.contains_key(&repository.join("shared/main.py")) {
+            assert_eq!(context.configuration.source_paths, vec!["shared/ty.toml"]);
+            assert_eq!(
+                context
+                    .native
+                    .parse(Path::new("shared/main.py"))
+                    .unwrap()
+                    .module()
+                    .python_version(),
+                ruff_python_ast::PythonVersion::PY312,
+            );
+            checked_owner = true;
+        }
+    }
+    assert!(checked_owner);
+    prepared.finish("stdlib", &mut Vec::new()).unwrap();
     let result = analyze(&serde_json::from_value(request.clone()).unwrap()).unwrap();
     let file = result["evidence"]["files"]
         .as_array()
@@ -482,4 +515,55 @@ fn source_policy_does_not_change_explicit_selection_and_empty_defaults() {
             .unwrap()
             .is_empty()
     );
+}
+
+/// 准备边界同时保护配置和未选中的语义上下文，不能只核验输出成员。
+#[test]
+fn prepared_projects_verify_configuration_and_unselected_context_snapshots() {
+    for changed in ["ty.toml", "shared/context.py"] {
+        let (root, _scratch, _request) = fixture(&[
+            (
+                "ty.toml",
+                "[environment]\nroot=['src']\nextra-paths=['shared']\n",
+            ),
+            ("src/main.py", "def selected(): pass\n"),
+            ("shared/context.py", "def context(): pass\n"),
+        ]);
+        let repository = root.path().canonicalize().unwrap();
+        let (mut prepared, _) = discovery::PreparedProjects::prepare(
+            &repository,
+            None,
+            false,
+            Instant::now() + Duration::from_secs(30),
+            "discovery",
+        )
+        .unwrap();
+        let mut configurations = Vec::new();
+        while let Some(mut context) = prepared.next_analysis("stdlib").unwrap() {
+            let (_, files) = context.parse_selected().unwrap();
+            assert_eq!(files.len(), 1);
+            assert_eq!(files[0].path, "src/main.py");
+            configurations.push(context.configuration);
+        }
+        fs::write(root.path().join(changed), "# changed\n").unwrap();
+        let error = prepared
+            .finish("stdlib", &mut configurations)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("分析期间"), "{error}");
+    }
+    let (root, _scratch, _request) =
+        fixture(&[("ty.toml", ""), ("main.py", "def selected(): pass\n")]);
+    let repository = root.path().canonicalize().unwrap();
+    let (mut prepared, _) = discovery::PreparedProjects::prepare(
+        &repository,
+        None,
+        false,
+        Instant::now() + Duration::from_secs(30),
+        "discovery",
+    )
+    .unwrap();
+    fs::write(root.path().join("ty.toml"), "# changed\n").unwrap();
+    let error = prepared.next_analysis("stdlib").err().unwrap().to_string();
+    assert!(error.contains("分析期间配置已改变"), "{error}");
 }
