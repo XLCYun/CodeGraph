@@ -1,4 +1,8 @@
-use crate::{projection, protocol::Request, test_support as support};
+use crate::{
+    DependencyScope,
+    projection::{self, CompleteAnalysisInput, RustPlatform},
+    test_support as support,
+};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, fs, path::Path};
 
@@ -9,18 +13,24 @@ fn write(root: &Path, path: &str, source: &str) {
     fs::write(path, source).unwrap();
 }
 
-/// 构造一个请求；None 真正省略字段，不能借 null 测试另一条宽松入口。
-fn request(root: &Path, files: Option<&[&str]>, include_tests: bool) -> Request {
-    let mut value = json!({
-        "protocol":"codegraph.analyzer/1","type":"analyze","id":"analysis-1",
-        "input":{"repository_root":root.canonicalize().unwrap(),"include_tests":include_tests,"profile":"rust-repository-v1"},
-        "environment":{"scratch_root":std::env::temp_dir(),"platforms":[]},
-        "limits":{"analysis_timeout_ms":30000,"max_result_bytes":10000000,"max_diagnostic_bytes":65536}
-    });
-    if let Some(files) = files {
-        value["input"]["files"] = json!(files);
+/// 原生选集用 None 表达发现，显式空数组仍独立表达无需加载的空集。
+fn request(root: &Path, files: Option<&[&str]>, include_tests: bool) -> CompleteAnalysisInput {
+    CompleteAnalysisInput {
+        repository_root: root.canonicalize().unwrap(),
+        files: files.map(|files| files.iter().map(|path| (*path).to_owned()).collect()),
+        include_tests,
+        dependency_scope: DependencyScope::RepositoryOnly,
+        platforms: vec![],
+        observation: files
+            .is_none()
+            .then(|| {
+                codegraph_engine_common::observation::Observation::from_environment(
+                    "codegraph-rust",
+                    "analysis-1",
+                )
+            })
+            .flatten(),
     }
-    serde_json::from_value(value).unwrap()
 }
 
 /// 以 coverage 而非有无节点断言完整选集，空文件也必须得到明确记录。
@@ -941,34 +951,40 @@ fn discovery_keeps_all_dependency_scopes_read_only_and_selected_members_equal() 
     let toolchain = support::project_toolchain(root.path());
     let before = support::snapshot(root.path());
     let mut expected = None;
-    for profile in [
-        "rust-repository-v1",
-        "rust-standard-library-v1",
-        "rust-all-dependencies-v1",
+    for scope in [
+        DependencyScope::RepositoryOnly,
+        DependencyScope::StandardLibrary,
+        DependencyScope::AllDependencies,
     ] {
         let mut request = request(root.path(), None, false);
-        request.input.profile = profile.into();
-        if profile != "rust-repository-v1" {
-            request.environment.platforms = vec![
-                serde_json::from_value(json!({
-                    "id":"project-rust","kind":"rust-standard-library","version":"project",
-                    "root":toolchain.sysroot,
-                    "metadata":{"rust_src":"lib/rustlib/src/rust/library"}
-                }))
-                .unwrap(),
-            ];
+        request.dependency_scope = scope;
+        if scope != DependencyScope::RepositoryOnly {
+            request.platforms = vec![RustPlatform {
+                id: "project-rust".into(),
+                version: "project".into(),
+                root: toolchain.sysroot.clone(),
+                rust_src: "lib/rustlib/src/rust/library".into(),
+            }];
         }
         let result = projection::analyze(&request).unwrap();
+        assert_eq!(
+            result["evidence"]["configurations"][0]["platform_ids"],
+            if scope == DependencyScope::RepositoryOnly {
+                json!([])
+            } else {
+                json!(["project-rust"])
+            }
+        );
         let paths: Vec<String> = coverage(&result)
             .keys()
             .map(|path| (*path).to_owned())
             .collect();
         if let Some(expected) = &expected {
-            assert_eq!(&paths, expected, "{profile}");
+            assert_eq!(&paths, expected, "{scope:?}");
         } else {
             expected = Some(paths);
         }
-        if profile == "rust-all-dependencies-v1" {
+        if scope == DependencyScope::AllDependencies {
             assert!(
                 result["graph"]["external_symbols"]
                     .as_array()
@@ -1000,4 +1016,38 @@ fn discovery_rejects_module_symlinks_outside_repository() {
     )
     .unwrap();
     assert!(projection::analyze(&request(root.path(), None, true)).is_err());
+}
+
+/// 显式平台必须匹配实际目录工具链，合法相对路径也不能指向另一份标准声明。
+#[test]
+fn declared_platform_must_match_actual_project_toolchain() {
+    let root = support::fixture();
+    let other = tempfile::tempdir().unwrap();
+    let toolchain = support::project_toolchain(root.path());
+    let before = support::snapshot(root.path());
+    let mut input = request(root.path(), Some(&["src/lib.rs"]), false);
+    input.dependency_scope = DependencyScope::StandardLibrary;
+    input.platforms.push(RustPlatform {
+        id: "project-rust".into(),
+        version: "project".into(),
+        root: other.path().to_owned(),
+        rust_src: "lib/rustlib/src/rust/library".into(),
+    });
+    let error = projection::analyze(&input).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("批准的平台与实际项目 sysroot 不一致"),
+        "{error:#}"
+    );
+    input.platforms[0].root = toolchain.sysroot;
+    input.platforms[0].rust_src = "lib/rustlib/src/rust/library/core".into();
+    let error = projection::analyze(&input).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("平台 rust_src 与实际项目工具链不一致"),
+        "{error:#}"
+    );
+    support::assert_unchanged(root.path(), &before);
 }

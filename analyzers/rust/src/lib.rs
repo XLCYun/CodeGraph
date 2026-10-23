@@ -2,8 +2,7 @@
 
 mod discovery;
 mod loading;
-pub mod projection;
-pub mod protocol;
+mod projection;
 mod readonly_metadata;
 
 use anyhow::{Context, Result, bail, ensure};

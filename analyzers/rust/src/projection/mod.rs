@@ -1,12 +1,15 @@
 //! 从同源原生 AST/导航构造完整 Rust 图与内部来源，输出前由本进程校验。
 
+mod input;
 mod model;
 mod references;
 mod symbols;
 mod syntax;
 pub(crate) mod test_code;
 
-use crate::{DependencyScope, RustProject, protocol::Request};
+pub(crate) use input::{CompleteAnalysisInput, RustPlatform};
+
+use crate::RustProject;
 use anyhow::{Context, Result, ensure};
 use codegraph_engine_common::graph::{
     Configuration, Disposition, Evidence, FileEvidence, Origin, Projection,
@@ -26,12 +29,12 @@ fn failure(message: impl std::fmt::Display) -> anyhow::Error {
 }
 
 /// 每个请求独立加载并输出全图，任何查询错误立即丢弃项目和全部候选数据。
-pub fn build(request: &Request) -> Result<Projection> {
+pub(crate) fn build(request: &CompleteAnalysisInput) -> Result<Projection> {
     request.validate()?;
-    let repository = dunce::canonicalize(&request.input.repository_root)?;
+    let repository = dunce::canonicalize(&request.repository_root)?;
     ensure!(repository.is_dir(), "仓库根必须为目录");
     let mut selected: BTreeMap<PathBuf, Vec<String>> = BTreeMap::new();
-    for relative in request.input.files.iter().flatten() {
+    for relative in request.files.iter().flatten() {
         let path = dunce::canonicalize(repository.join(relative))
             .with_context(|| format!("无法读取 {relative}"))?;
         ensure!(
@@ -42,7 +45,7 @@ pub fn build(request: &Request) -> Result<Projection> {
         );
         selected.entry(path).or_default().push(relative.clone());
     }
-    if request.input.files.as_ref().is_some_and(Vec::is_empty) {
+    if request.files.as_ref().is_some_and(Vec::is_empty) {
         return Ok(Projection {
             graph: codegraph_engine_common::model::CodeGraph::empty(),
             evidence: Evidence::default(),
@@ -53,37 +56,19 @@ pub fn build(request: &Request) -> Result<Projection> {
         !manifests.is_empty(),
         "未发现 Rust workspace，无法完整加载 standalone 源码"
     );
-    let scope = match request.input.profile.as_str() {
-        "rust-repository-v1" => DependencyScope::RepositoryOnly,
-        "rust-standard-library-v1" => DependencyScope::StandardLibrary,
-        "rust-all-dependencies-v1" => DependencyScope::AllDependencies,
-        _ => unreachable!("请求已验证"),
-    };
     let policies = crate::discovery::policies(
         &repository,
         &manifests,
-        scope,
-        request.environment.platforms.first(),
+        request.dependency_scope,
+        request.platforms.first(),
     )?;
-    let observation = request
-        .input
-        .files
-        .is_none()
-        .then(|| {
-            codegraph_engine_common::observation::Observation::from_environment(
-                "codegraph-rust",
-                &request.id,
-            )
-        })
-        .flatten();
     let project = RustProject::load_projects(
         &manifests,
         &policies,
         &selected.keys().cloned().collect::<Vec<_>>(),
-        observation.as_ref(),
+        request.observation.as_ref(),
     )?;
     let discovered = request
-        .input
         .files
         .is_none()
         .then(|| project.discover_sources(&repository))
@@ -98,12 +83,12 @@ pub fn build(request: &Request) -> Result<Projection> {
             let relative = relative.replace('\\', "/");
             #[cfg(not(windows))]
             let relative = relative.to_owned();
-            crate::protocol::relative_path(&relative)?;
+            input::relative_path(&relative)?;
             selected.entry(path.clone()).or_default().push(relative);
         }
     }
     let options = model::AnalysisOptions {
-        include_tests: request.input.include_tests,
+        include_tests: request.include_tests,
     };
     let documents = selected
         .keys()
@@ -166,7 +151,6 @@ pub fn build(request: &Request) -> Result<Projection> {
         .map(|path| path.to_string_lossy().replace('\\', "/"))
         .collect();
     let platform_ids: Vec<_> = request
-        .environment
         .platforms
         .iter()
         .map(|platform| platform.id.clone())
@@ -191,6 +175,6 @@ mod syntax_tests;
 
 /// 历史语义测试读取同一投影的 JSON 视图；生产入口始终使用类型化图。
 #[cfg(test)]
-pub fn analyze(request: &Request) -> Result<serde_json::Value> {
+pub(crate) fn analyze(request: &CompleteAnalysisInput) -> Result<serde_json::Value> {
     Ok(serde_json::to_value(build(request)?)?)
 }

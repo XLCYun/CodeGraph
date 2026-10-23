@@ -1,9 +1,9 @@
 //! Rust 程序自行装配项目工具链政策并在同一进程内构图。
-use crate::protocol::{Environment, Input, Limits, Request};
+use crate::{DependencyScope, projection::CompleteAnalysisInput};
 use codegraph_engine_common::{
     graph,
     model::CodeGraph,
-    public_protocol::{CheckedRequest, MAX_BYTES, PROTOCOL, RustDependencyScope},
+    public_protocol::{CheckedRequest, RustDependencyScope},
 };
 use std::collections::BTreeMap;
 
@@ -79,30 +79,28 @@ pub fn analyze(input: &CheckedRequest) -> anyhow::Result<CodeGraph> {
             std::slice::from_ref(&input.installation),
         )?;
     }
-    let profile = match input.request.options.rust_dependency_scope {
-        RustDependencyScope::RepositoryOnly => "rust-repository-v1",
-        RustDependencyScope::StandardLibrary => "rust-standard-library-v1",
-        RustDependencyScope::AllDependencies => "rust-all-dependencies-v1",
+    let dependency_scope = match input.request.options.rust_dependency_scope {
+        RustDependencyScope::RepositoryOnly => DependencyScope::RepositoryOnly,
+        RustDependencyScope::StandardLibrary => DependencyScope::StandardLibrary,
+        RustDependencyScope::AllDependencies => DependencyScope::AllDependencies,
     };
-    let context = Request {
-        protocol: PROTOCOL.into(),
-        message_type: "analyze".into(),
-        id: input.request.id.clone(),
-        input: Input {
-            repository_root: input.repository.clone(),
-            files: input.request.files.clone(),
-            include_tests: input.request.options.include_tests,
-            profile: profile.into(),
-        },
-        environment: Environment {
-            scratch_root: std::env::temp_dir(),
-            platforms: vec![],
-        },
-        limits: Limits {
-            analysis_timeout_ms: 30 * 60 * 1000,
-            max_result_bytes: MAX_BYTES,
-            max_diagnostic_bytes: 256 * 1024,
-        },
+    let context = CompleteAnalysisInput {
+        repository_root: input.repository.clone(),
+        files: input.request.files.clone(),
+        include_tests: input.request.options.include_tests,
+        dependency_scope,
+        platforms: vec![],
+        observation: input
+            .request
+            .files
+            .is_none()
+            .then(|| {
+                codegraph_engine_common::observation::Observation::from_environment(
+                    "codegraph-rust",
+                    &input.request.id,
+                )
+            })
+            .flatten(),
     };
     graph::finish(crate::projection::build(&context)?, input, "rust", &[])
 }

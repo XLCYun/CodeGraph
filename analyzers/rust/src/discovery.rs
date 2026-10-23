@@ -35,7 +35,7 @@ pub(crate) fn policies(
     repository: &Path,
     manifests: &[PathBuf],
     scope: DependencyScope,
-    platform: Option<&crate::protocol::Platform>,
+    platform: Option<&crate::projection::RustPlatform>,
 ) -> Result<Vec<LoadPolicy>> {
     let mut policies = Vec::new();
     let mut previous = None;
@@ -82,11 +82,10 @@ pub(crate) fn policies(
             }
             if let Some(platform) = platform {
                 ensure!(
-                    platform.kind == "rust-standard-library"
-                        && dunce::canonicalize(&platform.root)? == sysroot,
+                    dunce::canonicalize(&platform.root)? == sysroot,
                     "批准的平台与实际项目 sysroot 不一致"
                 );
-                let rust_src = platform.root.join(&platform.metadata.rust_src);
+                let rust_src = platform.root.join(&platform.rust_src);
                 ensure!(
                     dunce::canonicalize(&rust_src)?
                         == dunce::canonicalize(sysroot.join("lib/rustlib/src/rust/library"))?,
