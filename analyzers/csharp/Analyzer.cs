@@ -112,21 +112,10 @@ internal static class Analyzer
                 throw new HelperException("target_unavailable", $"Exactly one approved reference assembly profile is required for {config.Tfm}", config.SourcePaths);
             var platform = matches[0];
             var references = References(platform, targetProfile).ToList();
-            // 显式 source-set 保持原常量；SDK 常量只在匹配引用验证成功后展开。
-            var defines = config.SourcePaths[0] == "narrant.csharp.json"
-                ? config.Defines
-                : Configuration.ImplicitDefines(targetProfile, cancellation).Concat(config.Defines)
-                    .Distinct(StringComparer.Ordinal).ToArray();
-            foreach (var dependency in config.ProjectReferences)
-            {
-                var target = configurations.SingleOrDefault(c => c.SourcePaths[0] == dependency && c.Tfm == config.Tfm &&
-                    c.ConfigurationName == config.ConfigurationName);
-                if (target is null)
-                    throw new HelperException("unsupported_configuration", $"ProjectReference lacks matching TFM and Configuration: {dependency}", config.SourcePaths);
-                if (target.TestOnly && !input.IncludeTests)
-                    throw new HelperException("unsupported_configuration", "Production project references excluded test project", config.SourcePaths);
+            // 目标引用匹配并加载成功后，才允许配置展开 SDK 隐式常量。
+            var defines = config.PreprocessorSymbols(targetProfile, cancellation);
+            foreach (var target in config.ReferencedConfigurations(configurations, input.IncludeTests))
                 references.Add(Compile(target).Compilation.ToMetadataReference());
-            }
             var trees = new Dictionary<string, SyntaxTree>(StringComparer.Ordinal);
             foreach (var file in config.Files)
             {
@@ -159,12 +148,8 @@ internal static class Analyzer
                     "global using System.Threading.Tasks;",
                     new CSharpParseOptions(config.LanguageVersion), path: "<narrant-implicit-usings>"));
             }
-            var output = config.SourcePaths[0] == "narrant.csharp.json" &&
-                trees.Values.Any(tree => tree.GetRoot(cancellation) is CompilationUnitSyntax unit &&
-                    unit.Members.OfType<GlobalStatementSyntax>().Any())
-                ? OutputKind.ConsoleApplication : config.Output;
             var compilation = CSharpCompilation.Create(config.AssemblyName, allTrees, references,
-                new CSharpCompilationOptions(output, nullableContextOptions: config.Nullable));
+                config.CompilationOptions(trees.Values, cancellation));
             compiling.Remove(config.Id);
             return compiled[config.Id] = (compilation, trees, platform);
         }

@@ -129,6 +129,93 @@ void B(){}
         self.assertIn("A", names)
         self.assertIn("B", names)
 
+    def test_source_set_constants_remain_explicit(self):
+        """source-set 只使用明确常量，既保留自定义值也不注入 SDK 常量。"""
+        self.write("A.cs", """#if CUSTOM && NET9_0
+class ExplicitSymbols {}
+#endif
+#if NET || NETCOREAPP || NET10_0 || NET10_0_OR_GREATER || DEBUG || TRACE
+class UnexpectedSdkSymbols {}
+#endif""")
+        self.source_set([self.config("main", ["A.cs"], ["CUSTOM", "NET9_0"])])
+        result = self.run_helper(self.request(["A.cs"]))
+        self.assertEqual(result["outcome"], "ok", result)
+        names = [node["name"] for node in result["graph"]["nodes"]]
+        self.assertIn("ExplicitSymbols", names)
+        self.assertNotIn("UnexpectedSdkSymbols", names)
+        self.assertEqual(result["evidence"]["configurations"][0]["source_paths"], ["narrant.csharp.json"])
+
+    def test_top_level_output_follows_configuration_model(self):
+        """source-set 自动接受顶层语句，SDK 项目仍遵守明确的 Library 或 Exe。"""
+        self.write("A.cs", 'System.Console.WriteLine("hello"); class Declared {}')
+        self.source_set([self.config("main", ["A.cs"])])
+        source_set = self.run_helper(self.request(["A.cs"]))
+        self.assertEqual(source_set["outcome"], "ok", source_set)
+        self.assertIn("Declared", [node["name"] for node in source_set["graph"]["nodes"]])
+        (self.root / "narrant.csharp.json").unlink()
+        for output, outcome in (("Library", "error"), ("Exe", "ok")):
+            with self.subTest(output=output):
+                self.write("App.csproj", f'<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>{output}</OutputType></PropertyGroup></Project>')
+                result = self.run_helper(self.request(["A.cs"]))
+                self.assertEqual(result["outcome"], outcome, result)
+                if outcome == "error":
+                    self.assertEqual(result["error"]["code"], "object_extraction_failed", result)
+                    self.assertIn("CS8805", result["error"]["message"])
+                else:
+                    self.assertEqual(result["evidence"]["configurations"][0]["source_paths"], ["App.csproj"])
+
+    def test_project_reference_cycle_keeps_detailed_failure(self):
+        """循环引用必须拒绝，并在组件错误中保留触发项目的来源路径。"""
+        for project, dependency in (("A", "B"), ("B", "A")):
+            self.write(f"{project}/{project}.csproj", f'<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup><ProjectReference Include="../{dependency}/{dependency}.csproj" /></ItemGroup></Project>')
+            self.write(f"{project}/Code.cs", f'class {project} {{}}')
+        result = self.run_helper(self.request(["A/Code.cs"]))
+        self.assertEqual(result["error"]["code"], "unsupported_configuration", result)
+        self.assertEqual(result["error"]["message"], "ProjectReference cycle")
+        self.assertEqual(result["error"]["paths"], ["A/A.csproj"])
+
+    def test_project_reference_to_excluded_test_requires_opt_in(self):
+        """生产项目引用测试项目时必须显式纳入测试，组件错误保留调用方来源。"""
+        self.write("App/App.csproj", '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup><ProjectReference Include="../Tests/Tests.csproj" /></ItemGroup></Project>')
+        self.write("Tests/Tests.csproj", '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework><IsTestProject>true</IsTestProject></PropertyGroup></Project>')
+        self.write("App/Main.cs", 'class Caller { void Run(){ TestApi.Call(); } }')
+        self.write("Tests/Api.cs", 'public class TestApi { public static void Call(){} }')
+        excluded = self.run_helper(self.request(["App/Main.cs", "Tests/Api.cs"]))
+        self.assertEqual(excluded["error"]["code"], "unsupported_configuration", excluded)
+        self.assertEqual(excluded["error"]["message"], "Production project references excluded test project")
+        self.assertEqual(excluded["error"]["paths"], ["App/App.csproj"])
+        included = self.run_helper(self.request(["App/Main.cs", "Tests/Api.cs"], include_tests=True))
+        self.assertEqual(included["outcome"], "ok", included)
+        run = next(node for node in included["graph"]["nodes"] if node["name"] == "Run")
+        self.assertTrue(any(ref["semantic"] == "code.calls" and ref["target"]["kind"] == "node"
+                            for ref in run["references"]))
+
+    def test_debug_reference_overrides_dependency_release_default(self):
+        """Debug 调用方必须传播上下文，即使依赖项目默认使用 Release。"""
+        self.write("Lib/Lib.csproj", '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework><Configuration>Release</Configuration></PropertyGroup></Project>')
+        self.write("App/App.csproj", '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup><ProjectReference Include="../Lib/Lib.csproj" /></ItemGroup></Project>')
+        self.write("Lib/Api.cs", "public class Api {\n#if DEBUG\npublic static void DebugOnly(){}\n#else\npublic static void ReleaseOnly(){}\n#endif\n}")
+        self.write("App/Main.cs", "class Caller { void Run(){Api.DebugOnly();} }")
+        result = self.run_helper(self.request(["App/Main.cs", "Lib/Api.cs"]))
+        self.assertEqual(result["outcome"], "ok", result)
+        run = next(node for node in result["graph"]["nodes"] if node["name"] == "Run")
+        self.assertTrue(any(ref["semantic"] == "code.calls" and ref["target"]["kind"] == "node" and
+                            "DebugOnly" in ref["target"]["id"] for ref in run["references"]))
+        ids = [config["id"] for config in result["evidence"]["configurations"]]
+        self.assertIn("Lib/Lib.csproj:net10.0:Debug", ids)
+        self.assertIn("Lib/Lib.csproj:net10.0:Release", ids)
+
+    def test_project_reference_requires_matching_target(self):
+        """依赖项目存在但 TFM 不匹配时，不能借用其他目标配置。"""
+        self.write("Lib/Lib.csproj", '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>')
+        self.write("Lib/Api.cs", "class Api {}")
+        self.write("App/App.csproj", '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup><ProjectReference Include="../Lib/Lib.csproj" /></ItemGroup></Project>')
+        self.write("App/Main.cs", "class Caller {}")
+        result = self.run_helper(self.request(["App/Main.cs"]))
+        self.assertEqual(result["error"]["code"], "unsupported_configuration", result)
+        self.assertEqual(result["error"]["message"], "ProjectReference lacks matching TFM and Configuration: Lib/Lib.csproj")
+        self.assertEqual(result["error"]["paths"], ["App/App.csproj"])
+
     def test_project_reference_and_static_rejection(self):
         """静态 ProjectReference 能绑定，项目 Target 必须拒绝且不可执行。"""
         self.write("A/A.csproj", '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>')

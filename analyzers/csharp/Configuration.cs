@@ -2,14 +2,64 @@ using System.Text.Json;
 using System.Xml.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace CodeGraph.CSharp.Engine;
 
-/// <summary>表示一个必须独立编译和分析的静态 C# 上下文。</summary>
+/// <summary>以项目路径、目标和构建配置共同确定 SDK 项目引用，独立于来源证据。</summary>
+internal sealed record ProjectIdentity(string Path, string Tfm, string ConfigurationName);
+
+/// <summary>保存独立编译上下文及其策略；Project 为空表示显式 source-set。</summary>
 internal sealed record StaticConfiguration(string Id, string[] Files, string Tfm, LanguageVersion LanguageVersion,
     string[] Defines, bool ImplicitUsings, string[] SourcePaths, string[] ProjectReferences, bool TestOnly,
     string[] InactiveFiles, string AssemblyName, NullableContextOptions Nullable, OutputKind Output,
-    string ConfigurationName);
+    ProjectIdentity? Project)
+{
+    /// <summary>保留 source-set 明确常量；调用方验证目标引用后，才按 SDK 规则展开隐式常量。</summary>
+    public string[] PreprocessorSymbols(TargetProfile validatedTarget, CancellationToken cancellation) => Project is null
+        ? Defines
+        : ImplicitDefines(validatedTarget, cancellation).Concat(Defines).Distinct(StringComparer.Ordinal).ToArray();
+
+    /// <summary>source-set 根据顶层语句选择输出；SDK 项目保持声明的 OutputType 与 Nullable。</summary>
+    public CSharpCompilationOptions CompilationOptions(IEnumerable<SyntaxTree> trees, CancellationToken cancellation)
+    {
+        var output = Project is null && trees.Any(tree => tree.GetRoot(cancellation) is CompilationUnitSyntax unit &&
+            unit.Members.OfType<GlobalStatementSyntax>().Any()) ? OutputKind.ConsoleApplication : Output;
+        return new CSharpCompilationOptions(output, nullableContextOptions: Nullable);
+    }
+
+    /// <summary>项目引用继承调用方的目标与 Debug/Release 上下文；source-set 不声明项目引用。</summary>
+    public ProjectIdentity ReferenceIdentity(string path) => Project! with { Path = path };
+
+    /// <summary>按完整身份绑定项目引用，并保留缺失配置与排除测试项目的细分失败。</summary>
+    public IEnumerable<StaticConfiguration> ReferencedConfigurations(IEnumerable<StaticConfiguration> configurations, bool includeTests)
+    {
+        foreach (var dependency in ProjectReferences)
+        {
+            var identity = ReferenceIdentity(dependency);
+            var target = configurations.SingleOrDefault(candidate => candidate.Project == identity);
+            if (target is null)
+                throw new HelperException("unsupported_configuration", $"ProjectReference lacks matching TFM and Configuration: {dependency}", SourcePaths);
+            if (target.TestOnly && !includeTests)
+                throw new HelperException("unsupported_configuration", "Production project references excluded test project", SourcePaths);
+            yield return target;
+        }
+    }
+
+    /// <summary>仅在本地目标引用已验证后生成 SDK 常量，避免声明任意大 TFM 时提前展开。</summary>
+    private static List<string> ImplicitDefines(TargetProfile target, CancellationToken cancellation)
+    {
+        var defines = new List<string> { "NET", "NETCOREAPP", $"NET{target.Major}_0" };
+        for (var major = target.Major; major >= 5; major--)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            defines.Add($"NET{major}_0_OR_GREATER");
+        }
+        defines.AddRange(["NETCOREAPP3_1_OR_GREATER", "NETCOREAPP3_0_OR_GREATER", "NETCOREAPP2_2_OR_GREATER",
+            "NETCOREAPP2_1_OR_GREATER", "NETCOREAPP2_0_OR_GREATER", "NETCOREAPP1_1_OR_GREATER", "NETCOREAPP1_0_OR_GREATER"]);
+        return defines;
+    }
+}
 
 /// <summary>保存已验证的现代 .NET 基础 TFM，不固定目标引用包的补丁版本。</summary>
 internal sealed record TargetProfile(string Tfm, int Major);
@@ -37,20 +87,6 @@ internal static class Configuration
             throw new HelperException("unsupported_configuration",
                 $"Bundled Roslyn does not support the default C# {version} for {target.Tfm}; set an explicit supported numeric LangVersion");
         return language;
-    }
-
-    /// <summary>仅在本地目标引用已验证后生成 SDK 常量，避免声明任意大 TFM 时提前展开。</summary>
-    public static List<string> ImplicitDefines(TargetProfile target, CancellationToken cancellation)
-    {
-        var defines = new List<string> { "NET", "NETCOREAPP", $"NET{target.Major}_0" };
-        for (var major = target.Major; major >= 5; major--)
-        {
-            cancellation.ThrowIfCancellationRequested();
-            defines.Add($"NET{major}_0_OR_GREATER");
-        }
-        defines.AddRange(["NETCOREAPP3_1_OR_GREATER", "NETCOREAPP3_0_OR_GREATER", "NETCOREAPP2_2_OR_GREATER",
-            "NETCOREAPP2_1_OR_GREATER", "NETCOREAPP2_0_OR_GREATER", "NETCOREAPP1_1_OR_GREATER", "NETCOREAPP1_0_OR_GREATER"]);
-        return defines;
     }
 
     /// <summary>发现配置，并确保每个文件的归属由静态规则证明。</summary>
@@ -88,11 +124,10 @@ internal static class Configuration
             var caller = output[index];
             foreach (var dependency in caller.ProjectReferences)
             {
-                if (output.Any(candidate => candidate.SourcePaths[0] == dependency &&
-                    candidate.Tfm == caller.Tfm && candidate.ConfigurationName == caller.ConfigurationName)) continue;
-                var propagated = ReadProject(root, ResolvePath(root, dependency), cancellation, documents, sourceInventories, caller.ConfigurationName)
-                    .SingleOrDefault(candidate => candidate.Tfm == caller.Tfm &&
-                        candidate.ConfigurationName == caller.ConfigurationName);
+                var identity = caller.ReferenceIdentity(dependency);
+                if (output.Any(candidate => candidate.Project == identity)) continue;
+                var propagated = ReadProject(root, ResolvePath(root, dependency), cancellation, documents, sourceInventories, identity.ConfigurationName)
+                    .SingleOrDefault(candidate => candidate.Project == identity);
                 if (propagated is null)
                     throw new HelperException("unsupported_configuration",
                         $"ProjectReference lacks matching TFM and Configuration: {dependency}", caller.SourcePaths);
@@ -140,7 +175,7 @@ internal static class Configuration
                 defines,
                 config.GetProperty("implicit_usings").GetBoolean(), ["narrant.csharp.json"], [],
                 config.TryGetProperty("test_only", out var test) && test.GetBoolean(), [],
-                id, NullableContextOptions.Disable, OutputKind.DynamicallyLinkedLibrary, id));
+                id, NullableContextOptions.Disable, OutputKind.DynamicallyLinkedLibrary, null));
         }
         if (output.Count == 0 || output.Select(c => c.Id).Distinct(StringComparer.Ordinal).Count() != output.Count)
             throw new HelperException("unsupported_configuration", "Source-set has no configurations or duplicate ids");
@@ -327,7 +362,7 @@ internal static class Configuration
                     .Select(item => item.path).ToArray(),
                 properties.GetValueOrDefault("IsTestProject", "false") == "true",
                 conditionalCandidates.Except(files).Order(StringComparer.Ordinal).ToArray(),
-                assemblyName, nullable, outputKind, configuration));
+                assemblyName, nullable, outputKind, new ProjectIdentity(relative, tfm, configuration)));
         }
         return output;
     }
