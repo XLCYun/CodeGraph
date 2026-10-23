@@ -1,7 +1,15 @@
-// 已安装 SDK 的只读发现；此头文件只编入生产入口，不接受调用方 catalog。
+#include "detail/analysis.hpp"
+#include <algorithm>
+#include <cstdlib>
+#include <limits>
+#include <sstream>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #endif
+namespace codegraph::clang_analyzer::detail {
 
 // 从环境读取 Unicode 安装线索，Windows 不经过当前 ANSI 代码页。
 static fs::path environmentPath(const char *name) {
@@ -41,11 +49,11 @@ static fs::path executablePath() {
 #endif
 }
 // bin 的父目录是安装根，本机构建输出目录也可作为独立测试安装。
-static fs::path installationRoot() {
+fs::path installationRoot() {
   auto directory=executablePath().parent_path(); return directory.filename()=="bin"?directory.parent_path():directory;
 }
 // 读取 SDK 自身声明，沿用默认部署目标及 C/C++ 标准头验证。
-static j::Object macosPlatform(const fs::path &path) {
+j::Object macosPlatform(const fs::path &path) {
   auto root=real(path); auto settings=parse(read(root/"SDKSettings.json")); auto object=settings.getAsObject(); require(object,"invalid macOS SDK settings","target_unavailable");
   auto version=str(*object,"Version"); require(!numericVersion(version).empty(),"invalid macOS SDK version","target_unavailable");
   for(auto header:{"usr/include/stdio.h","usr/include/c++/v1/vector"}) { auto file=real(root/header); require(under(file,root) && fs::is_regular_file(file),"missing macOS standard header","target_unavailable"); }
@@ -75,7 +83,7 @@ static fs::path newestInstallation(const fs::path &root,const fs::path &header) 
   std::sort(candidates.begin(),candidates.end()); return candidates.empty()?fs::path():candidates.back().second;
 }
 // Windows SDK 与 MSVC 独立授权具体 include 根，不把任意 compiler query-driver 作为发现手段。
-static j::Array discoverWindows() {
+j::Array discoverWindows() {
   auto kits=environmentPath("ProgramFiles(x86)"),programs=environmentPath("ProgramFiles");
   if(kits.empty()) kits=fs::path(L"C:\\Program Files (x86)"); if(programs.empty()) programs=fs::path(L"C:\\Program Files");
   auto sdk=environmentPath("CODEGRAPH_WINDOWS_SDK"),msvc=environmentPath("CODEGRAPH_MSVC_ROOT");
@@ -100,7 +108,7 @@ static j::Array discoverWindows() {
       {"metadata",j::Object{{"target_triple","x86_64-pc-windows-msvc"},{"system_include_directories",j::Array{"ucrt","shared","um","winrt","cppwinrt"}},{"resource_platform_id","clang-resource-21"},{"additional_system_platform_ids",j::Array{"msvc-standard-headers"}}}}}};
 }
 // 目标 SDK 与随包的固定 Clang builtin headers 分开定位，编译器运行时不是项目 SDK。
-static void discoverPlatforms(Request &request) {
+void discoverPlatforms(Request &request) {
   auto resource=real(installationRoot()/"runtime/platform/clang-resource");
   require(fs::is_regular_file(resource/"include/stddef.h"),"missing bundled Clang resource headers","invalid_pack");
 #ifdef _WIN32
@@ -115,3 +123,5 @@ static void discoverPlatforms(Request &request) {
     for(auto &root:roots) require(!under(root,request.root) && !under(request.root,root),"target SDK overlaps source repository","invalid_input");
   }
 }
+
+} // namespace codegraph::clang_analyzer::detail

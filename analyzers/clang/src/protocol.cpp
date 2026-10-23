@@ -1,10 +1,14 @@
-// 公共一次性 JSON 边界与 CLI；所有图构造继续在当前 LibTooling 进程内进行。
-#include <limits>
+#include "analyzer.hpp"
+#include "detail/analysis.hpp"
+#include <cstdio>
+#include <fstream>
+#include <istream>
+#include <ostream>
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
 #endif
-#include "sdk_discovery.hpp"
+namespace codegraph::clang_analyzer::detail {
 
 // Unicode 空白不能构成有效请求 ID；输入已通过严格 UTF-8 检查。
 static bool blankId(const std::string &text) {
@@ -94,23 +98,25 @@ static std::string publicCode(const std::string &code) {
   return codes.count(code)?code:"analysis_failed";
 }
 // 标准输入以原始字节读取直到 EOF，Windows 关闭 CRT 文本转换和 Ctrl-Z 提前终止。
-static std::string readPublic() {
+static std::string readPublic(std::istream &input) {
 #ifdef _WIN32
   require(_setmode(_fileno(stdin),_O_BINARY)!=-1 && _setmode(_fileno(stdout),_O_BINARY)!=-1,"cannot set binary pipes","io_failure");
 #endif
   std::string bytes; char chunk[65536];
-  while(std::cin) { std::cin.read(chunk,sizeof(chunk)); auto count=std::cin.gcount(); require(bytes.size()+static_cast<size_t>(count)<=MaxPublicBytes,"request exceeds byte limit","resource_limit"); bytes.append(chunk,static_cast<size_t>(count)); }
-  require(std::cin.eof(),"stdin read failed","io_failure"); return bytes;
+  while(input) { input.read(chunk,sizeof(chunk)); auto count=input.gcount(); require(bytes.size()+static_cast<size_t>(count)<=MaxPublicBytes,"request exceeds byte limit","resource_limit"); bytes.append(chunk,static_cast<size_t>(count)); }
+  require(input.eof(),"stdin read failed","io_failure"); return bytes;
 }
-// 公共 CLI 只允许一次 analyze；调用方取消通过终止进程树实现。
-int main(int argc,char **argv) {
-  if((argc==2 && (std::string(argv[1])=="--help" || std::string(argv[1])=="--version")) || (argc==3 && std::string(argv[1])=="analyze" && std::string(argv[2])=="--help")) {
-    std::cout<<(std::string(argv[1])=="--version"?"codegraph-c-cpp 0.1.0\n":"Usage: codegraph-c-cpp analyze\nReads one UTF-8 JSON request followed by EOF.\n"); return 0;
-  }
-  if(argc!=2 || std::string(argv[1])!="analyze") { std::cerr<<"Usage: codegraph-c-cpp analyze\n"; return 2; }
+
+} // namespace codegraph::clang_analyzer::detail
+
+namespace codegraph::clang_analyzer {
+
+// Request 在读取 stdin 前创建，保留公共期限的原有起点。
+int runPublicAnalysis(std::istream &input, std::ostream &outputStream) {
+  using namespace detail;
   Request request; j::Object result; bool success=false;
   try {
-    auto bytes=readPublic();
+    auto bytes=readPublic(input);
     try {
       require(j::isUTF8(bytes),"request must be UTF-8"); auto value=parse(bytes); auto object=value.getAsObject(); require(object,"request must be an object"); decodePublic(request,*object);
     } catch(const Failure &failure) { throw Failure(failure.code=="incompatible_protocol" || failure.code=="resource_limit"?failure.code:"invalid_request",failure.what()); }
@@ -122,5 +128,7 @@ int main(int argc,char **argv) {
     catch(const std::exception &exception) { result=error(request.id,Failure("internal_failure",exception.what())); }
   auto output=jsonText(j::Value(std::move(result)));
   if(output.size()+1>MaxPublicBytes) { output=jsonText(error(request.id,Failure("resource_limit","result exceeds byte limit"))); success=false; }
-  std::cout<<output<<'\n'; std::cout.flush(); if(!std::cout) return 1; return success?0:1;
+  outputStream<<output<<'\n'; outputStream.flush(); if(!outputStream) return 1; return success?0:1;
 }
+
+} // namespace codegraph::clang_analyzer

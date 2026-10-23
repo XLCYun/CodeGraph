@@ -1,10 +1,31 @@
 # codegraph-c-cpp
 
-Clang 21.1.8 LibTooling 原生分析器。`src/main.cpp` 直接使用 `ClangTool`、AST visitor、
+Clang 21.1.8 LibTooling 原生分析器。分析 module 直接使用 `ClangTool`、AST visitor、
 `SourceManager`、`Lexer`、`PPCallbacks` 和 USR 绑定证据；不运行 clang AST JSON 子进程。
 固定 `bin/codegraph-c-cpp[.exe] analyze` 直接读取公共 `codegraph.analyzer/1` JSON 后 EOF，
 输出一个带固定 `engine_version: "0.1.0"` 与 `pack_id: "c-cpp"` 的最终结果。
 调用方负责取消与超时的整棵进程树终止；没有 ready/cancel、分析 worker 或控制监听器。
+
+## 实现结构
+
+`src/analyzer.hpp` 是入口使用的内部 interface，只提供公共分析和非交付语义夹具的完整执行操作，
+不暴露 `Request`、`Graph` 或 AST 状态。`src/main.cpp` 只解释启动参数并调用公共操作；
+`tests/component.cpp` 只启动夹具或 SDK 专项检查，不包含生产 `.cpp`。
+
+| 文件 | 职责 |
+| --- | --- |
+| `src/protocol.cpp` | 一次性 JSON、公共校验、错误映射与最终输出 |
+| `src/analyzer.cpp` | 单请求生命周期、顺序运行全部 TU 后收尾 |
+| `src/project.cpp`、`src/sdk_discovery.cpp` | 现有 CDB 解释、目标 SDK 发现和批准策略 |
+| `src/extraction.cpp` | 同进程 Clang、VFS、AST、宏和参与文件提取 |
+| `src/graph.cpp` | 跨 TU 并集后的稳定身份、引用、自身内容与图结果 |
+| `src/support.cpp`、`src/source_text.cpp` | 严格 JSON、路径操作与原始 token 文本 |
+| `src/detail/analysis.hpp` | module 私有状态和内部声明 |
+| `src/fixture.cpp` | 非交付夹具的完整执行操作，保留内部 evidence 和细分错误码 |
+
+`sources.txt` 是 CMake 与 `build.sh` 共用的核心源文件清单。核心先编译为静态 archive，
+再由公共入口和夹具链接；archive 不安装、不随包交付。夹具操作是可选的独立成员，
+生产入口不引用它。公共与夹具原有的资源限制、校验和错误处理差异保持原样。
 
 ## 固定开发环境与构建
 
