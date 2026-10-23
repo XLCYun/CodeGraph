@@ -142,14 +142,6 @@ type projectSelection struct {
 	Files   []string
 }
 
-// analysisConfiguration 绑定一次分析使用的项目、文件和唯一 SDK，防止跨 module 混合上下文。
-type analysisConfiguration struct {
-	Project *project
-	Files   []string
-	SDK     platform
-	ID      string
-}
-
 // loadProjectSelections 在 workspace 内共用上下文，在无 workspace 时隔离每个独立 module。
 func loadProjectSelections(root string, selected []string) ([]projectSelection, *analysisError) {
 	return loadProjectSelectionsContext(context.Background(), root, selected)

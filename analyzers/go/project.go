@@ -6,15 +6,12 @@ import (
 	"fmt"
 	"go/build"
 	"go/build/constraint"
-	"go/parser"
-	"go/token"
 	"go/version"
 	"os"
 	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -30,15 +27,14 @@ type module struct {
 
 // project 持有只读仓库模块索引和配置文件来源。
 type project struct {
-	Context        context.Context
-	Root           string
-	Modules        []*module
-	WorkSource     string
-	WorkGo         string
-	WorkToolchain  string
-	Replace        map[string]string
-	WorkReplace    map[string]string
-	ContextModules map[string]*module
+	Context       context.Context
+	Root          string
+	Modules       []*module
+	WorkSource    string
+	WorkGo        string
+	WorkToolchain string
+	Replace       map[string]string
+	WorkReplace   map[string]string
 }
 
 // within 拒绝词法及符号链接层面的仓外路径。
@@ -236,7 +232,7 @@ func loadProject(root string, selected []string) (*project, *analysisError) {
 
 // loadProjectContext 在同一请求期限内解释根配置或显式文件的模块归属。
 func loadProjectContext(ctx context.Context, root string, selected []string) (*project, *analysisError) {
-	p := &project{Context: ctx, Root: root, Replace: map[string]string{}, WorkReplace: map[string]string{}, ContextModules: map[string]*module{}}
+	p := &project{Context: ctx, Root: root, Replace: map[string]string{}, WorkReplace: map[string]string{}}
 	work := filepath.Join(root, "go.work")
 	var useDirs []string
 	if _, err := os.Lstat(work); err == nil {
@@ -391,31 +387,6 @@ func (p *project) moduleForFile(filename string) *module {
 	return best
 }
 
-// moduleForPackage 为已准入的仓内包读取自身 module 的语言声明，包括本地 replace。
-func (p *project) moduleForPackage(dir string) (*module, error) {
-	if m := p.moduleForFile(dir); m != nil {
-		return m, nil
-	}
-	base := ""
-	for _, replacement := range p.Replace {
-		if within(replacement, dir) == nil && !crossedModuleBoundary(replacement, dir) && len(replacement) > len(base) {
-			base = replacement
-		}
-	}
-	if base == "" {
-		return nil, fmt.Errorf("package is outside admitted module: %s", dir)
-	}
-	if m := p.ContextModules[base]; m != nil {
-		return m, nil
-	}
-	m, err := parseModContext(p.Context, p.Root, filepath.Join(base, "go.mod"))
-	if err != nil {
-		return nil, fmt.Errorf("local replacement go.mod: %w", err)
-	}
-	p.ContextModules[base] = m
-	return m, nil
-}
-
 // crossedModuleBoundary 拒绝把未显式 use 的嵌套 go.mod 当作外层包。
 func crossedModuleBoundary(base, candidate string) bool {
 	dir := candidate
@@ -528,16 +499,8 @@ func validatePlatform(p platform) error {
 	return nil
 }
 
-// discoverPlatforms 根据明确条件选择 catalog 候选；无条件时仅取宿主基线。
-func discoverPlatforms(project *project, selected []string, includeTests bool, candidates []platform) ([]platform, *analysisError) {
-	candidates, problem := selectSDKVersions(project, candidates)
-	if problem != nil {
-		return nil, problem
-	}
-	contextFiles, problem := projectContextFiles(project, selected, includeTests, candidates[0])
-	if problem != nil {
-		return nil, problem
-	}
+// choosePlatforms 根据已准入源码的明确条件选择 SDK 目标；无条件时仅取宿主基线。
+func choosePlatforms(project *project, selected, contextFiles []string, candidates []platform) ([]platform, *analysisError) {
 	explicit := []string{}
 	selectedSet := map[string]bool{}
 	for _, rel := range selected {
@@ -633,100 +596,6 @@ func matchesSupportedTarget(root, rel string, sdk platform) (bool, *analysisErro
 	return false, nil
 }
 
-// projectContextFiles 沿仓内显式导入闭包搜集允许源码及平台条件，绝不读取第三方依赖。
-func projectContextFiles(p *project, selected []string, includeTests bool, sdk platform) ([]string, *analysisError) {
-	dirs := map[string]bool{}
-	for _, rel := range selected {
-		if !includeTests && strings.HasSuffix(rel, "_test.go") {
-			continue
-		}
-		filename := filepath.Join(p.Root, filepath.FromSlash(rel))
-		if p.moduleForFile(filename) == nil {
-			return nil, fail("unsupported_configuration", "selected file is outside admitted module", rel)
-		}
-		dirs[filepath.Dir(filename)] = true
-	}
-	files := []string{}
-	queue := []string{}
-	for dir := range dirs {
-		queue = append(queue, dir)
-	}
-	sort.Strings(queue)
-	visited := map[string]bool{}
-	for len(queue) > 0 {
-		if problem := p.checkpoint(); problem != nil {
-			return nil, problem
-		}
-		dir := queue[0]
-		queue = queue[1:]
-		if visited[dir] {
-			continue
-		}
-		visited[dir] = true
-		m, err := p.moduleForPackage(dir)
-		if problem := p.checkpoint(); problem != nil {
-			return nil, problem
-		}
-		if err != nil {
-			return nil, fail("unsupported_configuration", err.Error())
-		}
-		if problem := m.validateSDKVersion(sdk); problem != nil {
-			return nil, problem
-		}
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			return nil, fail("object_extraction_failed", err.Error())
-		}
-		for _, entry := range entries {
-			if problem := p.checkpoint(); problem != nil {
-				return nil, problem
-			}
-			if entry.IsDir() || !goSourceName(entry.Name()) || ((!includeTests || !dirs[dir]) && strings.HasSuffix(entry.Name(), "_test.go")) {
-				continue
-			}
-			filename := filepath.Join(dir, entry.Name())
-			data, err := safeFile(p.Root, filename)
-			if err != nil {
-				return nil, fail("unsupported_configuration", err.Error())
-			}
-			rel, _ := filepath.Rel(p.Root, filename)
-			files = append(files, filepath.ToSlash(rel))
-			if _, problem := hasTargetConstraint(p.Root, filepath.ToSlash(rel)); problem != nil {
-				return nil, problem
-			}
-			supported, problem := matchesSupportedTarget(p.Root, filepath.ToSlash(rel), sdk)
-			if problem != nil {
-				return nil, problem
-			}
-			if !supported {
-				continue
-			}
-			parsed, err := parser.ParseFile(token.NewFileSet(), filename, data, parser.ImportsOnly)
-			if err != nil {
-				return nil, fail("object_extraction_failed", err.Error(), filepath.ToSlash(rel))
-			}
-			for _, imported := range parsed.Imports {
-				name, err := strconv.Unquote(imported.Path.Value)
-				if err != nil {
-					return nil, fail("object_extraction_failed", err.Error(), filepath.ToSlash(rel))
-				}
-				dependency, local, err := p.importDirectory(name)
-				if err != nil {
-					return nil, fail("unsupported_configuration", err.Error(), filepath.ToSlash(rel))
-				}
-				if local {
-					if err := within(p.Root, dependency); err != nil {
-						return nil, fail("unsupported_configuration", err.Error(), filepath.ToSlash(rel))
-					}
-					queue = append(queue, dependency)
-				}
-			}
-		}
-	}
-	sort.Strings(files)
-	return files, nil
-}
-
 // hasTargetConstraint 解析 Go 布尔条件并校验其中所有标签有固定含义。
 func hasTargetConstraint(root, rel string) (bool, *analysisError) {
 	data, err := safeFile(root, filepath.Join(root, filepath.FromSlash(rel)))
@@ -797,22 +666,6 @@ func supportedBuildTag(tag string) bool {
 		return true
 	}
 	return strings.HasPrefix(tag, "go1.") && validGoVersion(strings.TrimPrefix(tag, "go")) && version.Lang(tag) == tag
-}
-
-// projectSourcePaths 返回实际读取并影响配置的仓内配置文件。
-func (p *project) projectSourcePaths() []string {
-	paths := []string{}
-	if p.WorkSource != "" {
-		paths = append(paths, p.WorkSource)
-	}
-	for _, m := range p.Modules {
-		paths = append(paths, m.Source)
-	}
-	for _, m := range p.ContextModules {
-		paths = append(paths, m.Source)
-	}
-	sort.Strings(paths)
-	return paths
 }
 
 // rejectSpecialSources 拒绝不能由纯 Go parser/types 保证完整性的源形态。

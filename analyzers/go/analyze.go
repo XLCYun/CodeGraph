@@ -38,10 +38,10 @@ type packageUnit struct {
 	TestsIncluded bool
 }
 
-// sourceLoader 只导入仓内 module 和目标 SDK 标准库源码。
+// sourceLoader 从已准备的准入域和目标 SDK 导入源码，不再登记配置来源。
 type sourceLoader struct {
 	Ctx       context.Context
-	Project   *project
+	Sources   *sourceAdmission
 	SDK       platform
 	Build     build.Context
 	Fset      *token.FileSet
@@ -69,7 +69,7 @@ func (l *sourceLoader) Import(importPath string) (*types.Package, error) {
 	return unit.Package, nil
 }
 
-// load 读取一个可证明来源的包，并递归检查必要声明。
+// load 读取已准入包并递归检查必要声明，语言版本只查询准备阶段的索引。
 func (l *sourceLoader) load(importPath string, checkBodies, includeTests bool) (loaded *packageUnit, loadErr error) {
 	if unit := l.Cache[importPath]; unit != nil {
 		if (!checkBodies || unit.BodiesChecked) && (!includeTests || unit.TestsIncluded) {
@@ -83,14 +83,14 @@ func (l *sourceLoader) load(importPath string, checkBodies, includeTests bool) (
 	if path.Clean(importPath) != importPath || strings.HasPrefix(importPath, "/") || strings.Contains(importPath, "\\") || importPath == "C" {
 		return nil, fmt.Errorf("rejected import %q", importPath)
 	}
-	dir, local, routeErr := l.Project.importDirectory(importPath)
+	dir, local, routeErr := l.Sources.Project.importDirectory(importPath)
 	if routeErr != nil {
 		l.Fatal = fail("unsupported_configuration", routeErr.Error())
 		return nil, routeErr
 	}
 	// 仓内导入包也必须检查函数体中的语言门禁，标准库仍只检查所需声明。
 	checkBodies = checkBodies || local
-	allowed := l.Project.Root
+	allowed := l.Sources.Project.Root
 	// 仓内已准入源码的读取或解析失败不能退化成缺少第三方绑定。
 	defer func() {
 		if local && loadErr != nil && l.Fatal == nil {
@@ -107,36 +107,6 @@ func (l *sourceLoader) load(importPath string, checkBodies, includeTests bool) (
 	}
 	if err := within(allowed, dir); err != nil {
 		return nil, err
-	}
-	if local {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			return nil, err
-		}
-		var contextFiles []string
-		for _, entry := range entries {
-			if err := l.Ctx.Err(); err != nil {
-				return nil, err
-			}
-			if entry.IsDir() || !goSourceName(entry.Name()) || (!includeTests && strings.HasSuffix(entry.Name(), "_test.go")) {
-				continue
-			}
-			filename := filepath.Join(dir, entry.Name())
-			if _, err := safeFile(allowed, filename); err != nil {
-				return nil, err
-			}
-			rel, _ := filepath.Rel(l.Project.Root, filename)
-			contextFiles = append(contextFiles, filepath.ToSlash(rel))
-		}
-		for _, rel := range contextFiles {
-			if err := l.Ctx.Err(); err != nil {
-				return nil, err
-			}
-			if _, problem := hasTargetConstraint(l.Project.Root, rel); problem != nil {
-				l.Fatal = problem
-				return nil, fmt.Errorf("package %s: %s", importPath, problem.Message)
-			}
-		}
 	}
 	meta, err := l.Build.ImportDir(dir, build.IgnoreVendor)
 	if err != nil {
@@ -166,7 +136,7 @@ func (l *sourceLoader) load(importPath string, checkBodies, includeTests bool) (
 		}
 		rel := ""
 		if local {
-			rel, _ = filepath.Rel(l.Project.Root, filename)
+			rel, _ = filepath.Rel(l.Sources.Project.Root, filename)
 			rel = filepath.ToSlash(rel)
 		}
 		unit.Files = append(unit.Files, &fileUnit{Rel: rel, Abs: filename, AST: file, Bytes: data})
@@ -179,7 +149,7 @@ func (l *sourceLoader) load(importPath string, checkBodies, includeTests bool) (
 	}
 	goVersion := "go" + l.SDK.Version
 	if local {
-		m, err := l.Project.moduleForPackage(dir)
+		m, err := l.Sources.moduleForPackage(dir)
 		if err != nil {
 			l.Fatal = fail("unsupported_configuration", err.Error())
 			return nil, err
@@ -193,7 +163,7 @@ func (l *sourceLoader) load(importPath string, checkBodies, includeTests bool) (
 	config := types.Config{Importer: l, Sizes: types.SizesFor("gc", l.SDK.Metadata.GOARCH), GoVersion: goVersion, IgnoreFuncBodies: !checkBodies, Error: func(err error) {
 		unit.Missing[err.Error()] = true
 		if diagnostic := languageVersionError(err); local && l.Fatal == nil && diagnostic != nil {
-			source, _ := filepath.Rel(l.Project.Root, l.Fset.Position(diagnostic.Pos).Filename)
+			source, _ := filepath.Rel(l.Sources.Project.Root, l.Fset.Position(diagnostic.Pos).Filename)
 			l.Fatal = fail("object_extraction_failed", diagnostic.Msg, filepath.ToSlash(source))
 		}
 	}}
@@ -960,7 +930,6 @@ func analyze(ctx context.Context, req request) completed {
 	if len(req.Input.Files) > maxSelectionFiles {
 		return returnError(fail("resource_limit", "too many selected files"))
 	}
-	discovery := req.Input.Files == nil
 	seen := map[string]bool{}
 	for _, rel := range req.Input.Files {
 		if response, yes := stopped(); yes {
@@ -987,118 +956,17 @@ func analyze(ctx context.Context, req request) completed {
 			return returnError(fail("invalid_input", err.Error()))
 		}
 	}
-	groups, problem := loadProjectSelectionsContext(ctx, root, req.Input.Files)
+	plan, problem := prepareAnalysis(ctx, req)
 	if problem != nil {
 		return returnError(problem)
 	}
-	if discovery && len(groups) > 0 {
-		if err := observeDiscovery(req.ID); err != nil {
-			return returnError(fail("internal_failure", err.Error()))
-		}
-	}
-	plans := []analysisConfiguration{}
-	for index, group := range groups {
-		if discovery {
-			files, problem := discoverProjectFiles(group.Project, req.Input.IncludeTests, req.Environment.Platforms)
-			if problem != nil {
-				return returnError(problem)
-			}
-			group.Files = files
-			for _, file := range files {
-				seen[file] = true
-			}
-			req.Input.Files = append(req.Input.Files, files...)
-			if problem := rejectSpecialSources(root, files, req.Input.IncludeTests); problem != nil {
-				return returnError(problem)
-			}
-		}
-		discoveryFiles := []string{}
-		for _, rel := range group.Files {
-			if req.Input.IncludeTests || !strings.HasSuffix(rel, "_test.go") {
-				discoveryFiles = append(discoveryFiles, rel)
-			}
-		}
-		platforms, problem := discoverPlatforms(group.Project, discoveryFiles, req.Input.IncludeTests, req.Environment.Platforms)
-		if problem != nil {
-			return returnError(problem)
-		}
-		for _, sdk := range platforms {
-			configID := "go-" + sdk.ID
-			if len(groups) > 1 {
-				configID = fmt.Sprintf("go-%d-%s", index+1, sdk.ID)
-			}
-			plans = append(plans, analysisConfiguration{Project: group.Project, Files: group.Files, SDK: sdk, ID: configID})
-		}
-	}
 	builder := newGraphBuilder()
-	active := map[string][]string{}
-	ownedConfigs := map[string][]string{}
-	configs := []configurationEvidence{}
-	for _, plan := range plans {
+	for _, config := range plan.Configurations {
 		if response, yes := stopped(); yes {
 			return response
 		}
-		project, sdk, configID := plan.Project, plan.SDK, plan.ID
-		configs = append(configs, configurationEvidence{ID: configID, SourcePaths: project.projectSourcePaths(), PlatformIDs: []string{sdk.ID}})
-		for _, rel := range plan.Files {
-			ownedConfigs[rel] = append(ownedConfigs[rel], configID)
-		}
-		loader := &sourceLoader{Ctx: ctx, Project: project, SDK: sdk, Build: standardTarget(sdk), Fset: token.NewFileSet(), Cache: map[string]*packageUnit{}, Loading: map[string]bool{}}
-		selectedPackages := map[string]bool{}
-		for _, rel := range plan.Files {
-			if response, yes := stopped(); yes {
-				return response
-			}
-			if strings.HasSuffix(rel, "_test.go") && !req.Input.IncludeTests {
-				continue
-			}
-			filename := filepath.Join(root, filepath.FromSlash(rel))
-			m := project.moduleForFile(filename)
-			if m == nil {
-				return returnError(fail("unsupported_configuration", "selected file is outside workspace modules", rel))
-			}
-			dir := filepath.Dir(filename)
-			entries, readErr := os.ReadDir(dir)
-			if readErr != nil {
-				return returnError(fail("object_extraction_failed", readErr.Error(), rel))
-			}
-			for _, entry := range entries {
-				if response, yes := stopped(); yes {
-					return response
-				}
-				if !entry.IsDir() && goSourceName(entry.Name()) {
-					if _, readErr := safeFile(root, filepath.Join(dir, entry.Name())); readErr != nil {
-						return returnError(fail("unsupported_configuration", readErr.Error(), rel))
-					}
-				}
-			}
-			suffix, _ := filepath.Rel(m.Dir, dir)
-			importPath := m.Path
-			if suffix != "." {
-				importPath += "/" + filepath.ToSlash(suffix)
-			}
-			meta, err := loader.Build.ImportDir(dir, build.IgnoreVendor)
-			if err != nil {
-				if _, ok := err.(*build.NoGoError); !ok {
-					return returnError(fail("object_extraction_failed", err.Error(), rel))
-				}
-			}
-			fileName := filepath.Base(filename)
-			if req.Input.IncludeTests && containsString(meta.XTestGoFiles, fileName) {
-				return returnError(fail("unsupported_configuration", "external _test package is outside the verified static profile", rel))
-			}
-			if !containsString(meta.GoFiles, fileName) && !(req.Input.IncludeTests && containsString(meta.TestGoFiles, fileName)) {
-				continue
-			}
-			active[rel] = append(active[rel], configID)
-			selectedPackages[importPath] = true
-		}
-		packagePaths := []string{}
-		for p := range selectedPackages {
-			packagePaths = append(packagePaths, p)
-		}
-		sort.Strings(packagePaths)
-		for _, importPath := range packagePaths {
+		loader := &sourceLoader{Ctx: ctx, Sources: config.Sources, SDK: config.SDK, Build: standardTarget(config.SDK), Fset: token.NewFileSet(), Cache: map[string]*packageUnit{}, Loading: map[string]bool{}}
+		for _, importPath := range config.Packages {
 			if response, yes := stopped(); yes {
 				return response
 			}
@@ -1119,7 +987,7 @@ func analyze(ctx context.Context, req request) completed {
 				return returnError(loader.Fatal)
 			}
 			for _, f := range unit.Files {
-				if !seen[f.Rel] || !containsString(active[f.Rel], configID) {
+				if !config.Selected[f.Rel] {
 					continue
 				}
 				if problem := loader.extractFile(builder, unit, f); problem != nil {
@@ -1131,22 +999,7 @@ func analyze(ctx context.Context, req request) completed {
 	if response, yes := stopped(); yes {
 		return response
 	}
-	fileEvidenceList := []fileEvidence{}
-	for _, rel := range req.Input.Files {
-		if response, yes := stopped(); yes {
-			return response
-		}
-		disposition := "analyzed"
-		configIDs := active[rel]
-		if strings.HasSuffix(rel, "_test.go") && !req.Input.IncludeTests {
-			disposition = "excluded_test"
-			configIDs = ownedConfigs[rel]
-		} else if len(configIDs) == 0 {
-			return returnError(fail("target_unavailable", "selected Go file is inactive in every admitted target", rel))
-		}
-		fileEvidenceList = append(fileEvidenceList, fileEvidence{Path: rel, Disposition: disposition, ConfigurationIDs: configIDs})
-	}
-	result, ev := builder.finish(configs, fileEvidenceList)
+	result, ev := builder.finish(plan.Evidence, plan.Files)
 	if response, yes := stopped(); yes {
 		return response
 	}

@@ -214,7 +214,7 @@ func TestBooleanBuildSelection(t *testing.T) {
 	if problem != nil {
 		t.Fatal(problem)
 	}
-	chosen, problem := discoverPlatforms(p, []string{"common.go"}, false, catalog)
+	chosen, problem := prepareProjectSelection(projectSelection{Project: p, Files: []string{"common.go"}}, false, catalog)
 	if problem != nil {
 		t.Fatal(problem)
 	}
@@ -222,11 +222,11 @@ func TestBooleanBuildSelection(t *testing.T) {
 		t.Fatalf("linux || amd64 selected %v", chosen)
 	}
 	writeFixture(t, root, "choice.go", "//go:build (linux && amd64) || (windows && arm64)\n\npackage app\n")
-	chosen, problem = discoverPlatforms(p, []string{"common.go"}, false, catalog)
+	chosen, problem = prepareProjectSelection(projectSelection{Project: p, Files: []string{"common.go"}}, false, catalog)
 	if problem != nil {
 		t.Fatal(problem)
 	}
-	if len(chosen) != 2 || chosen[0].ID != "la" || chosen[1].ID != "wl" {
+	if len(chosen) != 2 || chosen[0].SDK.ID != "la" || chosen[1].SDK.ID != "wl" {
 		t.Fatalf("wrong Boolean target set: %v", chosen)
 	}
 }
