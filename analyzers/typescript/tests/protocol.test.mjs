@@ -116,3 +116,30 @@ test('installation cannot overlap selected source even for explicit empty select
   assert.equal(result.message.id, request.id);
   assert.equal(result.message.error.code, 'invalid_input');
 });
+
+/** 损坏的固定运行时仍在公开入口失败；显式空选集不触碰声明或无关配置。 */
+for (const [name, mutate, code, message] of [
+  ['malformed manifest', root => fs.writeFileSync(path.join(root, 'runtime/typescript/package.json'), '{broken'), 'invalid_pack', /随包 TypeScript 声明不可用/],
+  ['mismatched declaration version', root => fs.writeFileSync(path.join(root, 'runtime/@types/node/package.json'), '{"version":"0.0.0"}'), 'invalid_pack', /固定声明版本不符/],
+  ['missing compiler', root => fs.unlinkSync(path.join(root, 'runtime/typescript/lib/typescript.js')), 'invalid_pack', /随包 TypeScript 声明不可用/],
+  ['mismatched compiler version', root => fs.writeFileSync(path.join(root, 'runtime/typescript/lib/typescript.js'), 'module.exports = { version: "0.0.0" };'), 'analysis_failed', /需要固定 TypeScript/],
+  ['mismatched canonical catalog', (root, t) => {
+    const other = directConfiguration(t);
+    const library = path.join(root, 'runtime/typescript/lib');
+    fs.rmSync(library, { recursive: true });
+    fs.symlinkSync(path.join(other.root, 'runtime/typescript/lib'), library, 'junction');
+  }, 'analysis_failed', /声明 catalog 与固定运行时目录不一致/],
+]) test(`fixed runtime rejects ${name} while empty selection still short circuits`, t => {
+  const pack = directConfiguration(t);
+  mutate(pack.root, t);
+  const request = fixture(t);
+  fs.writeFileSync(path.join(request.repository_root, 'tsconfig.json'), '{broken');
+  assert.equal(exchange(JSON.stringify(request), pack.args).status, 0);
+  request.files = ['main.ts'];
+  fs.writeFileSync(path.join(request.repository_root, 'main.ts'), 'export function source(){}');
+  const result = exchange(JSON.stringify(request), pack.args);
+  assert.equal(result.status, 1);
+  assert.equal(result.message.id, request.id);
+  assert.equal(result.message.error.code, code);
+  assert.match(result.message.error.message, message);
+});

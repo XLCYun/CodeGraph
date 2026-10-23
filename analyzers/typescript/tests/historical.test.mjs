@@ -4,8 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { analyze } from '../analyze.mjs';
-import { runtimeContext } from '../runtime.mjs';
-import { runtime, ts } from './support.mjs';
+import { analyzerRuntime } from './support.mjs';
 
 /** 继续使用退役前冻结的身份、类别、原文与包含树，不重新生成期望值。 */
 test('historical public identity and source fixture remains exact in the direct compiler', t => {
@@ -17,8 +16,7 @@ test('historical public identity and source fixture remains exact in the direct 
     'default.ts': 'export default function() {}',
   };
   for (const [file, source] of Object.entries(sources)) { fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true }); fs.writeFileSync(path.join(root, file), source); }
-  const { platforms } = runtimeContext(runtime);
-  const { graph } = analyze(ts, { id: 'history', input: { repository_root: root, files: Object.keys(sources), include_tests: false, profile: 'typescript-static-v1' }, environment: { platforms } });
+  const { graph } = analyze(analyzerRuntime, { id: 'history', input: { repository_root: root, files: Object.keys(sources), include_tests: false, profile: 'typescript-static-v1' } });
   const expected = JSON.parse(fs.readFileSync(new URL('./fixtures/typescript-historical-identity.json', import.meta.url)));
   const category = { container: 'Container', type: 'Type', callable: 'Callable', value: 'Value', execution_region: 'ExecutionRegion', extension: 'Extension' };
   /** 历史 fixture 保持 POSIX 路径；只沿用既有 Windows 分隔符转义差异。 */

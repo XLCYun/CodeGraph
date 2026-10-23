@@ -7,24 +7,14 @@ import { hasSyntaxErrors } from './syntax.mjs';
 import { createObservation } from './observation.mjs';
 import { validateProjection } from './graph.mjs';
 
-/** 一侧一次固定请求：同一个 LanguageService 同时提供语法树、类型诊断和定义导航。 */
-export function analyze(ts, request) {
+/** 使用完整固定运行时分析一次请求，同一 LanguageService 提供语法树、诊断和导航。 */
+export function analyze({ ts, platforms, runtime, libraryRoot }, request) {
   const input = request.input;
   const discovery = input.files === undefined;
   const deadline = performance.now() + (request.limits?.analysis_timeout_ms ?? 1800000);
   /** 同步原生遍历保留内部期限；取消与外部期限由调用方终止进程。 */
   function checkpoint() { if (performance.now() > deadline) throw new Error('TypeScript 分析超过期限'); }
   if (input.profile !== 'typescript-static-v1') throw new Error('不支持的 TypeScript profile');
-  const platforms = request.environment.platforms;
-  const library = platforms.find(p => p.metadata.package === 'typescript');
-  if (!library || ts.version !== '6.0.3') throw new Error('需要固定 TypeScript 6.0.3 与声明平台');
-  const libraryRoot = canonicalPath(library.root);
-  const runtime = path.dirname(path.dirname(libraryRoot));
-  for (const name of ['typescript', '@types/node', 'undici-types']) {
-    const entries = platforms.filter(p => p.kind === 'typescript-declarations' && p.metadata.package === name);
-    const expected = path.join(runtime, name, name === 'typescript' ? 'lib' : '');
-    if (entries.length !== 1 || canonicalPath(entries[0].root) !== canonicalPath(expected)) throw new Error('声明 catalog 与固定运行时目录不一致');
-  }
   const root = canonicalPath(input.repository_root);
   let paths = input.files ?? [];
   let selected = paths.map(file => canonicalPath(checkedWorkspacePath(root, path.join(root, file))));

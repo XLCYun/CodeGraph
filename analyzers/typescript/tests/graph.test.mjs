@@ -6,17 +6,16 @@ import { test } from 'node:test';
 import { analyze } from '../analyze.mjs';
 import { project } from '../projection.mjs';
 import { validateProjection } from '../graph.mjs';
-import { runtimeContext } from '../runtime.mjs';
-import { runtime, ts } from './support.mjs';
+import { analyzerRuntime, ts } from './support.mjs';
 
 /** 使用真实编译器的有效图作为输入，再逐项破坏公共不变量。 */
 test('natural output boundary rejects broken identities, coverage and graph endpoints without repair', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codegraph TS 图边界-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.writeFileSync(path.join(root, 'main.ts'), 'export function caller(){target(); Promise.resolve(1)} export function target(){}');
-  const { platforms } = runtimeContext(runtime);
+  const { platforms } = analyzerRuntime;
   const input = { repository_root: root, files: ['main.ts'], include_tests: false, profile: 'typescript-static-v1' };
-  const result = analyze(ts, { id: 'graph', input, environment: { platforms } });
+  const result = analyze(analyzerRuntime, { id: 'graph', input });
   const mutations = [
     value => value.graph.nodes.push(structuredClone(value.graph.nodes[0])),
     value => { value.evidence.origins = []; },

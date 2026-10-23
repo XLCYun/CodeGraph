@@ -65,11 +65,10 @@ async function main() {
     request = validateInput(request, path.resolve(import.meta.dirname, '../..'));
     let graph = { root_contains: [], nodes: [], external_symbols: [] };
     if (request.files?.length !== 0) {
-      const { ts, platforms } = runtimeContext();
       // 这是同进程构图上下文；不编码私有消息，也不创建分析 worker。
-      ({ graph } = analyze(ts, { id: request.id, input: { repository_root: request.repository_root,
+      ({ graph } = analyze(runtimeContext(), { id: request.id, input: { repository_root: request.repository_root,
         ...(request.files === undefined ? {} : { files: request.files }), include_tests: request.options.include_tests,
-        profile: 'typescript-static-v1' }, environment: { platforms } }));
+        profile: 'typescript-static-v1' } }));
     }
     result = { ...identity, type: 'completed', id: request.id, outcome: 'ok', graph };
     if (Buffer.byteLength(JSON.stringify(result)) + 1 > MAX_BYTES) throw new AnalysisFailure('resource_limit', '结果超过 128 MiB');
