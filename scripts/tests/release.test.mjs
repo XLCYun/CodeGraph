@@ -152,6 +152,84 @@ test('GitHub publish adapter sends the exact target commit and tag in its PATCH 
   assert.deepEqual(JSON.parse(calls[0].options.input), body);
 });
 
+/** 在 gh 进程边界提供固定分页响应，字符串保留原始输出，并核对适配器的只读参数。 */
+function releaseLookupFixture(pages) {
+  const calls = [];
+  const github = githubAdapter((command, args, options) => {
+    const page = calls.length + 1;
+    calls.push({ command, args, options });
+    assert.equal(command, 'gh');
+    assert.deepEqual(args, ['api', `/repos/${releaseRepository}/releases?per_page=100&page=${page}`]);
+    assert.equal(options.encoding, 'utf8');
+    assert.equal(options.input, undefined);
+    assert.ok(page <= pages.length, 'Unexpected release list page');
+    const response = pages[page - 1];
+    if (response instanceof Error) throw response;
+    return typeof response === 'string' ? response : JSON.stringify(response);
+  });
+  return { github, calls };
+}
+
+/** draft 必须通过认证 release 列表按完整 tag 查找，不能误取相似版本。 */
+test('GitHub release lookup discovers the exact draft tag with its existing identity and assets', async () => {
+  const release = { id: 422619176, tag_name: 'v0.1.0', target_commitish: 'a'.repeat(40), draft: true, prerelease: true, assets: [{ id: 81, name: 'SHA256SUMS', state: 'uploaded', size: 42 }] };
+  const f = releaseLookupFixture([[{ ...release, id: 18, tag_name: 'v0.1.00' }, release]]);
+  assert.deepEqual(await f.github.findRelease('v0.1.0'), release);
+  assert.equal(f.calls.length, 1);
+});
+
+/** 满页之后仍须继续查找，已发布版本也必须按完整 tag 返回。 */
+test('GitHub release lookup discovers a published exact tag beyond the first page', async () => {
+  const firstPage = Array.from({ length: 100 }, (_, index) => ({ id: index + 1, tag_name: `v2.0.${index}`, draft: false }));
+  const release = { id: 101, tag_name: 'v0.1.0', target_commitish: 'a'.repeat(40), draft: false, prerelease: true, assets: [] };
+  const f = releaseLookupFixture([firstPage, [{ ...release, id: 102, tag_name: 'V0.1.0' }, release]]);
+  assert.deepEqual(await f.github.findRelease('v0.1.0'), release);
+  assert.equal(f.calls.length, 2);
+});
+
+/** 空页、末尾短页和满页后的空页都能确认 tag 确实不存在。 */
+test('GitHub release lookup returns undefined only after exhausting valid pages without an exact tag', async () => {
+  const firstPage = Array.from({ length: 100 }, (_, index) => ({ id: index + 1, tag_name: `v2.0.${index}`, draft: false }));
+  for (const pages of [[[]], [[{ id: 1, tag_name: 'v0.1.00', draft: true }]], [firstPage, []]]) {
+    const f = releaseLookupFixture(pages);
+    assert.equal(await f.github.findRelease('v0.1.0'), undefined);
+    assert.equal(f.calls.length, pages.length);
+  }
+});
+
+/** 列表的认证、权限、404、限流、服务端与网络错误都必须原样抛出。 */
+test('GitHub release lookup propagates API and network failures on every page', () => {
+  const firstPage = Array.from({ length: 100 }, (_, index) => ({ id: index + 1, tag_name: `v2.0.${index}`, draft: false }));
+  const failures = [401, 403, 404, 429, 500].map(status => Object.assign(new Error(`GitHub API failed: ${status}`), { stderr: `gh: request failed (HTTP ${status})` }));
+  failures.push(new Error('ECONNRESET'));
+  for (const failure of failures) {
+    for (const pages of [[failure], [firstPage, failure]]) {
+      const f = releaseLookupFixture(pages);
+      assert.throws(() => f.github.findRelease('v0.1.0'), error => error === failure);
+      assert.equal(f.calls.length, pages.length);
+    }
+  }
+});
+
+/** JSON 解码失败不能被当成空列表或不存在的 tag。 */
+test('GitHub release lookup propagates malformed JSON output', () => {
+  const f = releaseLookupFixture(['{ invalid JSON']);
+  assert.throws(() => f.github.findRelease('v0.1.0'), SyntaxError);
+  assert.equal(f.calls.length, 1);
+});
+
+/** 无法判断完整 tag 的响应结构必须关闭查询，不能冒充真正缺失。 */
+test('GitHub release lookup rejects malformed list and release records', () => {
+  const firstPage = Array.from({ length: 100 }, (_, index) => ({ id: index + 1, tag_name: `v2.0.${index}`, draft: false }));
+  for (const malformed of [[{}], null, {}, { message: 'Bad credentials' }, [null], [{ tag_name: 17 }], [{ tag_name: '' }], [[]]]) {
+    for (const pages of [[malformed], [firstPage, malformed]]) {
+      const f = releaseLookupFixture(pages);
+      assert.throws(() => f.github.findRelease('v0.1.0'), /Invalid GitHub release list response/);
+      assert.equal(f.calls.length, pages.length);
+    }
+  }
+});
+
 /** artifact 存在不能冒充测试成功；证据必须逐项匹配身份、语义清单与归档摘要。 */
 test('partial or stale local evidence is rejected before preparing release assets', async () => {
   const { validateVerificationEvidence } = await import('../release/release-artifacts.mjs');

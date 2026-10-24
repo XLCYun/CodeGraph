@@ -1,6 +1,6 @@
 # CodeGraph analyzer protocol 1
 
-This is the direct language-program contract confirmed on 2026-10-22. It supersedes the unreleased ready/cancel transport. The protocol remains `codegraph.analyzer/1`, with engine/package version `0.1.0`; no released version or legacy mode exists.
+This is the direct language-program contract confirmed on 2026-10-22. It supersedes the unreleased ready/cancel transport. The protocol remains `codegraph.analyzer/1`, with engine/package version `0.1.0`, as shipped in the public `v0.1.0` prerelease. The earlier ready/cancel transport was never released and has no legacy mode.
 
 ## Entry and ownership
 

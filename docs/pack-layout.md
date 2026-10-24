@@ -1,4 +1,4 @@
-# Language package layout (0.1.0 development series)
+# Language package layout (0.1.0)
 
 Each verified package exposes exactly one public entry
 `bin/codegraph-<pack-id>[.exe] analyze`. There is no required umbrella program,

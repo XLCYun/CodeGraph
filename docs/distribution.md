@@ -1,8 +1,11 @@
 # CodeGraph 0.1.0 distribution contract
 
-Status: **not published**. No `v0.1.0` download is claimed by local development
-artifacts. First publication requires human merge and successful exact-main complete
-CI. Existing Narrant language-pack releases are a separate channel.
+Status: [**v0.1.0 public prerelease**](https://github.com/XLCYun/CodeGraph/releases/tag/v0.1.0),
+published from exact source `0552cc97f217d772b6d883ba75cc9007d3fc8309` after successful
+main CI run [40075547966](https://github.com/XLCYun/CodeGraph/actions/runs/40075547966).
+All 29 assets cover macOS ARM64 and Windows x64. The published bytes, tag and source
+remain immutable; subsequent catalog/documentation commits do not replace those bytes.
+Existing Narrant language-pack releases are a separate channel.
 
 ## Fixed assets and provenance
 
@@ -147,4 +150,5 @@ Configure the `codegraph-release` environment protection as appropriate before u
 The final draft read rechecks its release ID, tag, exact target commit and prerelease
 identity. The publication PATCH also pins that tag and target commit, while the
 existing-tag commit checks remain mandatory before and after publication.
-No workflow has been dispatched and nothing has been published by this implementation.
+The public `v0.1.0` release uses release ID `422619176`, source `0552cc97f217d772b6d883ba75cc9007d3fc8309`,
+and the 29 exact CI assets. It remains a prerelease with `make_latest: false`.

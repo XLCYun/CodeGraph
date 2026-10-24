@@ -3,11 +3,11 @@ import { releaseRepository, targets } from '../language-packs/distribution.mjs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-/** GitHub CLI 只读取固定仓库 API；JSON 参数不经 shell 展开。 */
-export function githubJson(endpoint, body) {
+/** GitHub CLI 访问固定仓库 API；JSON 参数不经 shell 展开，执行器可在进程边界替换。 */
+export function githubJson(endpoint, body, run = execFileSync) {
   const args = ['api', endpoint];
   if (body) args.push('--method', 'POST', '--input', '-');
-  return JSON.parse(execFileSync('gh', args, { encoding: 'utf8', input: body ? JSON.stringify(body) : undefined, maxBuffer: 8 * 1024 * 1024 }));
+  return JSON.parse(run('gh', args, { encoding: 'utf8', input: body ? JSON.stringify(body) : undefined, maxBuffer: 8 * 1024 * 1024 }));
 }
 
 /** 只接受 main push 的完整成功 CI，不能用 PR merge SHA、失败上传或手动子集冒充。 */

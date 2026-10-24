@@ -16,9 +16,15 @@ CodeGraph 提供七个可独立运行的**语言分析器（Language Analyzer）
 分析器可独立于 Narrant 和 Tauri 运行，被分析目录也不必是 Git 仓库。
 代码图差异计算、多语言代码图合并由调用方实现。
 
-**项目状态**：目前处于尚未发布的 **0.1.0 开发阶段**，面向 **macOS ARM64** 和
-**Windows x64**。尚无已发布版本，也没有包管理器安装方式。
-开发包、校验方式和发布条件见[分发说明](docs/distribution.md)。
+**项目状态**：[v0.1.0 预发布版](https://github.com/XLCYun/CodeGraph/releases/tag/v0.1.0) 已公开，
+包含 **macOS ARM64** 和 **Windows x64** 的全部七种分析器。
+发布包来自源码 `0552cc97f217d772b6d883ba75cc9007d3fc8309`，包与引擎版本均为 `0.1.0`，
+协议为 `codegraph.analyzer/1`。目前没有包管理器安装方式。
+从发布页下载对应归档和清单，按[分发约定](docs/distribution.md)及
+[SHA256SUMS](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/SHA256SUMS)
+完成校验后，即可调用包内的独立入口。例如，Python 包提供
+[macOS ARM64 下载](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/python-aarch64-apple-darwin-pack.tar.gz)
+和 [Windows x64 下载](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/python-x86_64-pc-windows-msvc-pack.tar.gz)。
 
 ## 选择分析器
 

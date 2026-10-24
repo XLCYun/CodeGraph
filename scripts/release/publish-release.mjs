@@ -52,22 +52,34 @@ export async function publishBundle(bundle, github) {
 
 /** 官方 gh 处理认证和资产跳转；读写固定仓库，不接受任意下载主机或 clobber。 */
 export function githubAdapter(run = execFileSync) {
-  /** 只把明确 404 当成不存在，其余 API 失败仍关闭发布。 */
+  /** 仅 tag 引用允许把明确 404 当作不存在，其余 API 失败仍关闭发布。 */
   function optional(endpoint) {
-    try { return githubJson(endpoint); } catch (error) { if (String(error.stderr).includes('(HTTP 404)')) return undefined; throw error; }
+    try { return githubJson(endpoint, undefined, run); } catch (error) { if (String(error.stderr).includes('(HTTP 404)')) return undefined; throw error; }
   }
   return {
+    /** 解析轻量或附注 tag，读取统一经过注入的 gh 执行器。 */
     tagCommit(tag) {
       let object = optional(`/repos/${releaseRepository}/git/ref/tags/${tag}`)?.object;
-      for (let depth = 0; object?.type === 'tag' && depth < 8; depth++) object = githubJson(`/repos/${releaseRepository}/git/tags/${object.sha}`).object;
+      for (let depth = 0; object?.type === 'tag' && depth < 8; depth++) object = githubJson(`/repos/${releaseRepository}/git/tags/${object.sha}`, undefined, run).object;
       if (object && object.type !== 'commit') throw new Error('Tag does not resolve to a commit');
       return object?.sha;
     },
-    findRelease: tag => optional(`/repos/${releaseRepository}/releases/tags/${tag}`),
-    createRelease: body => githubJson(`/repos/${releaseRepository}/releases`, body),
+    /** 分页读取包含 draft 的认证列表；完整 tag 精确匹配，只有读完才判定不存在。 */
+    findRelease(tag) {
+      for (let page = 1; ; page++) {
+        const releases = githubJson(`/repos/${releaseRepository}/releases?per_page=100&page=${page}`, undefined, run);
+        if (!Array.isArray(releases) || releases.some(release => !release || typeof release.tag_name !== 'string' || !release.tag_name)) throw new Error('Invalid GitHub release list response');
+        const release = releases.find(release => release.tag_name === tag);
+        if (release) return release;
+        if (releases.length < 100) return undefined;
+      }
+    },
+    /** draft 的创建同样使用统一执行器，默认仍由官方 gh 认证。 */
+    createRelease: body => githubJson(`/repos/${releaseRepository}/releases`, body, run),
+    /** 上传后按固定 release ID 读回资产，禁止覆盖同名文件。 */
     uploadAsset(release, asset) {
       run('gh', ['release', 'upload', release.tag_name, asset.file, '--repo', releaseRepository], { stdio: 'inherit' });
-      const uploaded = githubJson(`/repos/${releaseRepository}/releases/${release.id}`).assets.find(item => item.name === asset.name);
+      const uploaded = githubJson(`/repos/${releaseRepository}/releases/${release.id}`, undefined, run).assets.find(item => item.name === asset.name);
       if (!uploaded) throw new Error('Uploaded asset missing');
       return uploaded;
     },
