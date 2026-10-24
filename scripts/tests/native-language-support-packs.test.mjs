@@ -106,10 +106,18 @@ test('smoke preserves primary failure and reports cleanup-only failure', async t
   await assert.rejects(smoke('go'), error => error === cleanupError);
 });
 
-/** 本地开发产物没有通过真实双平台验收前不会被发布脚本纳入。 */
-test('native catalog remains explicitly unpublished', async () => {
+/** 固定公开版本只声明已通过真实发布验证的七包与两个目标，不能漂移身份。 */
+test('native catalog pins the published seven-pack dual-platform release', async () => {
   const catalog = JSON.parse(await fs.readFile(new URL('../../resources/language-support-packs.json', import.meta.url)));
-  for (const id of ['java', 'go', 'csharp', 'c-cpp']) assert.equal(catalog.packs[id].published, false);
+  assert.equal(catalog.repository, 'XLCYun/CodeGraph');
+  assert.equal(catalog.engineVersion, '0.1.0');
+  assert.equal(catalog.protocol, 'codegraph.analyzer/1');
+  assert.deepEqual(Object.keys(catalog.packs).sort(), ['rust', 'typescript-javascript', 'python', 'java', 'go', 'csharp', 'c-cpp'].sort());
+  for (const pack of Object.values(catalog.packs)) {
+    assert.equal(pack.version, '0.1.0');
+    assert.equal(pack.published, true);
+    assert.deepEqual(pack.verifiedTargets, ['aarch64-apple-darwin', 'x86_64-pc-windows-msvc']);
+  }
 });
 
 /** 标准引用只出现在本机测试 SDK，生成的目录描述允许新 TFM/补丁且不复制构建资产。 */

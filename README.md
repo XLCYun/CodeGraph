@@ -15,9 +15,16 @@ Source directory + file selection → chosen Language Analyzer → Code Graph (J
 The analyzers run independently of Narrant or Tauri. The analyzed directory does not need to be
 a Git repository. Graph differences and multi-language graph merging belong to consumers.
 
-**Status:** unreleased **0.1.0 development series**, targeting **macOS ARM64** and **Windows x64**.
-There is no published release or package-manager installation yet. See [distribution](docs/distribution.md)
-for development packages, verification and publication requirements.
+**Status:** [v0.1.0 public prerelease](https://github.com/XLCYun/CodeGraph/releases/tag/v0.1.0),
+with all seven analyzers for **macOS ARM64** and **Windows x64**. Released packages come from
+source `0552cc97f217d772b6d883ba75cc9007d3fc8309`; package/engine version is `0.1.0`
+and protocol is `codegraph.analyzer/1`. There is no package-manager installation.
+Download the matching archive and manifest from the release and verify them against
+[SHA256SUMS](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/SHA256SUMS)
+using the [distribution contract](docs/distribution.md) before invoking its direct entry.
+For example, Python packages are available for
+[macOS ARM64](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/python-aarch64-apple-darwin-pack.tar.gz)
+and [Windows x64](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/python-x86_64-pc-windows-msvc-pack.tar.gz).
 
 ## Choose an analyzer
 
