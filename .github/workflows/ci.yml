@@ -1,0 +1,149 @@
+name: CodeGraph CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: Native acceptance (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-15
+          - target: x86_64-pc-windows-msvc
+            runner: windows-2022
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    env:
+      CODEGRAPH_PROJECT_RUST_TOOLCHAIN: stable
+      # 保留 Cargo dev/test 默认 incremental；显式 CARGO_INCREMENTAL=1 会被 sccache 拒绝。
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.13.1
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            launchers -> ../target
+            analyzers/common -> target
+            analyzers/integration-tests -> target
+            analyzers/rust -> target
+            analyzers/python -> target
+            analyzers/windows-process-probe -> target
+      - name: Probe Windows process cleanup before toolchain provisioning
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $ErrorActionPreference = 'Stop'
+          node scripts/language-packs/run-windows-process-probe.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Windows process cleanup probe failed' }
+      - run: pnpm install --frozen-lockfile
+      - name: Build non-shipped caller tree owner before real transport regressions
+        run: node scripts/language-packs/public-cli-owner.mjs
+      - name: Verify scripts, version contracts and engine format
+        run: |
+          pnpm test
+          pnpm check:scripts
+          bash scripts/cargo-agent.sh fmt --all --check
+          bash scripts/cargo-agent.sh check --locked --workspace --lib --bins
+          bash scripts/cargo-agent.sh fmt --manifest-path analyzers/common/Cargo.toml --check
+          bash scripts/cargo-agent.sh fmt --manifest-path analyzers/rust/Cargo.toml --check
+          bash scripts/cargo-agent.sh fmt --manifest-path analyzers/python/Cargo.toml --check
+          bash scripts/cargo-agent.sh fmt --manifest-path analyzers/integration-tests/Cargo.toml --check
+          bash scripts/cargo-agent.sh fmt --manifest-path analyzers/windows-process-probe/Cargo.toml --check
+      - name: Enable Windows Git checkout long paths
+        if: runner.os == 'Windows'
+        run: git config --global core.longpaths true
+      - name: Select pinned macOS target SDK
+        if: runner.os == 'macOS'
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_16.4.app
+          test "$(xcrun --sdk macosx --show-sdk-version)" = 15.5
+          echo "CODEGRAPH_MACOS_SDK=$(xcrun --sdk macosx --show-sdk-path)" >> "$GITHUB_ENV"
+      - name: Select isolated Windows SDK and MSVC declaration roots
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fixed = (Get-Content resources/native-toolchains.json -Raw | ConvertFrom-Json).runner_prerequisites.'x86_64-pc-windows-msvc'
+          $version = $fixed.msvc_tools
+          # 发现含固定工具集的 VS 2022 实例，兼容已安装的 Build Tools。
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          if (!(Test-Path -LiteralPath $vswhere -PathType Leaf)) { throw 'Visual Studio Installer vswhere.exe is missing' }
+          # 先等待原生命令完整退出，避免 First 提前终止管道而留下空退出码。
+          $installations = @(& $vswhere -products '*' -version '[17.0,18.0)' -property installationPath)
+          if ($LASTEXITCODE -ne 0) { throw "VS 2022 discovery failed with exit code $LASTEXITCODE" }
+          $vs = $installations |
+            Where-Object { Test-Path -LiteralPath (Join-Path $_ "VC\Tools\MSVC\$version\include") -PathType Container } |
+            Select-Object -First 1
+          if (!$vs) { throw "No VS 2022 instance contains MSVC $version" }
+          $msvc = "$vs\VC\Tools\MSVC\$version"
+          $sdk = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Include\$($fixed.windows_sdk)"
+          foreach ($directory in @("$msvc\include", "$sdk\ucrt", "$sdk\um", "$sdk\shared")) {
+            if (!(Test-Path $directory -PathType Container)) { throw "Missing exact SDK directory: $directory" }
+          }
+          node scripts/language-packs/select-msvc-redist.mjs "$vs" "$($fixed.msvc_runtime_version)"
+          if ($LASTEXITCODE -ne 0) { throw 'Fixed MSVC runtime selection failed; see metadata and DLL version evidence above' }
+          "CODEGRAPH_MSVC_ROOT=$msvc" >> $env:GITHUB_ENV
+          "CODEGRAPH_MSVC_VERSION=$version" >> $env:GITHUB_ENV
+          "CODEGRAPH_WINDOWS_SDK=$sdk" >> $env:GITHUB_ENV
+          "CODEGRAPH_WINDOWS_SDK_VERSION=$($fixed.windows_sdk)" >> $env:GITHUB_ENV
+          "CODEGRAPH_VISUAL_STUDIO=$vs" >> $env:GITHUB_ENV
+      - name: Provision checksum-verified analyzer toolchains
+        run: node scripts/language-packs/provision-native-toolchains.mjs "${{ runner.temp }}/codegraph-native-toolchains" --language all
+      - name: Select isolated Rust project test Cargo home
+        env:
+          CODEGRAPH_RUST_TEST_CARGO_HOME: ${{ runner.temp }}/codegraph-native-cargo
+        run: node -e "require('node:fs').appendFileSync(process.env.GITHUB_ENV, 'CARGO_HOME=' + process.env.CODEGRAPH_RUST_TEST_CARGO_HOME + '\n')"
+      - name: Prepare pinned Rust engine build toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal
+      - name: Prepare Rust project sources and historical Cargo test inputs
+        run: |
+          rustup component add rust-src --toolchain stable
+          rustup toolchain install 1.81.0 1.94.0 1.96.0 --profile minimal
+          node scripts/language-packs/prepare-rust-native-tests.mjs --prepare
+      - name: Build all seven packs and run complete native and public CLI acceptance
+        run: node scripts/language-packs/verify-native-analyzers.mjs artifacts --build --language all
+      # 只上传完整成功验收后的证据；失败或取消不产生可发布 artifact。
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          retention-days: 7
+          name: codegraph-${{ matrix.target }}
+          path: |
+            artifacts/*/*/*/manifest.json
+            artifacts/*/*/*/pack.tar.gz
+            artifacts/verification-${{ matrix.target }}.json
+          if-no-files-found: error
+
+  complete:
+    name: Complete CI
+    if: always()
+    needs: native
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require both complete native jobs
+        env:
+          NATIVE_RESULT: ${{ needs.native.result }}
+        run: test "$NATIVE_RESULT" = success

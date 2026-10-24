@@ -1,5 +1,13 @@
-/node_modules/
-target/
-/dist/
+/target/
+**/target/
 /tools/
+/dist/
+/artifacts/
+**/node_modules/
+**/__pycache__/
+**/bin/
+**/obj/
+/analyzers/java/build/
+/analyzers/clang/build/
+/.tools/
 .DS_Store

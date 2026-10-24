@@ -1,0 +1,21 @@
+{
+  "name": "codegraph-build",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@11.13.1",
+  "engines": {
+    "node": ">=24.18.0"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 scripts/tests/*.test.mjs",
+    "check:scripts": "node scripts/check-scripts.mjs",
+    "build:packs": "node scripts/language-packs/build-language-support-packs.mjs --native",
+    "verify:packs": "node scripts/language-packs/verify-native-analyzers.mjs artifacts --build",
+    "rust:cache:status": "node scripts/dev/rust-cache.mjs status"
+  },
+  "devDependencies": {
+    "tar": "7.5.22"
+  },
+  "license": "Apache-2.0"
+}

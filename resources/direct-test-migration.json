@@ -1,0 +1,3107 @@
+{
+  "schemaVersion": 1,
+  "baseline": "ff7e648ecace3aeca672064bc3eb6ca37ffb729e",
+  "note": "183 recognizable named cases in 42 root source/fixture files; not an executable libtest count. Fixture application tests stay frozen analysis inputs. Actual local/CI outcomes are reported separately.",
+  "commands": {
+    "integration": "bash scripts/cargo-agent.sh test --manifest-path analyzers/integration-tests/Cargo.toml --locked --lib <filter> -- --ignored --test-threads=1",
+    "common": "bash scripts/cargo-agent.sh +1.98.0 test --manifest-path analyzers/common/Cargo.toml --locked --lib",
+    "process": "bash scripts/cargo-agent.sh test --manifest-path analyzers/windows-process-probe/Cargo.toml --locked --lib child_process:: -- --test-threads=1",
+    "rust": "bash scripts/cargo-agent.sh +1.98.0 test --manifest-path analyzers/rust/Cargo.toml --locked -- --include-ignored --test-threads=1",
+    "go": "<pinned-go>/bin/go test ./... (cwd analyzers/go)",
+    "java": "python3 -m unittest discover -s analyzers/java/tests -v",
+    "csharp": "python3 -m unittest discover -s analyzers/csharp/tests -v",
+    "clang": "python3 -m unittest discover -s analyzers/clang/tests -v",
+    "typescript": "node --test --test-concurrency=1 analyzers/typescript/tests/*.test.mjs",
+    "scripts": "pnpm test",
+    "public": "node scripts/language-packs/verify-public-cli.mjs <fresh-exact-head-output> all"
+  },
+  "families": [
+    {
+      "path": "src/adapters/rust/tests/production.rs",
+      "cases": [
+        {
+          "name": "empty_selection_keeps_all_scopes_without_project_tools",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/initial.rs",
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ]
+        },
+        {
+          "name": "production_cancellation_reaps_toolchain_probe",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/initial.rs",
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ],
+          "newTests": [
+            "tests::rust_graph::rust_helper_cancellation_reaps_active_toolchain_probe"
+          ],
+          "commands": [
+            "integration"
+          ]
+        }
+      ],
+      "disposition": "native-covered",
+      "destinations": [
+        "analyzers/common/src/tests/initial.rs",
+        "analyzers/integration-tests/src/tests/rust_graph.rs"
+      ],
+      "commands": [
+        "rust",
+        "integration",
+        "public"
+      ],
+      "rationale": "All Rust scopes keep explicit empty behavior. The former extra factory cancellation now maps to the same public active-Cargo descendant owner test, with no private worker.",
+      "namedCaseCount": 2
+    },
+    {
+      "path": "src/adapters/rust/tests/toolchain.rs",
+      "cases": [
+        {
+          "name": "child_projects_are_checked_individually_and_mixed_sysroots_are_explicit",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/rust/src/tests/loading.rs",
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ]
+        },
+        {
+          "name": "missing_sources_fail_without_installing_and_repository_scope_needs_no_sources",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/rust/src/tests/loading.rs",
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ]
+        }
+      ],
+      "disposition": "native-covered",
+      "destinations": [
+        "analyzers/rust/src/tests/loading.rs",
+        "analyzers/integration-tests/src/tests/rust_graph.rs"
+      ],
+      "commands": [
+        "rust",
+        "integration"
+      ],
+      "rationale": "Missing rust-src/toolchain no-install, repository scope, per-project actual Cargo/rustc and mixed-sysroot failure remain asserted by native loading and public integration.",
+      "namedCaseCount": 2
+    },
+    {
+      "path": "src/adapters/tests/csharp_graph.rs",
+      "cases": [
+        {
+          "name": "factory_preserves_source_and_local_calls",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/csharp_graph.rs"
+          ],
+          "newTests": [
+            "tests::csharp_graph::factory_preserves_source_and_local_calls"
+          ],
+          "commands": [
+            "integration"
+          ]
+        }
+      ],
+      "disposition": "moved",
+      "destinations": [
+        "analyzers/integration-tests/src/tests/csharp_graph.rs"
+      ],
+      "commands": [
+        "integration"
+      ],
+      "rationale": "Original semantic assertions use the real direct public entry and read-only result view. Construction evidence is not emulated.",
+      "namedCaseCount": 1
+    },
+    {
+      "path": "src/adapters/tests/factory.rs",
+      "cases": [
+        {
+          "name": "existing_factories_still_require_target_declarations",
+          "disposition": "native-covered",
+          "coverage": [
+            "launchers/src/tests/startup.rs",
+            "analyzers/common/src/tests/public_protocol.rs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "scripts/tests/analyzer-entries.test.mjs"
+          ]
+        },
+        {
+          "name": "missing_pack_is_an_error",
+          "disposition": "native-covered",
+          "coverage": [
+            "launchers/src/tests/startup.rs",
+            "analyzers/common/src/tests/public_protocol.rs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "scripts/tests/analyzer-entries.test.mjs"
+          ]
+        },
+        {
+          "name": "python_factory_keeps_embedded_stdlib_in_helper_trusted_root",
+          "disposition": "native-covered",
+          "coverage": [
+            "launchers/src/tests/startup.rs",
+            "analyzers/common/src/tests/public_protocol.rs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "scripts/tests/analyzer-entries.test.mjs"
+          ]
+        },
+        {
+          "name": "relative_paths_cannot_escape_pack",
+          "disposition": "native-covered",
+          "coverage": [
+            "launchers/src/tests/startup.rs",
+            "analyzers/common/src/tests/public_protocol.rs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "scripts/tests/analyzer-entries.test.mjs"
+          ]
+        },
+        {
+          "name": "rust_repository_factory_accepts_only_verified_pack_entry",
+          "disposition": "native-covered",
+          "coverage": [
+            "launchers/src/tests/startup.rs",
+            "analyzers/common/src/tests/public_protocol.rs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "scripts/tests/analyzer-entries.test.mjs"
+          ]
+        }
+      ],
+      "disposition": "native-covered",
+      "destinations": [
+        "launchers/src/tests/startup.rs",
+        "analyzers/common/src/tests/public_protocol.rs",
+        "scripts/tests/analyzer-package-policy.test.mjs",
+        "scripts/tests/analyzer-entries.test.mjs"
+      ],
+      "commands": [
+        "scripts",
+        "common",
+        "public"
+      ],
+      "rationale": "The old cross-language factory is deleted. Real fixed entries/resources, package path/link boundaries, embedded Python declarations, missing/foreign entries and all public identities replace its assembly assertions.",
+      "namedCaseCount": 5
+    },
+    {
+      "path": "src/adapters/tests/fixtures/typescript-historical-identity.json",
+      "cases": [],
+      "disposition": "preserved-fixture",
+      "destinations": [
+        "analyzers/integration-tests/src/tests/fixtures/typescript-historical-identity.json",
+        "analyzers/typescript/tests/fixtures/typescript-historical-identity.json"
+      ],
+      "commands": [
+        "integration",
+        "typescript"
+      ],
+      "rationale": "Frozen data/source input is copied byte-for-byte and consumed by its retained semantic assertion; fixture #[test] text is not compiled as application tests.",
+      "namedCaseCount": 0
+    },
+    {
+      "path": "src/adapters/tests/platforms.rs",
+      "cases": [
+        {
+          "name": "installed_dotnet_targets_are_discovered_without_a_version_list",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/go/public_test.go",
+            "analyzers/java/tests/java/dev/codegraph/java/SdkDiscoveryTest.java",
+            "analyzers/csharp/tests/SdkDiscoveryTests.cs",
+            "analyzers/clang/tests/sdk_discovery.hpp"
+          ]
+        },
+        {
+          "name": "macos_sdk_uses_installed_metadata_without_a_whitelist",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/go/public_test.go",
+            "analyzers/java/tests/java/dev/codegraph/java/SdkDiscoveryTest.java",
+            "analyzers/csharp/tests/SdkDiscoveryTests.cs",
+            "analyzers/clang/tests/sdk_discovery.hpp"
+          ]
+        },
+        {
+          "name": "runtime_only_installation_cannot_supply_target_references",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/go/public_test.go",
+            "analyzers/java/tests/java/dev/codegraph/java/SdkDiscoveryTest.java",
+            "analyzers/csharp/tests/SdkDiscoveryTests.cs",
+            "analyzers/clang/tests/sdk_discovery.hpp"
+          ]
+        },
+        {
+          "name": "windows_sdk_and_msvc_versions_come_from_installed_directories",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/go/public_test.go",
+            "analyzers/java/tests/java/dev/codegraph/java/SdkDiscoveryTest.java",
+            "analyzers/csharp/tests/SdkDiscoveryTests.cs",
+            "analyzers/clang/tests/sdk_discovery.hpp"
+          ]
+        }
+      ],
+      "disposition": "native-covered",
+      "destinations": [
+        "analyzers/go/public_test.go",
+        "analyzers/java/tests/java/dev/codegraph/java/SdkDiscoveryTest.java",
+        "analyzers/csharp/tests/SdkDiscoveryTests.cs",
+        "analyzers/clang/tests/sdk_discovery.hpp"
+      ],
+      "commands": [
+        "go",
+        "java",
+        "csharp",
+        "clang"
+      ],
+      "rationale": "Direct language discovery tests retain highest stable patch/minor/major, future installed versions, missing standard declarations, runtime-only rejection, macOS deployment metadata and independently approved Windows/MSVC roots.",
+      "namedCaseCount": 4
+    },
+    {
+      "path": "src/adapters/tests/platforms/go.rs",
+      "cases": [
+        {
+          "name": "sdk_catalog_keeps_minor_versions_and_selects_stable_patches",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/go/public_test.go",
+            "analyzers/java/tests/java/dev/codegraph/java/SdkDiscoveryTest.java",
+            "analyzers/csharp/tests/SdkDiscoveryTests.cs",
+            "analyzers/clang/tests/sdk_discovery.hpp"
+          ]
+        },
+        {
+          "name": "sdk_without_standard_sources_is_rejected",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/go/public_test.go",
+            "analyzers/java/tests/java/dev/codegraph/java/SdkDiscoveryTest.java",
+            "analyzers/csharp/tests/SdkDiscoveryTests.cs",
+            "analyzers/clang/tests/sdk_discovery.hpp"
+          ]
+        }
+      ],
+      "disposition": "native-covered",
+      "destinations": [
+        "analyzers/go/public_test.go",
+        "analyzers/java/tests/java/dev/codegraph/java/SdkDiscoveryTest.java",
+        "analyzers/csharp/tests/SdkDiscoveryTests.cs",
+        "analyzers/clang/tests/sdk_discovery.hpp"
+      ],
+      "commands": [
+        "go",
+        "java",
+        "csharp",
+        "clang"
+      ],
+      "rationale": "Direct language discovery tests retain highest stable patch/minor/major, future installed versions, missing standard declarations, runtime-only rejection, macOS deployment metadata and independently approved Windows/MSVC roots.",
+      "namedCaseCount": 2
+    },
+    {
+      "path": "src/adapters/tests/platforms/java.rs",
+      "cases": [
+        {
+          "name": "jdk_catalog_uses_installed_versions_and_keeps_majors_separate",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/go/public_test.go",
+            "analyzers/java/tests/java/dev/codegraph/java/SdkDiscoveryTest.java",
+            "analyzers/csharp/tests/SdkDiscoveryTests.cs",
+            "analyzers/clang/tests/sdk_discovery.hpp"
+          ]
+        },
+        {
+          "name": "jdk_missing_system_libraries_is_not_a_target",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/go/public_test.go",
+            "analyzers/java/tests/java/dev/codegraph/java/SdkDiscoveryTest.java",
+            "analyzers/csharp/tests/SdkDiscoveryTests.cs",
+            "analyzers/clang/tests/sdk_discovery.hpp"
+          ]
+        }
+      ],
+      "disposition": "native-covered",
+      "destinations": [
+        "analyzers/go/public_test.go",
+        "analyzers/java/tests/java/dev/codegraph/java/SdkDiscoveryTest.java",
+        "analyzers/csharp/tests/SdkDiscoveryTests.cs",
+        "analyzers/clang/tests/sdk_discovery.hpp"
+      ],
+      "commands": [
+        "go",
+        "java",
+        "csharp",
+        "clang"
+      ],
+      "rationale": "Direct language discovery tests retain highest stable patch/minor/major, future installed versions, missing standard declarations, runtime-only rejection, macOS deployment metadata and independently approved Windows/MSVC roots.",
+      "namedCaseCount": 2
+    },
+    {
+      "path": "src/adapters/tests/typescript_graph.rs",
+      "cases": [
+        {
+          "name": "directory_discovery_preserves_config_members_and_explicit_selection",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::directory_discovery_preserves_config_members_and_explicit_selection"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_assignments_omit_writes_and_keep_calls_and_function_values",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_assignments_omit_writes_and_keep_calls_and_function_values"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_async_member_calls_keep_concrete_targets",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_async_member_calls_keep_concrete_targets"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_config_dir_templates_retain_local_call",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_config_dir_templates_retain_local_call"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_cross_language_alias_barrel_and_callbacks",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_cross_language_alias_barrel_and_callbacks"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_file_modules_keep_merged_execution_calls",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_file_modules_keep_merged_execution_calls"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_heterogeneous_union_members_follow_definition_navigation",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_heterogeneous_union_members_follow_definition_navigation"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_jsx_properties_heritage_and_function_values",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_jsx_properties_heritage_and_function_values"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_missing_dynamic_ambiguous_and_type_only_are_unresolved",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_missing_dynamic_ambiguous_and_type_only_are_unresolved"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_named_function_values_and_omitted_initializers_keep_calls",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_named_function_values_and_omitted_initializers_keep_calls"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_overloads_and_merged_fragments",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_overloads_and_merged_fragments"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_parameter_properties_keep_field_types_and_default_calls",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_parameter_properties_keep_field_types_and_default_calls"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_project_conflicts_keep_unknown_calls_and_local_targets",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_project_conflicts_keep_unknown_calls_and_local_targets"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_repository_ambient_functions_and_nonambient_signature_boundary",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_repository_ambient_functions_and_nonambient_signature_boundary"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_repository_relative_test_classification_ignores_checkout_ancestors",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_repository_relative_test_classification_ignores_checkout_ancestors"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_runtime_wrappers_node_modules_and_jsdoc",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_runtime_wrappers_node_modules_and_jsdoc"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_type_only_alias_chains_do_not_become_runtime_calls",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_type_only_alias_chains_do_not_become_runtime_calls"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_unicode_default_namespace_alias_and_union_evidence",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_unicode_default_namespace_alias_and_union_evidence"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_unverified_relative_imports_do_not_abort_analysis",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_unverified_relative_imports_do_not_abort_analysis"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "graph_workspace_references_without_built_dist",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::graph_workspace_references_without_built_dist"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "typescript_aliases_merge_canonical_nodes_and_keep_boundary_and_test_policy",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::typescript_aliases_merge_canonical_nodes_and_keep_boundary_and_test_policy"
+          ],
+          "commands": [
+            "integration"
+          ],
+          "rationale": "Original graph/alias/test/source assertions are unchanged. The duplicate selected-path fixture now checks the stable public invalid_request code; the removed Host-specific Chinese diagnostic wording is retired. Public paths and outside links still fail on the actual fixed entry."
+        },
+        {
+          "name": "typescript_historical_identity_and_source_contract",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::typescript_historical_identity_and_source_contract"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "typescript_real_helper_cancellation_reaps_before_return",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/typescript_graph.rs"
+          ],
+          "newTests": [
+            "tests::typescript_graph::typescript_real_helper_cancellation_reaps_before_return"
+          ],
+          "commands": [
+            "integration"
+          ]
+        }
+      ],
+      "disposition": "moved",
+      "destinations": [
+        "analyzers/integration-tests/src/tests/typescript_graph.rs"
+      ],
+      "commands": [
+        "integration"
+      ],
+      "rationale": "Original semantic assertions use the real direct public entry and read-only result view. Construction evidence is not emulated.",
+      "namedCaseCount": 23
+    },
+    {
+      "path": "src/child_process/tests/fixture.rs",
+      "cases": [
+        {
+          "name": "process_fixture",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/fixture.rs"
+          ]
+        }
+      ],
+      "disposition": "moved-test-utility",
+      "destinations": [
+        "analyzers/windows-process-probe/src/child_process/tests/fixture.rs"
+      ],
+      "commands": [
+        "process"
+      ],
+      "rationale": "Same caller-owned ProcessTree, pre-resume Windows Job admission/history and descendant-exit assertions; helper self-supervision types removed.",
+      "namedCaseCount": 1
+    },
+    {
+      "path": "src/child_process/tests/process_tree.rs",
+      "cases": [
+        {
+          "name": "cleanup_error_still_waits_direct_child",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/process_tree.rs"
+          ]
+        },
+        {
+          "name": "drop_reclaims_parent_and_descendant_matrix",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/process_tree.rs"
+          ]
+        },
+        {
+          "name": "finish_reclaims_parent_and_descendant_matrix",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/process_tree.rs"
+          ]
+        },
+        {
+          "name": "live_member_cannot_satisfy_exit_barrier",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/process_tree.rs"
+          ]
+        },
+        {
+          "name": "reap_reclaims_parent_and_descendant_matrix",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/process_tree.rs"
+          ]
+        },
+        {
+          "name": "zombie_only_group_reaps_without_false_permission_error",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/process_tree.rs"
+          ]
+        }
+      ],
+      "disposition": "moved-test-utility",
+      "destinations": [
+        "analyzers/windows-process-probe/src/child_process/tests/process_tree.rs"
+      ],
+      "commands": [
+        "process"
+      ],
+      "rationale": "Same caller-owned ProcessTree, pre-resume Windows Job admission/history and descendant-exit assertions; helper self-supervision types removed.",
+      "namedCaseCount": 6
+    },
+    {
+      "path": "src/child_process/tests/support.rs",
+      "cases": [],
+      "disposition": "moved-test-utility",
+      "destinations": [
+        "analyzers/windows-process-probe/src/child_process/tests/support.rs"
+      ],
+      "commands": [
+        "process"
+      ],
+      "rationale": "Same caller-owned ProcessTree, pre-resume Windows Job admission/history and descendant-exit assertions; helper self-supervision types removed.",
+      "namedCaseCount": 0
+    },
+    {
+      "path": "src/child_process/tests/unix_group.rs",
+      "cases": [
+        {
+          "name": "permission_denied_never_means_group_disappeared",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/unix_group.rs"
+          ]
+        }
+      ],
+      "disposition": "moved-test-utility",
+      "destinations": [
+        "analyzers/windows-process-probe/src/child_process/tests/unix_group.rs"
+      ],
+      "commands": [
+        "process"
+      ],
+      "rationale": "Same caller-owned ProcessTree, pre-resume Windows Job admission/history and descendant-exit assertions; helper self-supervision types removed.",
+      "namedCaseCount": 1
+    },
+    {
+      "path": "src/child_process/tests/windows_job.rs",
+      "cases": [
+        {
+          "name": "admission_gate_rejects_new_process_with_exact_quota_error",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ]
+        },
+        {
+          "name": "native_windows_cleanup_waits_for_queued_history",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ]
+        },
+        {
+          "name": "native_windows_member_snapshot_tolerates_root_exit",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ]
+        },
+        {
+          "name": "native_windows_missing_history_is_sticky",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ]
+        },
+        {
+          "name": "native_windows_stop_error_still_waits_recorded_members",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ]
+        },
+        {
+          "name": "native_windows_stop_preserves_dequeued_member",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ]
+        },
+        {
+          "name": "native_windows_suspended_root_is_owned_and_deduplicated",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ]
+        },
+        {
+          "name": "windows_job_owns_suspended_startup_before_execution",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ]
+        }
+      ],
+      "disposition": "moved-test-utility",
+      "destinations": [
+        "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+      ],
+      "commands": [
+        "process"
+      ],
+      "rationale": "Same caller-owned ProcessTree, pre-resume Windows Job admission/history and descendant-exit assertions; helper self-supervision types removed.",
+      "namedCaseCount": 8
+    },
+    {
+      "path": "src/child_process/tests/windows_support.rs",
+      "cases": [],
+      "disposition": "moved-test-utility",
+      "destinations": [
+        "analyzers/windows-process-probe/src/child_process/tests/windows_support.rs"
+      ],
+      "commands": [
+        "process"
+      ],
+      "rationale": "Same caller-owned ProcessTree, pre-resume Windows Job admission/history and descendant-exit assertions; helper self-supervision types removed.",
+      "namedCaseCount": 0
+    },
+    {
+      "path": "src/child_process/tests/windows_tracking.rs",
+      "cases": [
+        {
+          "name": "insufficient_buffer_retries_and_keeps_all_ids",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/windows_tracking.rs"
+          ]
+        },
+        {
+          "name": "query_error_is_not_retried",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/windows_tracking.rs"
+          ]
+        },
+        {
+          "name": "returned_count_must_fit_buffer",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/windows_tracking.rs"
+          ]
+        },
+        {
+          "name": "successful_exit_snapshot_uses_returned_ids_without_retry",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/windows_tracking.rs"
+          ]
+        }
+      ],
+      "disposition": "moved-test-utility",
+      "destinations": [
+        "analyzers/windows-process-probe/src/child_process/tests/windows_tracking.rs"
+      ],
+      "commands": [
+        "process"
+      ],
+      "rationale": "Same caller-owned ProcessTree, pre-resume Windows Job admission/history and descendant-exit assertions; helper self-supervision types removed.",
+      "namedCaseCount": 4
+    },
+    {
+      "path": "src/child_process/tests/windows_validation.rs",
+      "cases": [],
+      "disposition": "moved-test-utility",
+      "destinations": [
+        "analyzers/windows-process-probe/src/child_process/tests/windows_validation.rs"
+      ],
+      "commands": [
+        "process"
+      ],
+      "rationale": "Same caller-owned ProcessTree, pre-resume Windows Job admission/history and descendant-exit assertions; helper self-supervision types removed.",
+      "namedCaseCount": 0
+    },
+    {
+      "path": "src/cli/tests/protocol.rs",
+      "cases": [
+        {
+          "name": "empty_selection_and_all_rust_scopes_decode",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/initial.rs",
+            "analyzers/common/src/tests/public_protocol.rs",
+            "scripts/tests/public-cli-transport.test.mjs"
+          ]
+        },
+        {
+          "name": "omitted_selection_decodes_but_null_and_malformed_selections_fail",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/initial.rs",
+            "analyzers/common/src/tests/public_protocol.rs",
+            "scripts/tests/public-cli-transport.test.mjs"
+          ]
+        },
+        {
+          "name": "rejects_duplicate_unknown_and_wrongly_typed_fields",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/initial.rs",
+            "analyzers/common/src/tests/public_protocol.rs",
+            "scripts/tests/public-cli-transport.test.mjs"
+          ]
+        },
+        {
+          "name": "rejects_version_truncation_and_paths",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/initial.rs",
+            "analyzers/common/src/tests/public_protocol.rs",
+            "scripts/tests/public-cli-transport.test.mjs"
+          ]
+        }
+      ],
+      "disposition": "native-covered",
+      "destinations": [
+        "analyzers/common/src/tests/initial.rs",
+        "analyzers/common/src/tests/public_protocol.rs",
+        "scripts/tests/public-cli-transport.test.mjs"
+      ],
+      "commands": [
+        "common",
+        "scripts",
+        "public"
+      ],
+      "rationale": "Strict shared public vectors, recursive duplicates/types/paths, omitted/empty/null selection, all scopes and final compiled identity replace root decoding. Actual public packaged bytes exercise all seven languages.",
+      "namedCaseCount": 4
+    },
+    {
+      "path": "src/cli/tests/transport.rs",
+      "cases": [
+        {
+          "name": "output_queue_accepts_ready_and_terminal_before_writer_runs",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "scripts/tests/public-cli-transport.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs"
+          ]
+        }
+      ],
+      "disposition": "retired-control-only",
+      "destinations": [
+        "scripts/tests/public-cli-transport.test.mjs",
+        "analyzers/common/src/tests/lifecycle.rs"
+      ],
+      "commands": [
+        "scripts",
+        "rust"
+      ],
+      "rationale": "ready-plus-terminal queue no longer exists. Replacement verifies EOF-before-analysis, one final JSON, no/malformed result, real stdio/status and caller termination of blocked output.",
+      "namedCaseCount": 1
+    },
+    {
+      "path": "src/code_graph/tests/fixtures.rs",
+      "cases": [],
+      "disposition": "native-covered-fixture",
+      "destinations": [
+        "analyzers/common/src/tests/historical_graph.rs"
+      ],
+      "commands": [
+        "common"
+      ],
+      "rationale": "Original six-category/node/edge fixture assertions now call the current language output boundary; no old graph generator/validator is kept.",
+      "namedCaseCount": 0
+    },
+    {
+      "path": "src/code_graph/tests/graph.rs",
+      "cases": [
+        {
+          "name": "all_categories_are_reachable_through_the_root",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_graph.rs",
+            "analyzers/common/src/tests/graph.rs"
+          ],
+          "newTests": [
+            "graph::historical_tests::all_categories_are_reachable_through_the_root"
+          ]
+        },
+        {
+          "name": "dangling_local_reference_is_rejected",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_graph.rs",
+            "analyzers/common/src/tests/graph.rs"
+          ],
+          "newTests": [
+            "graph::historical_tests::dangling_local_reference_is_rejected"
+          ]
+        },
+        {
+          "name": "dangling_nested_child_is_rejected",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_graph.rs",
+            "analyzers/common/src/tests/graph.rs"
+          ],
+          "newTests": [
+            "graph::historical_tests::dangling_nested_child_is_rejected"
+          ]
+        },
+        {
+          "name": "dangling_root_child_is_rejected",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_graph.rs",
+            "analyzers/common/src/tests/graph.rs"
+          ],
+          "newTests": [
+            "graph::historical_tests::dangling_root_child_is_rejected"
+          ]
+        },
+        {
+          "name": "deep_declaration_chains_can_be_validated",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_graph.rs",
+            "analyzers/common/src/tests/graph.rs"
+          ],
+          "newTests": [
+            "graph::historical_tests::deep_declaration_chains_can_be_validated"
+          ]
+        },
+        {
+          "name": "disconnected_containment_cycle_is_rejected",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_graph.rs",
+            "analyzers/common/src/tests/graph.rs"
+          ],
+          "newTests": [
+            "graph::historical_tests::disconnected_containment_cycle_is_rejected"
+          ]
+        },
+        {
+          "name": "duplicate_children_in_one_container_are_rejected",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_graph.rs",
+            "analyzers/common/src/tests/graph.rs"
+          ],
+          "newTests": [
+            "graph::historical_tests::duplicate_children_in_one_container_are_rejected"
+          ]
+        },
+        {
+          "name": "duplicate_ids_are_rejected_across_languages_and_categories",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_graph.rs",
+            "analyzers/common/src/tests/graph.rs"
+          ],
+          "newTests": [
+            "graph::historical_tests::duplicate_ids_are_rejected_across_languages_and_categories"
+          ]
+        },
+        {
+          "name": "duplicate_root_children_are_rejected",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_graph.rs",
+            "analyzers/common/src/tests/graph.rs"
+          ],
+          "newTests": [
+            "graph::historical_tests::duplicate_root_children_are_rejected"
+          ]
+        },
+        {
+          "name": "empty_graph_has_a_root_and_no_nodes",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_graph.rs",
+            "analyzers/common/src/tests/graph.rs"
+          ],
+          "newTests": [
+            "graph::historical_tests::empty_graph_has_a_root_and_no_nodes"
+          ]
+        },
+        {
+          "name": "merges_language_graphs_and_rejects_identity_or_symbol_collisions",
+          "disposition": "consumer-owned",
+          "coverage": [
+            "Narrant src-tauri/src/structure_review/code_graph/tests/graph.rs"
+          ],
+          "reason": "Cross-language merge remains caller functionality; do not reintroduce producer merge API."
+        },
+        {
+          "name": "mixed_languages_and_all_reference_target_states_are_supported",
+          "disposition": "consumer-owned",
+          "coverage": [
+            "Narrant src-tauri/src/structure_review/code_graph/tests/graph.rs"
+          ],
+          "reason": "Cross-language merge remains caller functionality; do not reintroduce producer merge API."
+        },
+        {
+          "name": "multiple_parents_are_rejected",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_graph.rs",
+            "analyzers/common/src/tests/graph.rs"
+          ],
+          "newTests": [
+            "graph::historical_tests::multiple_parents_are_rejected"
+          ]
+        },
+        {
+          "name": "reference_reachability_does_not_replace_containment",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_graph.rs",
+            "analyzers/common/src/tests/graph.rs"
+          ],
+          "newTests": [
+            "graph::historical_tests::reference_reachability_does_not_replace_containment"
+          ]
+        },
+        {
+          "name": "root_and_nested_placement_cannot_share_a_node",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_graph.rs",
+            "analyzers/common/src/tests/graph.rs"
+          ],
+          "newTests": [
+            "graph::historical_tests::root_and_nested_placement_cannot_share_a_node"
+          ]
+        },
+        {
+          "name": "rooted_containment_cycle_is_rejected",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_graph.rs",
+            "analyzers/common/src/tests/graph.rs"
+          ],
+          "newTests": [
+            "graph::historical_tests::rooted_containment_cycle_is_rejected"
+          ]
+        },
+        {
+          "name": "self_and_mutual_references_are_allowed",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_graph.rs",
+            "analyzers/common/src/tests/graph.rs"
+          ],
+          "newTests": [
+            "graph::historical_tests::self_and_mutual_references_are_allowed"
+          ]
+        },
+        {
+          "name": "self_containment_is_rejected",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_graph.rs",
+            "analyzers/common/src/tests/graph.rs"
+          ],
+          "newTests": [
+            "graph::historical_tests::self_containment_is_rejected"
+          ]
+        }
+      ],
+      "disposition": "native-covered",
+      "destinations": [
+        "analyzers/common/src/tests/historical_graph.rs",
+        "analyzers/common/src/tests/graph.rs"
+      ],
+      "commands": [
+        "common"
+      ],
+      "rationale": "16 graph invariant cases call the current production output validator. Two cross-language/merge cases remain consumer-owned in Narrant structure_review/code_graph/tests/graph.rs; the producer has no merge API.",
+      "namedCaseCount": 18
+    },
+    {
+      "path": "src/code_graph/tests/mod.rs",
+      "cases": [],
+      "disposition": "native-covered-fixture",
+      "destinations": [
+        "analyzers/common/src/tests/historical_graph.rs"
+      ],
+      "commands": [
+        "common"
+      ],
+      "rationale": "Original six-category/node/edge fixture assertions now call the current language output boundary; no old graph generator/validator is kept.",
+      "namedCaseCount": 0
+    },
+    {
+      "path": "src/native_analyzer/tests/directory/clang.rs",
+      "cases": [
+        {
+          "name": "participation_discovery_preserves_headers_and_exact_selection",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/directory/clang.rs"
+          ],
+          "newTests": [
+            "tests::directory::clang::participation_discovery_preserves_headers_and_exact_selection"
+          ],
+          "commands": [
+            "integration"
+          ]
+        }
+      ],
+      "disposition": "moved",
+      "destinations": [
+        "analyzers/integration-tests/src/tests/directory/clang.rs"
+      ],
+      "commands": [
+        "integration"
+      ],
+      "rationale": "Original semantic assertions use the real direct public entry and read-only result view. Construction evidence is not emulated.",
+      "namedCaseCount": 1
+    },
+    {
+      "path": "src/native_analyzer/tests/directory/csharp.rs",
+      "cases": [
+        {
+          "name": "compile_discovery_preserves_exact_selection_and_test_roles",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/directory/csharp.rs"
+          ],
+          "newTests": [
+            "tests::directory::csharp::compile_discovery_preserves_exact_selection_and_test_roles"
+          ],
+          "commands": [
+            "integration"
+          ]
+        }
+      ],
+      "disposition": "moved",
+      "destinations": [
+        "analyzers/integration-tests/src/tests/directory/csharp.rs"
+      ],
+      "commands": [
+        "integration"
+      ],
+      "rationale": "Original semantic assertions use the real direct public entry and read-only result view. Construction evidence is not emulated.",
+      "namedCaseCount": 1
+    },
+    {
+      "path": "src/native_analyzer/tests/directory/go.rs",
+      "cases": [
+        {
+          "name": "workspace_discovery_preserves_exact_selection_and_test_roles",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/directory/go.rs"
+          ],
+          "newTests": [
+            "tests::directory::go::workspace_discovery_preserves_exact_selection_and_test_roles"
+          ],
+          "commands": [
+            "integration"
+          ]
+        }
+      ],
+      "disposition": "moved",
+      "destinations": [
+        "analyzers/integration-tests/src/tests/directory/go.rs"
+      ],
+      "commands": [
+        "integration"
+      ],
+      "rationale": "Original semantic assertions use the real direct public entry and read-only result view. Construction evidence is not emulated.",
+      "namedCaseCount": 1
+    },
+    {
+      "path": "src/native_analyzer/tests/directory/java.rs",
+      "cases": [
+        {
+          "name": "source_root_discovery_preserves_exact_selection_and_test_roles",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/directory/java.rs"
+          ],
+          "newTests": [
+            "tests::directory::java::source_root_discovery_preserves_exact_selection_and_test_roles"
+          ],
+          "commands": [
+            "integration"
+          ]
+        }
+      ],
+      "disposition": "moved",
+      "destinations": [
+        "analyzers/integration-tests/src/tests/directory/java.rs"
+      ],
+      "commands": [
+        "integration"
+      ],
+      "rationale": "Original semantic assertions use the real direct public entry and read-only result view. Construction evidence is not emulated.",
+      "namedCaseCount": 1
+    },
+    {
+      "path": "src/native_analyzer/tests/directory/mod.rs",
+      "cases": [],
+      "disposition": "moved",
+      "destinations": [
+        "analyzers/integration-tests/src/tests/directory/mod.rs"
+      ],
+      "commands": [
+        "integration"
+      ],
+      "rationale": "Original semantic assertions use the real direct public entry and read-only result view. Construction evidence is not emulated.",
+      "namedCaseCount": 0
+    },
+    {
+      "path": "src/native_analyzer/tests/discovery.rs",
+      "cases": [
+        {
+          "name": "discovery_accepts_complete_coverage_without_extension_guessing",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/graph.rs",
+            "analyzers/rust/src/tests/discovery.rs",
+            "analyzers/python/src/projection/tests/discovery.rs",
+            "analyzers/typescript/tests/workspace.test.mjs",
+            "analyzers/integration-tests/src/tests/directory"
+          ]
+        },
+        {
+          "name": "discovery_checks_canonical_containment_and_alias_policy",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/graph.rs",
+            "analyzers/rust/src/tests/discovery.rs",
+            "analyzers/python/src/projection/tests/discovery.rs",
+            "analyzers/typescript/tests/workspace.test.mjs",
+            "analyzers/integration-tests/src/tests/directory"
+          ]
+        },
+        {
+          "name": "discovery_empty_results_require_configuration_and_file_count_is_bounded",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/graph.rs",
+            "analyzers/rust/src/tests/discovery.rs",
+            "analyzers/python/src/projection/tests/discovery.rs",
+            "analyzers/typescript/tests/workspace.test.mjs",
+            "analyzers/integration-tests/src/tests/directory"
+          ]
+        },
+        {
+          "name": "discovery_rejects_invalid_paths_coverage_and_origins",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/graph.rs",
+            "analyzers/rust/src/tests/discovery.rs",
+            "analyzers/python/src/projection/tests/discovery.rs",
+            "analyzers/typescript/tests/workspace.test.mjs",
+            "analyzers/integration-tests/src/tests/directory"
+          ]
+        },
+        {
+          "name": "discovery_rejects_unreadable_source_or_configuration",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/graph.rs",
+            "analyzers/rust/src/tests/discovery.rs",
+            "analyzers/python/src/projection/tests/discovery.rs",
+            "analyzers/typescript/tests/workspace.test.mjs",
+            "analyzers/integration-tests/src/tests/directory"
+          ]
+        },
+        {
+          "name": "selection_modes_preserve_the_private_wire_contract",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/graph.rs",
+            "analyzers/rust/src/tests/discovery.rs",
+            "analyzers/python/src/projection/tests/discovery.rs",
+            "analyzers/typescript/tests/workspace.test.mjs",
+            "analyzers/integration-tests/src/tests/directory"
+          ]
+        }
+      ],
+      "disposition": "native-covered",
+      "destinations": [
+        "analyzers/common/src/tests/graph.rs",
+        "analyzers/rust/src/tests/discovery.rs",
+        "analyzers/python/src/projection/tests/discovery.rs",
+        "analyzers/typescript/tests/workspace.test.mjs",
+        "analyzers/integration-tests/src/tests/directory"
+      ],
+      "commands": [
+        "common",
+        "rust",
+        "typescript",
+        "integration",
+        "public"
+      ],
+      "rationale": "Exact coverage/configuration/origins, configured empty, no extension guessing, readable real source and alias boundaries are checked in the language boundary and native loaders. Only private-wire serialization itself is retired.",
+      "namedCaseCount": 6
+    },
+    {
+      "path": "src/native_analyzer/tests/fake-helper.mjs",
+      "cases": [],
+      "disposition": "native-covered",
+      "destinations": [
+        "analyzers/common/src/tests/graph.rs",
+        "analyzers/common/src/tests/initial.rs",
+        "analyzers/common/src/tests/lifecycle.rs",
+        "analyzers/windows-process-probe/src/child_process/tests",
+        "scripts/tests/public-cli-transport.test.mjs"
+      ],
+      "commands": [
+        "common",
+        "scripts",
+        "rust",
+        "public",
+        "process"
+      ],
+      "rationale": "Private Host transport/fake-helper controls are retired. Public decoder/graph/evidence/resource checks remain language-local; actual one-shot inputs, bounded pipes, missing/malformed/nonzero results and caller-owned cancel/deadline/panic/tree cleanup replace helper ready/cancel lifecycle. No fake private-wire compatibility is kept.",
+      "namedCaseCount": 0
+    },
+    {
+      "path": "src/native_analyzer/tests/fixtures/pr31_github_discovery.rs",
+      "cases": [
+        {
+          "name": "discovers_all_remotes_deduplicates_repositories_and_paginates_metadata_only",
+          "disposition": "preserved-fixture",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/fixtures/pr31_github_discovery.rs"
+          ]
+        },
+        {
+          "name": "rejects_code_content_endpoints_by_only_listing_pull_requests",
+          "disposition": "preserved-fixture",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/fixtures/pr31_github_discovery.rs"
+          ]
+        },
+        {
+          "name": "reports_offline_discovery_per_repository_without_losing_groups",
+          "disposition": "preserved-fixture",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/fixtures/pr31_github_discovery.rs"
+          ]
+        },
+        {
+          "name": "uses_authenticated_metadata_access_and_keeps_permission_failures_local",
+          "disposition": "preserved-fixture",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/fixtures/pr31_github_discovery.rs"
+          ]
+        }
+      ],
+      "disposition": "preserved-fixture",
+      "destinations": [
+        "analyzers/integration-tests/src/tests/fixtures/pr31_github_discovery.rs"
+      ],
+      "commands": [
+        "integration"
+      ],
+      "rationale": "Frozen data/source input is copied byte-for-byte and consumed by its retained semantic assertion; fixture #[test] text is not compiled as application tests.",
+      "namedCaseCount": 4
+    },
+    {
+      "path": "src/native_analyzer/tests/fixtures/python-historical/bindings.json",
+      "cases": [],
+      "disposition": "preserved-fixture",
+      "destinations": [
+        "analyzers/integration-tests/src/tests/fixtures/python-historical/bindings.json"
+      ],
+      "commands": [
+        "integration"
+      ],
+      "rationale": "Frozen data/source input is copied byte-for-byte and consumed by its retained semantic assertion; fixture #[test] text is not compiled as application tests.",
+      "namedCaseCount": 0
+    },
+    {
+      "path": "src/native_analyzer/tests/fixtures/python-historical/projects.json",
+      "cases": [],
+      "disposition": "preserved-fixture",
+      "destinations": [
+        "analyzers/integration-tests/src/tests/fixtures/python-historical/projects.json"
+      ],
+      "commands": [
+        "integration"
+      ],
+      "rationale": "Frozen data/source input is copied byte-for-byte and consumed by its retained semantic assertion; fixture #[test] text is not compiled as application tests.",
+      "namedCaseCount": 0
+    },
+    {
+      "path": "src/native_analyzer/tests/fixtures/python-historical/relationships.json",
+      "cases": [],
+      "disposition": "preserved-fixture",
+      "destinations": [
+        "analyzers/integration-tests/src/tests/fixtures/python-historical/relationships.json"
+      ],
+      "commands": [
+        "integration"
+      ],
+      "rationale": "Frozen data/source input is copied byte-for-byte and consumed by its retained semantic assertion; fixture #[test] text is not compiled as application tests.",
+      "namedCaseCount": 0
+    },
+    {
+      "path": "src/native_analyzer/tests/migration.rs",
+      "cases": [
+        {
+          "name": "embedded_python_stdlib_is_strict_and_tied_to_the_helper",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/rust/src/tests/runtime.rs",
+            "analyzers/rust/src/tests/loading.rs",
+            "analyzers/python/src/tests/core.rs",
+            "analyzers/typescript/tests/public.test.mjs",
+            "analyzers/common/src/tests/public_protocol.rs"
+          ]
+        },
+        {
+          "name": "python_lexical_aliases_keep_identity_without_weakening_escape_checks",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/rust/src/tests/runtime.rs",
+            "analyzers/rust/src/tests/loading.rs",
+            "analyzers/python/src/tests/core.rs",
+            "analyzers/typescript/tests/public.test.mjs",
+            "analyzers/common/src/tests/public_protocol.rs"
+          ]
+        },
+        {
+          "name": "rust_constructor_keeps_factory_resolution_and_forces_safety_policy",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/rust/src/tests/runtime.rs",
+            "analyzers/rust/src/tests/loading.rs",
+            "analyzers/python/src/tests/core.rs",
+            "analyzers/typescript/tests/public.test.mjs",
+            "analyzers/common/src/tests/public_protocol.rs"
+          ]
+        },
+        {
+          "name": "rust_constructor_preserves_inherited_toolchain_and_discovery_path",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/rust/src/tests/runtime.rs",
+            "analyzers/rust/src/tests/loading.rs",
+            "analyzers/python/src/tests/core.rs",
+            "analyzers/typescript/tests/public.test.mjs",
+            "analyzers/common/src/tests/public_protocol.rs"
+          ]
+        },
+        {
+          "name": "rust_environment_preserves_network_policy_and_blocks_automatic_installation",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/rust/src/tests/runtime.rs",
+            "analyzers/rust/src/tests/loading.rs",
+            "analyzers/python/src/tests/core.rs",
+            "analyzers/typescript/tests/public.test.mjs",
+            "analyzers/common/src/tests/public_protocol.rs"
+          ]
+        },
+        {
+          "name": "rust_profiles_admit_physical_aliases_without_loosening_other_languages",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/rust/src/tests/runtime.rs",
+            "analyzers/rust/src/tests/loading.rs",
+            "analyzers/python/src/tests/core.rs",
+            "analyzers/typescript/tests/public.test.mjs",
+            "analyzers/common/src/tests/public_protocol.rs"
+          ]
+        },
+        {
+          "name": "rust_profiles_preserve_wire_contract_and_require_only_needed_declarations",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/rust/src/tests/runtime.rs",
+            "analyzers/rust/src/tests/loading.rs",
+            "analyzers/python/src/tests/core.rs",
+            "analyzers/typescript/tests/public.test.mjs",
+            "analyzers/common/src/tests/public_protocol.rs"
+          ]
+        },
+        {
+          "name": "rust_project_configuration_keeps_frozen_runtime_environment",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/rust/src/tests/runtime.rs",
+            "analyzers/rust/src/tests/loading.rs",
+            "analyzers/python/src/tests/core.rs",
+            "analyzers/typescript/tests/public.test.mjs",
+            "analyzers/common/src/tests/public_protocol.rs"
+          ]
+        },
+        {
+          "name": "typescript_requires_approved_standard_declaration_packages",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/rust/src/tests/runtime.rs",
+            "analyzers/rust/src/tests/loading.rs",
+            "analyzers/python/src/tests/core.rs",
+            "analyzers/typescript/tests/public.test.mjs",
+            "analyzers/common/src/tests/public_protocol.rs"
+          ]
+        }
+      ],
+      "disposition": "native-covered",
+      "destinations": [
+        "analyzers/rust/src/tests/runtime.rs",
+        "analyzers/rust/src/tests/loading.rs",
+        "analyzers/python/src/tests/core.rs",
+        "analyzers/typescript/tests/public.test.mjs",
+        "analyzers/common/src/tests/public_protocol.rs"
+      ],
+      "commands": [
+        "rust",
+        "common",
+        "typescript",
+        "public"
+      ],
+      "rationale": "Language-local runtime policies retain frozen safe Rust environment/network/no-install/build-script policy, exact three scopes and embedded declaration source/path rules. Production rejects old private envelopes rather than serializing private profile/catalog data.",
+      "namedCaseCount": 9
+    },
+    {
+      "path": "src/native_analyzer/tests/mod.rs",
+      "cases": [
+        {
+          "name": "clang_catalog_requires_exact_approved_additional_header_ids",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/clang/tests/test_helper.py",
+            "analyzers/clang/tests/sdk_discovery.hpp"
+          ],
+          "commands": [
+            "clang",
+            "public"
+          ],
+          "newTests": [
+            "test_additional_system_header_catalog",
+            "sdkDiscoveryTests"
+          ],
+          "rationale": "Approved independent header roots and missing/duplicate IDs remain direct C++ component assertions. Public requests reject every private catalog field; no Host catalog validator or wire shape survives."
+        },
+        {
+          "name": "graph_accepts_complete_coverage_reference_cycles_and_external_descriptors",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_evidence.rs"
+          ],
+          "commands": [
+            "common"
+          ],
+          "newTests": [
+            "historical_complete_coverage_reference_cycles_and_external_descriptors"
+          ],
+          "rationale": "Same Unicode, empty-source coverage, internal cycle and external/unresolved descriptors pass the actual finish function in-process."
+        },
+        {
+          "name": "helper_observes_host_stdin_eof_before_terminal",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "analyzers/common/src/tests/lifecycle.rs",
+            "scripts/tests/public-cli-transport.test.mjs"
+          ],
+          "commands": [
+            "rust",
+            "scripts",
+            "public"
+          ],
+          "newTests": [
+            "waits_for_eof_then_rejects_a_second_request",
+            "one-shot exchange closes stdin and accepts only matching actual stdio and exit"
+          ],
+          "rationale": "Old helper EOF-as-cancellation control is intentionally removed. Complete public JSON plus EOF is normal input completion; second JSON and caller termination while waiting input are tested directly."
+        },
+        {
+          "name": "input_rejects_unsafe_paths_platforms_and_tool_roots",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/public_protocol.rs",
+            "analyzers/clang/tests/sdk_discovery.hpp",
+            "analyzers/csharp/tests/SdkDiscoveryTests.cs"
+          ],
+          "commands": [
+            "common",
+            "clang",
+            "csharp",
+            "public"
+          ],
+          "newTests": [
+            "repository_and_package_boundaries_apply_before_the_empty_fast_path",
+            "sdkDiscoveryTests"
+          ],
+          "rationale": "Public paths, duplicates, canonical boundaries and installation overlap remain checked before empty selection. SDK roots are discovered and approved by language components. Caller-provided platform/command/trusted-root fields have no public counterpart and are explicitly rejected as unknown input."
+        },
+        {
+          "name": "protocol_rejects_duplicates_unknown_fields_types_and_missing_nullable",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/public_protocol.rs",
+            "analyzers/common/src/tests/initial.rs",
+            "scripts/tests/public-cli-transport.test.mjs"
+          ],
+          "commands": [
+            "common",
+            "rust",
+            "scripts",
+            "public"
+          ],
+          "newTests": [
+            "public_selection_and_recursive_duplicate_keys_are_strict",
+            "malformed_requests_and_private_envelopes_are_rejected"
+          ],
+          "rationale": "Public duplicate keys, unknown request fields/types and invalid final envelopes are rejected. Missing nullable fields in the deleted private result DTO and its duplicate extension-key parser are retired wire-shape checks: language components construct typed output, while public graph validation/serialization remains native. No private parser is retained."
+        },
+        {
+          "name": "rejects_invalid_graphs_and_cross_evidence",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/historical_evidence.rs"
+          ],
+          "commands": [
+            "common"
+          ],
+          "newTests": [
+            "historical_invalid_graphs_and_cross_evidence_variants"
+          ],
+          "rationale": "All 19 original graph/source facts remain invalid: duplicate IDs/roots/configurations, missing local/external endpoints, self containment/orphans, unapproved platforms, excluded/missing coverage, outside/missing/duplicate origins, missing configuration/source, foreign language, unscoped extension, unused descriptor and external identity that is actually local. Tests invoke existing finish directly; no private JSON decoder is restored."
+        },
+        {
+          "name": "rejects_outbound_symlinks_and_duplicate_aliases",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/public_protocol.rs",
+            "analyzers/go/tests/native_public.py"
+          ],
+          "commands": [
+            "common",
+            "go",
+            "csharp",
+            "clang",
+            "public"
+          ],
+          "newTests": [
+            "repository_and_package_boundaries_apply_before_the_empty_fast_path",
+            "test_source_boundary_and_missing_configuration"
+          ],
+          "rationale": "Actual public programs reject escaping links, duplicate physical aliases and installation/source overlap; native language link assertions remain unchanged."
+        },
+        {
+          "name": "session_drop_and_panic_reap_all_children",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/process_tree.rs",
+            "analyzers/integration-tests/src/tests/python_graph.rs"
+          ],
+          "commands": [
+            "process",
+            "integration"
+          ],
+          "newTests": [
+            "drop_reclaims_parent_and_descendant_matrix",
+            "python_helper_timeout_and_caller_panic_reap_actual_process"
+          ],
+          "rationale": "The actual Python program emits its configuration-read milestone/PID before the caller starts a 150ms deadline or panics. The preserved ProcessTree guard terminates and waits; both real stdout/stderr pipes are drained and joined, and the observed native PID must already be gone. Startup observation has a separate bounded wait; no shell timing assumption or private cancellation frame remains."
+        },
+        {
+          "name": "subprocess_bounds_blocked_stdin_writer",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/tests/public-cli-transport.test.mjs"
+          ],
+          "commands": [
+            "scripts"
+          ],
+          "newTests": [
+            "one-shot exchange bounds a child that never reads stdin"
+          ],
+          "rationale": "New caller sends a real 8 MiB pipe write to a child that never reads stdin; its deadline must terminate/reap the process and release the pending write. No private helper/request loop remains."
+        },
+        {
+          "name": "subprocess_bounds_resources_and_all_timeout_stages",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/tests/native-language-support-packs.test.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs"
+          ],
+          "commands": [
+            "scripts",
+            "rust",
+            "public"
+          ],
+          "newTests": [
+            "smoke waits for killed child close before rejecting and removing cwd",
+            "one-shot exchange bounds a child that never reads stdin",
+            "caller_can_terminate_a_blocked_final_output"
+          ],
+          "rationale": "Real one-shot timeout/close barriers and blocked input/output caller termination replace helper startup/analyze/exit phases. Private per-helper max_result/startup stage controls retire; public analyzers retain their own output/input budgets and callers own transport limits."
+        },
+        {
+          "name": "subprocess_cancel_preserves_observed_backend_and_protocol_failures",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/language-packs/verify-public-cli.mjs"
+          ],
+          "commands": [
+            "scripts",
+            "public"
+          ],
+          "newTests": [
+            "public decoder rejects missing malformed duplicate lifecycle and nonzero success results"
+          ],
+          "rationale": "Cancellation-message races and cancelled replies have no new wire representation. Actual caller tree termination produces no success JSON; backend public errors and invalid final envelopes remain separately asserted."
+        },
+        {
+          "name": "subprocess_cooperative_and_forced_cancellation",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "analyzers/windows-process-probe/src/child_process/tests/process_tree.rs"
+          ],
+          "commands": [
+            "public",
+            "process"
+          ],
+          "newTests": [
+            "finish_reclaims_parent_and_descendant_matrix",
+            "reap_reclaims_parent_and_descendant_matrix"
+          ],
+          "rationale": "Cancel/cancelled message handshake is removed. Each actual package reaches a real load milestone, then its caller kills and verifies the owned tree; ProcessTree tests retain direct-child and inherited-pipe/parent-exit cleanup matrices."
+        },
+        {
+          "name": "subprocess_handles_unicode_fragments_and_drains_stderr",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/tests/public-cli-transport.test.mjs"
+          ],
+          "commands": [
+            "scripts",
+            "public"
+          ],
+          "newTests": [
+            "one-shot exchange preserves fragmented UTF-8 and drains a full stderr pipe"
+          ],
+          "rationale": "Real one-shot child sends Unicode final bytes in one-byte fragments after a 1 MiB stderr write. Caller drains both actual pipes. Private scratch_root and private input serialization assertions retire with the removed Session."
+        },
+        {
+          "name": "subprocess_initializes_crypto_with_explicit_minimal_runtime_environment",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/tests/public-cli-transport.test.mjs",
+            "launchers/src/tests/startup.rs",
+            "scripts/tests/native-language-support-packs.test.mjs"
+          ],
+          "commands": [
+            "scripts",
+            "public"
+          ],
+          "newTests": [
+            "one-shot exchange preserves fragmented UTF-8 and drains a full stderr pipe",
+            "runtime_environment_is_bounded"
+          ],
+          "rationale": "Actual Node child initializes crypto, launchers retain runtime-injection/environment bounds, and each real packaged entry starts in minimal empty-smoke environment. Deleted private scratch_root/explicit-marker transport fields are retired."
+        },
+        {
+          "name": "subprocess_preserves_backend_failure_over_exit_failure",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/language-packs/verify-public-cli.mjs"
+          ],
+          "commands": [
+            "scripts",
+            "public"
+          ],
+          "newTests": [
+            "public decoder rejects missing malformed duplicate lifecycle and nonzero success results"
+          ],
+          "rationale": "Priority between a private helper failure and a later Host helper-exit stage retires with that Session. A one-shot public failure must have its error, matching final identity and required nonzero exit; missing/invalid output and stderr remain observable. Native handled errors remain language public tests."
+        },
+        {
+          "name": "subprocess_preserves_early_eof_diagnostics",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/tests/public-cli-transport.test.mjs"
+          ],
+          "commands": [
+            "scripts"
+          ],
+          "newTests": [
+            "one-shot exchange retains delayed stderr after stdout EOF"
+          ],
+          "rationale": "Real child closes stdout before a delayed unique stderr diagnostic and nonzero exit; caller waits close, rejects missing result and retains that actual diagnostic."
+        },
+        {
+          "name": "subprocess_reaps_descendants_after_parent_exit",
+          "disposition": "moved-test-utility",
+          "coverage": [
+            "analyzers/windows-process-probe/src/child_process/tests/process_tree.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "process"
+          ],
+          "newTests": [
+            "finish_reclaims_parent_and_descendant_matrix",
+            "reap_reclaims_parent_and_descendant_matrix",
+            "drop_reclaims_parent_and_descendant_matrix"
+          ],
+          "rationale": "Original actual-process tests move byte-for-byte and retain parent exit plus inherited/closed pipe matrices; Windows handle/Job execution remains automatic Windows CI."
+        },
+        {
+          "name": "subprocess_rejects_invalid_protocol_lifecycle",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/tests/public-cli-transport.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs"
+          ],
+          "commands": [
+            "scripts",
+            "rust",
+            "public"
+          ],
+          "newTests": [
+            "public decoder rejects missing malformed duplicate lifecycle and nonzero success results",
+            "waits_for_eof_then_rejects_a_second_request"
+          ],
+          "rationale": "One final JSON with matching compiled identity/id and exit is required; missing/truncated/duplicate/old-ready/nonzero success are rejected. Old ready sequencing and unrequested cancelled state have no production wire counterpart."
+        }
+      ],
+      "disposition": "native-covered",
+      "destinations": [
+        "analyzers/clang/tests/sdk_discovery.hpp",
+        "analyzers/clang/tests/test_helper.py",
+        "analyzers/common/src/tests/historical_evidence.rs",
+        "analyzers/common/src/tests/initial.rs",
+        "analyzers/common/src/tests/lifecycle.rs",
+        "analyzers/common/src/tests/public_protocol.rs",
+        "analyzers/csharp/tests/SdkDiscoveryTests.cs",
+        "analyzers/go/tests/native_public.py",
+        "analyzers/integration-tests/src/tests/python_graph.rs",
+        "analyzers/windows-process-probe/src/child_process/tests/process_tree.rs",
+        "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs",
+        "launchers/src/tests/startup.rs",
+        "scripts/language-packs/verify-public-cli.mjs",
+        "scripts/tests/native-language-support-packs.test.mjs",
+        "scripts/tests/public-cli-transport.test.mjs"
+      ],
+      "commands": [
+        "common",
+        "scripts",
+        "clang",
+        "csharp",
+        "go",
+        "rust",
+        "public",
+        "process",
+        "integration"
+      ],
+      "rationale": "Mixed old Host family: source/graph facts invoke native components; actual public stdio and caller tree tests replace transport ownership. Each removed private control or DTO-shape assertion has its own explicit retirement reason below; no test is claimed to live in a module-declaration file.",
+      "namedCaseCount": 18
+    },
+    {
+      "path": "src/native_analyzer/tests/observation.rs",
+      "cases": [
+        {
+          "name": "destination_preserves_input_and_existing_paths",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/common/src/tests/observation.rs"
+          ]
+        },
+        {
+          "name": "marker_is_bounded_atomic_and_never_overwrites",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/common/src/tests/observation.rs"
+          ]
+        },
+        {
+          "name": "symlink_destinations_and_parents_are_rejected",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/common/src/tests/observation.rs"
+          ]
+        }
+      ],
+      "disposition": "moved",
+      "destinations": [
+        "analyzers/common/src/tests/observation.rs"
+      ],
+      "commands": [
+        "common"
+      ],
+      "rationale": "All three atomic/bounded/non-overwriting/source/link observation assertions were migrated in Task1 unchanged in meaning.",
+      "namedCaseCount": 3
+    },
+    {
+      "path": "src/native_analyzer/tests/package_observation.rs",
+      "cases": [
+        {
+          "name": "python_adapter_observation_accepts_only_independent_scratch",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/observation.rs",
+            "analyzers/common/src/tests/public_protocol.rs",
+            "scripts/tests/public-cli-observation.test.mjs"
+          ]
+        },
+        {
+          "name": "python_adapter_protects_entire_package_from_observation",
+          "disposition": "native-covered",
+          "coverage": [
+            "analyzers/common/src/tests/observation.rs",
+            "analyzers/common/src/tests/public_protocol.rs",
+            "scripts/tests/public-cli-observation.test.mjs"
+          ]
+        }
+      ],
+      "disposition": "native-covered",
+      "destinations": [
+        "analyzers/common/src/tests/observation.rs",
+        "analyzers/common/src/tests/public_protocol.rs",
+        "scripts/tests/public-cli-observation.test.mjs"
+      ],
+      "commands": [
+        "common",
+        "scripts",
+        "public"
+      ],
+      "rationale": "The language receives the full real installation boundary directly. Observation destinations still reject source/installation overlap and links; real load markers must belong to the current still-running owned tree.",
+      "namedCaseCount": 2
+    },
+    {
+      "path": "src/native_analyzer/tests/python_graph.rs",
+      "cases": [
+        {
+          "name": "directory_discovery_preserves_members_context_and_explicit_selection",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_graph.rs"
+          ],
+          "newTests": [
+            "tests::python_graph::directory_discovery_preserves_members_context_and_explicit_selection"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "escaping_context_links_fail_native_loading",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_graph.rs"
+          ],
+          "newTests": [
+            "tests::python_graph::escaping_context_links_fail_native_loading"
+          ],
+          "commands": [
+            "integration"
+          ],
+          "rationale": "Original semantic failure and detailed diagnostics remain asserted against the actual direct entry. The view retains raw public error.code/message separately from its actual captured stderr; detailed syntax/path/toolchain strings come from the real stderr diagnostic and are not regenerated from test expectations."
+        },
+        {
+          "name": "first_valid_utf8_cookie_controls_source_decoding",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_graph.rs"
+          ],
+          "newTests": [
+            "tests::python_graph::first_valid_utf8_cookie_controls_source_decoding"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "internal_links_preserve_selected_paths_and_distinct_identities",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_graph.rs"
+          ],
+          "newTests": [
+            "tests::python_graph::internal_links_preserve_selected_paths_and_distinct_identities"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "invalid_versions_and_encodings_fail_native_analysis",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_graph.rs"
+          ],
+          "newTests": [
+            "tests::python_graph::invalid_versions_and_encodings_fail_native_analysis"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "project_requires_python_controls_native_syntax",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_graph.rs"
+          ],
+          "newTests": [
+            "tests::python_graph::project_requires_python_controls_native_syntax"
+          ],
+          "commands": [
+            "integration"
+          ],
+          "rationale": "Original semantic failure and detailed diagnostics remain asserted against the actual direct entry. The view retains raw public error.code/message separately from its actual captured stderr; detailed syntax/path/toolchain strings come from the real stderr diagnostic and are not regenerated from test expectations."
+        },
+        {
+          "name": "python_helper_preserves_historical_complete_graphs",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_graph.rs"
+          ],
+          "newTests": [
+            "tests::python_graph::python_helper_preserves_historical_complete_graphs"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "python_helper_timeout_and_caller_panic_reap_actual_process",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_graph.rs"
+          ],
+          "newTests": [
+            "tests::python_graph::python_helper_timeout_and_caller_panic_reap_actual_process"
+          ],
+          "commands": [
+            "integration"
+          ],
+          "rationale": "The actual Python program emits its configuration-read milestone/PID before the caller starts a 150ms deadline or panics. The preserved ProcessTree guard terminates and waits; both real stdout/stderr pipes are drained and joined, and the observed native PID must already be gone. Startup observation has a separate bounded wait; no shell timing assumption or private cancellation frame remains."
+        },
+        {
+          "name": "receiver_fields_distinguish_expression_scopes_and_outer_walrus",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_graph.rs"
+          ],
+          "newTests": [
+            "tests::python_graph::receiver_fields_distinguish_expression_scopes_and_outer_walrus"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "receiver_fields_follow_lexical_bindings",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_graph.rs"
+          ],
+          "newTests": [
+            "tests::python_graph::receiver_fields_follow_lexical_bindings"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "test_filter_and_input_failures_never_hide_invalid_source_paths",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_graph.rs"
+          ],
+          "newTests": [
+            "tests::python_graph::test_filter_and_input_failures_never_hide_invalid_source_paths"
+          ],
+          "commands": [
+            "integration"
+          ]
+        }
+      ],
+      "disposition": "moved",
+      "destinations": [
+        "analyzers/integration-tests/src/tests/python_graph.rs"
+      ],
+      "commands": [
+        "integration"
+      ],
+      "rationale": "Original semantic assertions use the real direct public entry and read-only result view. Construction evidence is not emulated.",
+      "namedCaseCount": 11
+    },
+    {
+      "path": "src/native_analyzer/tests/python_native.rs",
+      "cases": [
+        {
+          "name": "native_alias_chains_do_not_erase_rebinding_evidence",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_alias_chains_do_not_erase_rebinding_evidence"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_aliases_require_single_unconditional_binding",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_aliases_require_single_unconditional_binding"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_all_supported_minors_preserve_local_and_stdlib_navigation",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_all_supported_minors_preserve_local_and_stdlib_navigation"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_cancellation_finishes_promptly",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_cancellation_finishes_promptly"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_cross_project_configuration_conflicts_remain_unresolved",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_cross_project_configuration_conflicts_remain_unresolved"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_cross_project_context_still_validates_own_syntax",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_cross_project_context_still_validates_own_syntax"
+          ],
+          "commands": [
+            "integration"
+          ],
+          "rationale": "Original semantic failure and detailed diagnostics remain asserted against the actual direct entry. The view retains raw public error.code/message separately from its actual captured stderr; detailed syntax/path/toolchain strings come from the real stderr diagnostic and are not regenerated from test expectations."
+        },
+        {
+          "name": "native_cross_project_modern_decorator_and_base_remain_unproven",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_cross_project_modern_decorator_and_base_remain_unproven"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_cross_project_selected_target_still_validates_own_syntax",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_cross_project_selected_target_still_validates_own_syntax"
+          ],
+          "commands": [
+            "integration"
+          ],
+          "rationale": "Original semantic failure and detailed diagnostics remain asserted against the actual direct entry. The view retains raw public error.code/message separately from its actual captured stderr; detailed syntax/path/toolchain strings come from the real stderr diagnostic and are not regenerated from test expectations."
+        },
+        {
+          "name": "native_descriptor_writes_and_exception_receivers_do_not_create_fields",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_descriptor_writes_and_exception_receivers_do_not_create_fields"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_field_type_relations_and_nested_calls_have_distinct_owners",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_field_type_relations_and_nested_calls_have_distinct_owners"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_internal_links_do_not_rewrite_definition_ownership",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_internal_links_do_not_rewrite_definition_ownership"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_multifile_performance_records_cold_and_warm_sessions",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_multifile_performance_records_cold_and_warm_sessions"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_projects_keep_module_search_and_selected_identity_separate",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_projects_keep_module_search_and_selected_identity_separate"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_properties_overloads_and_explicit_aliases_keep_source_ownership",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_properties_overloads_and_explicit_aliases_keep_source_ownership"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_property_chains_require_current_lexical_binding",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_property_chains_require_current_lexical_binding"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_repository_stdlib_and_missing_dependency_relations",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_repository_stdlib_and_missing_dependency_relations"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_stubs_and_shadowed_decorators_keep_separate_declarations",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_stubs_and_shadowed_decorators_keep_separate_declarations"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_test_filter_hides_targets_until_enabled",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_test_filter_hides_targets_until_enabled"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_unicode_bom_and_python_line_endings_preserve_definitions",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_unicode_bom_and_python_line_endings_preserve_definitions"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_union_with_unknown_decorator_stays_unresolved",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_union_with_unknown_decorator_stays_unresolved"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_user_environment_and_repository_configuration_cannot_add_dependencies",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_user_environment_and_repository_configuration_cannot_add_dependencies"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "native_windows_junction_escape_is_rejected",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/python_native.rs"
+          ],
+          "newTests": [
+            "tests::python_native::native_windows_junction_escape_is_rejected"
+          ],
+          "commands": [
+            "integration"
+          ]
+        }
+      ],
+      "disposition": "moved",
+      "destinations": [
+        "analyzers/integration-tests/src/tests/python_native.rs"
+      ],
+      "commands": [
+        "integration"
+      ],
+      "rationale": "Original semantic assertions use the real direct public entry and read-only result view. Construction evidence is not emulated.",
+      "namedCaseCount": 22
+    },
+    {
+      "path": "src/native_analyzer/tests/rust_graph.rs",
+      "cases": [
+        {
+          "name": "checks",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ]
+        },
+        {
+          "name": "custom",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ]
+        },
+        {
+          "name": "rust_helper_cancellation_reaps_active_toolchain_probe",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ],
+          "newTests": [
+            "tests::rust_graph::rust_helper_cancellation_reaps_active_toolchain_probe"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "rust_helper_cancellation_uses_common_process_ownership",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ],
+          "newTests": [
+            "tests::rust_graph::rust_helper_cancellation_uses_common_process_ownership"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "rust_helper_deduplicates_aliases_with_stable_graph_content",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ],
+          "newTests": [
+            "tests::rust_graph::rust_helper_deduplicates_aliases_with_stable_graph_content"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "rust_helper_describes_external_symbols",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ],
+          "newTests": [
+            "tests::rust_graph::rust_helper_describes_external_symbols"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "rust_helper_discovers_modules_without_promoting_context_files",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ],
+          "newTests": [
+            "tests::rust_graph::rust_helper_discovers_modules_without_promoting_context_files"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "rust_helper_escaping_context_link_is_not_promoted_to_repository_symbol",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ],
+          "newTests": [
+            "tests::rust_graph::rust_helper_escaping_context_link_is_not_promoted_to_repository_symbol"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "rust_helper_excludes_test_attributes_with_glob_imports",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ],
+          "newTests": [
+            "tests::rust_graph::rust_helper_excludes_test_attributes_with_glob_imports"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "rust_helper_lifecycle_native_failure_remains_error",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ],
+          "newTests": [
+            "tests::rust_graph::rust_helper_lifecycle_native_failure_remains_error"
+          ],
+          "commands": [
+            "integration"
+          ],
+          "rationale": "Original semantic failure and detailed diagnostics remain asserted against the actual direct entry. The view retains raw public error.code/message separately from its actual captured stderr; detailed syntax/path/toolchain strings come from the real stderr diagnostic and are not regenerated from test expectations."
+        },
+        {
+          "name": "rust_helper_loads_project_shapes_and_preserves_standalone_failure",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ],
+          "newTests": [
+            "tests::rust_graph::rust_helper_loads_project_shapes_and_preserves_standalone_failure"
+          ],
+          "commands": [
+            "integration"
+          ],
+          "rationale": "Original semantic failure and detailed diagnostics remain asserted against the actual direct entry. The view retains raw public error.code/message separately from its actual captured stderr; detailed syntax/path/toolchain strings come from the real stderr diagnostic and are not regenerated from test expectations."
+        },
+        {
+          "name": "rust_helper_multiple_project_toolchains_keep_scope_boundary",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ],
+          "newTests": [
+            "tests::rust_graph::rust_helper_multiple_project_toolchains_keep_scope_boundary"
+          ],
+          "commands": [
+            "integration"
+          ],
+          "rationale": "Original semantic failure and detailed diagnostics remain asserted against the actual direct entry. The view retains raw public error.code/message separately from its actual captured stderr; detailed syntax/path/toolchain strings come from the real stderr diagnostic and are not regenerated from test expectations."
+        },
+        {
+          "name": "rust_helper_recognizes_custom_and_empty_crate_roots",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ],
+          "newTests": [
+            "tests::rust_graph::rust_helper_recognizes_custom_and_empty_crate_roots"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "rust_helper_runtime_toolchain_selection_reaches_real_cargo_and_rustc",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_graph.rs"
+          ],
+          "newTests": [
+            "tests::rust_graph::rust_helper_runtime_toolchain_selection_reaches_real_cargo_and_rustc"
+          ],
+          "commands": [
+            "integration"
+          ]
+        }
+      ],
+      "disposition": "moved",
+      "destinations": [
+        "analyzers/integration-tests/src/tests/rust_graph.rs"
+      ],
+      "commands": [
+        "integration"
+      ],
+      "rationale": "Original semantic assertions use the real direct public entry and read-only result view. Construction evidence is not emulated.",
+      "namedCaseCount": 14
+    },
+    {
+      "path": "src/native_analyzer/tests/rust_syntax.rs",
+      "cases": [
+        {
+          "name": "closure_references_belong_to_the_nearest_modeled_declaration",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_syntax.rs"
+          ],
+          "newTests": [
+            "tests::rust_syntax::closure_references_belong_to_the_nearest_modeled_declaration"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "preserves_cfg_declarations_and_rejects_parse_failures",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_syntax.rs"
+          ],
+          "newTests": [
+            "tests::rust_syntax::preserves_cfg_declarations_and_rejects_parse_failures"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "source_line_breaks_keep_complete_declarations",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_syntax.rs"
+          ],
+          "newTests": [
+            "tests::rust_syntax::source_line_breaks_keep_complete_declarations"
+          ],
+          "commands": [
+            "integration"
+          ]
+        },
+        {
+          "name": "source_ranges_keep_complete_declarations_without_neighboring_items",
+          "disposition": "moved",
+          "coverage": [
+            "analyzers/integration-tests/src/tests/rust_syntax.rs"
+          ],
+          "newTests": [
+            "tests::rust_syntax::source_ranges_keep_complete_declarations_without_neighboring_items"
+          ],
+          "commands": [
+            "integration"
+          ]
+        }
+      ],
+      "disposition": "moved",
+      "destinations": [
+        "analyzers/integration-tests/src/tests/rust_syntax.rs"
+      ],
+      "commands": [
+        "integration"
+      ],
+      "rationale": "Original semantic assertions use the real direct public entry and read-only result view. Construction evidence is not emulated.",
+      "namedCaseCount": 4
+    },
+    {
+      "path": "src/pack/tests/location.rs",
+      "cases": [
+        {
+          "name": "executable_parent_defines_package_root",
+          "disposition": "native-covered",
+          "coverage": [
+            "launchers/src/tests/startup.rs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/public_protocol.rs"
+          ]
+        },
+        {
+          "name": "symlink_uses_real_executable_location",
+          "disposition": "native-covered",
+          "coverage": [
+            "launchers/src/tests/startup.rs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/public_protocol.rs"
+          ]
+        }
+      ],
+      "disposition": "native-covered",
+      "destinations": [
+        "launchers/src/tests/startup.rs",
+        "scripts/tests/analyzer-package-policy.test.mjs",
+        "analyzers/common/src/tests/public_protocol.rs"
+      ],
+      "commands": [
+        "scripts",
+        "common",
+        "public"
+      ],
+      "rationale": "Entries derive real installation/resources themselves; missing/outbound-link resources and source-install overlap are checked natively. Actual extracted packages run from unrelated cwd; no old root pack locator remains.",
+      "namedCaseCount": 2
+    }
+  ],
+  "additionalFamilies": [
+    {
+      "path": "tests/cli.rs",
+      "namedCaseCount": 16,
+      "note": "Additional root CLI suite outside the supplied 42-file/183-name inventory; kept separate to preserve that baseline accounting.",
+      "cases": [
+        {
+          "name": "real_factory_host_graph_and_eof",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Actual all-seven package public acceptance covers fixed identity, discovery/selection, empty/no-SDK, invalid protocol, read-only graph and exit. Native lifecycle tests retain real input/output backpressure; scripts reject malformed transport and old selectors."
+        },
+        {
+          "name": "empty_selection_does_not_start_helper",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Actual all-seven package public acceptance covers fixed identity, discovery/selection, empty/no-SDK, invalid protocol, read-only graph and exit. Native lifecycle tests retain real input/output backpressure; scripts reject malformed transport and old selectors."
+        },
+        {
+          "name": "omitted_selection_reaches_engine_and_null_is_invalid",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Actual all-seven package public acceptance covers fixed identity, discovery/selection, empty/no-SDK, invalid protocol, read-only graph and exit. Native lifecycle tests retain real input/output backpressure; scripts reject malformed transport and old selectors."
+        },
+        {
+          "name": "invalid_protocol_and_pack_inputs_fail",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Actual all-seven package public acceptance covers fixed identity, discovery/selection, empty/no-SDK, invalid protocol, read-only graph and exit. Native lifecycle tests retain real input/output backpressure; scripts reject malformed transport and old selectors."
+        },
+        {
+          "name": "helper_mismatch_and_invalid_graph_fail",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Old helper and private package descriptor gates are removed from the analyzer. Caller archive/descriptor/hash/path/package policy is strict before launch; actual final compiled identities and graph invariants remain independently checked."
+        },
+        {
+          "name": "cancellation_reaps_nested_helpers",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Old worker/Host/cancel/open-stdin control architecture is removed. Normal public completion requires EOF; actual load cancellation belongs to caller tree ownership and Windows pre-resume Job tests. Compiled fixed identity is asserted on every real extracted entry."
+        },
+        {
+          "name": "parent_kill_reaps_worker_helper_and_detached_descendant",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Old worker/Host/cancel/open-stdin control architecture is removed. Normal public completion requires EOF; actual load cancellation belongs to caller tree ownership and Windows pre-resume Job tests. Compiled fixed identity is asserted on every real extracted entry."
+        },
+        {
+          "name": "blocked_stdout_has_bounded_exit",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Actual all-seven package public acceptance covers fixed identity, discovery/selection, empty/no-SDK, invalid protocol, read-only graph and exit. Native lifecycle tests retain real input/output backpressure; scripts reject malformed transport and old selectors."
+        },
+        {
+          "name": "open_consumer_stdin_does_not_hold_completed_process",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Old worker/Host/cancel/open-stdin control architecture is removed. Normal public completion requires EOF; actual load cancellation belongs to caller tree ownership and Windows pre-resume Job tests. Compiled fixed identity is asserted on every real extracted entry."
+        },
+        {
+          "name": "oversized_request_fails_before_helper_start",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Actual all-seven package public acceptance covers fixed identity, discovery/selection, empty/no-SDK, invalid protocol, read-only graph and exit. Native lifecycle tests retain real input/output backpressure; scripts reject malformed transport and old selectors."
+        },
+        {
+          "name": "cancellation_bounds_blocked_factory",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Old worker/Host/cancel/open-stdin control architecture is removed. Normal public completion requires EOF; actual load cancellation belongs to caller tree ownership and Windows pre-resume Job tests. Compiled fixed identity is asserted on every real extracted entry."
+        },
+        {
+          "name": "windows_parent_kill_reaps_nested_jobs",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Old worker/Host/cancel/open-stdin control architecture is removed. Normal public completion requires EOF; actual load cancellation belongs to caller tree ownership and Windows pre-resume Job tests. Compiled fixed identity is asserted on every real extracted entry."
+        },
+        {
+          "name": "compiled_entries_have_fixed_identities_and_empty_graphs",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Actual all-seven package public acceptance covers fixed identity, discovery/selection, empty/no-SDK, invalid protocol, read-only graph and exit. Native lifecycle tests retain real input/output backpressure; scripts reject malformed transport and old selectors."
+        },
+        {
+          "name": "public_entry_rejects_language_and_package_selectors",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Actual all-seven package public acceptance covers fixed identity, discovery/selection, empty/no-SDK, invalid protocol, read-only graph and exit. Native lifecycle tests retain real input/output backpressure; scripts reject malformed transport and old selectors."
+        },
+        {
+          "name": "wrong_package_is_rejected_before_empty_selection",
+          "disposition": "native-covered",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Old helper and private package descriptor gates are removed from the analyzer. Caller archive/descriptor/hash/path/package policy is strict before launch; actual final compiled identities and graph invariants remain independently checked."
+        },
+        {
+          "name": "private_worker_keeps_compiled_identity",
+          "disposition": "retired-control-only",
+          "coverage": [
+            "scripts/language-packs/verify-public-cli.mjs",
+            "scripts/tests/public-cli-transport.test.mjs",
+            "scripts/tests/analyzer-package-policy.test.mjs",
+            "analyzers/common/src/tests/lifecycle.rs",
+            "analyzers/windows-process-probe/src/child_process/tests/windows_job.rs"
+          ],
+          "commands": [
+            "scripts",
+            "public",
+            "rust",
+            "process"
+          ],
+          "rationale": "Old worker/Host/cancel/open-stdin control architecture is removed. Normal public completion requires EOF; actual load cancellation belongs to caller tree ownership and Windows pre-resume Job tests. Compiled fixed identity is asserted on every real extracted entry."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,210 @@
+[
+  {
+    "name": "EOF without final newline",
+    "patch": {},
+    "suffix": "",
+    "outcome": "ok"
+  },
+  {
+    "name": "ordinary whitespace",
+    "patch": {},
+    "suffix": " \n\t",
+    "outcome": "ok"
+  },
+  {
+    "name": "trailing second JSON",
+    "patch": {},
+    "suffix": "\n{}",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "unknown field",
+    "patch": {
+      "command": "untrusted"
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "wrong protocol",
+    "patch": {
+      "protocol": "codegraph.engine/1"
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "incompatible_protocol"
+  },
+  {
+    "name": "removed cancel",
+    "patch": {
+      "type": "cancel"
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "null selection",
+    "patch": {
+      "files": null
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "duplicate selection",
+    "patch": {
+      "files": [
+        "a.py",
+        "a.py"
+      ]
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "parent traversal",
+    "patch": {
+      "files": [
+        "../source.py"
+      ]
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "absolute path",
+    "patch": {
+      "files": [
+        "/source.py"
+      ]
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "backslash",
+    "patch": {
+      "files": [
+        "src\\source.py"
+      ]
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "drive colon",
+    "patch": {
+      "files": [
+        "C:source.py"
+      ]
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "empty path",
+    "patch": {
+      "files": [
+        ""
+      ]
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "blank id",
+    "patch": {
+      "id": " "
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "unknown option",
+    "patch": {
+      "options": {
+        "include_tests": false,
+        "rust_dependency_scope": "repository-only",
+        "sdk_root": "/untrusted"
+      }
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "fixed identity injection",
+    "patch": {
+      "pack_id": "go",
+      "engine_version": "9.9.9"
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "NUL id",
+    "patch": {
+      "id": "a\u0000b"
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "dot component",
+    "patch": {
+      "files": [
+        "src/./source.py"
+      ]
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "empty component",
+    "patch": {
+      "files": [
+        "src//source.py"
+      ]
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "invalid enum",
+    "patch": {
+      "options": {
+        "include_tests": false,
+        "rust_dependency_scope": "legacy"
+      }
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_request"
+  },
+  {
+    "name": "missing physical source",
+    "patch": {
+      "files": [
+        "missing.py"
+      ]
+    },
+    "suffix": "",
+    "outcome": "error",
+    "error_code": "invalid_input"
+  }
+]

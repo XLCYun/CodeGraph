@@ -1,0 +1,6 @@
+bin/
+obj/
+publish/
+tests/__pycache__/
+tests/bin/
+tests/obj/

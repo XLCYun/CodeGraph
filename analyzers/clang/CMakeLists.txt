@@ -1,0 +1,72 @@
+cmake_minimum_required(VERSION 3.24)
+# 仅构建 CodeGraph 引擎，LLVM_ROOT 必须是隔离且已核验的固定 SDK。
+project(codegraph_clang LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+find_package(LLVM 21.1.8 EXACT REQUIRED CONFIG)
+find_package(Clang REQUIRED CONFIG)
+# 固定 Windows 生成器已经明确选定 VS2022；修复上游导出的 VS2019 DIA 路径。
+if(WIN32)
+  include(cmake/RelocateWindowsDia.cmake)
+  codegraph_relocate_windows_dia("${CMAKE_GENERATOR_INSTANCE}")
+endif()
+# 两个入口链接同一份已编译分析实现，源清单与 macOS shell 构建共用。
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/sources.txt")
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/sources.txt" CODEGRAPH_CLANG_SOURCES)
+add_library(codegraph_clang_analysis STATIC ${CODEGRAPH_CLANG_SOURCES})
+target_include_directories(codegraph_clang_analysis SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
+separate_arguments(CODEGRAPH_LLVM_DEFINITIONS NATIVE_COMMAND "${LLVM_DEFINITIONS}")
+target_compile_options(codegraph_clang_analysis PUBLIC ${CODEGRAPH_LLVM_DEFINITIONS})
+if(MSVC)
+  target_compile_options(codegraph_clang_analysis PUBLIC /EHsc /GR- /utf-8)
+  target_compile_definitions(codegraph_clang_analysis PUBLIC NOMINMAX _CRT_SECURE_NO_WARNINGS)
+else()
+  target_compile_options(codegraph_clang_analysis PUBLIC -fexceptions -fno-rtti)
+endif()
+# 优先发布包的整体 Clang 动态库；没有该目标的 Windows SDK 使用官方静态依赖图。
+if(TARGET clang-cpp)
+  target_link_libraries(codegraph_clang_analysis PUBLIC clang-cpp)
+else()
+  target_link_libraries(codegraph_clang_analysis PUBLIC clangTooling clangDriver clangFrontend clangIndex clangAST clangLex clangBasic)
+endif()
+add_executable(codegraph-c-cpp src/main.cpp)
+target_link_libraries(codegraph-c-cpp PRIVATE codegraph_clang_analysis)
+# 所有生成器都产生 build/codegraph-c-cpp[.exe]，避免 CI 猜测 Debug/Release 子目录。
+set_target_properties(codegraph-c-cpp PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+foreach(CODEGRAPH_CONFIGURATION DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+  set_target_properties(codegraph-c-cpp PROPERTIES RUNTIME_OUTPUT_DIRECTORY_${CODEGRAPH_CONFIGURATION} "${CMAKE_BINARY_DIR}")
+endforeach()
+if(APPLE)
+  set_target_properties(codegraph-c-cpp PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "@executable_path/runtime/lib;@executable_path/../runtime/lib")
+elseif(UNIX)
+  set_target_properties(codegraph-c-cpp PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "$ORIGIN/runtime/lib;$ORIGIN/../runtime/lib")
+endif()
+install(TARGETS codegraph-c-cpp RUNTIME DESTINATION bin)
+# 分发器读取 CMake 的实际 DLL 闭包，不能把旧 build 目录内的 DLL 当成当前依赖。
+if(WIN32)
+  file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/runtime-dlls-$<CONFIG>.txt"
+    CONTENT "$<JOIN:$<TARGET_RUNTIME_DLLS:codegraph-c-cpp>,\n>")
+endif()
+# Windows 动态依赖放在程序旁边；静态 SDK 不引入多余 DLL。
+if(WIN32 AND TARGET clang-cpp)
+  get_target_property(CODEGRAPH_CLANG_LIBRARY_TYPE clang-cpp TYPE)
+  if(CODEGRAPH_CLANG_LIBRARY_TYPE STREQUAL "SHARED_LIBRARY")
+    add_custom_command(TARGET codegraph-c-cpp POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:codegraph-c-cpp> $<TARGET_FILE_DIR:codegraph-c-cpp>
+      COMMAND_EXPAND_LISTS)
+  endif()
+endif()
+
+# 历史语义夹具通过同进程组件驱动执行；该目标永不安装或放入发布包。
+option(CODEGRAPH_BUILD_COMPONENT_TESTS "Build non-shipped semantic fixture driver" OFF)
+if(CODEGRAPH_BUILD_COMPONENT_TESTS)
+  # 夹具操作是独立 archive 成员，生产入口不会引用或链接该成员。
+  target_sources(codegraph_clang_analysis PRIVATE src/fixture.cpp)
+  add_executable(codegraph-clang-components tests/component.cpp tests/sdk_discovery.cpp)
+  target_link_libraries(codegraph-clang-components PRIVATE codegraph_clang_analysis)
+  set_target_properties(codegraph-clang-components PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+  foreach(CODEGRAPH_CONFIGURATION DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+    set_target_properties(codegraph-clang-components PROPERTIES RUNTIME_OUTPUT_DIRECTORY_${CODEGRAPH_CONFIGURATION} "${CMAKE_BINARY_DIR}")
+  endforeach()
+endif()

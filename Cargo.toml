@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = ["launchers"]
+exclude = ["analyzers/common", "analyzers/rust", "analyzers/python", "analyzers/windows-process-probe", "analyzers/integration-tests"]
+
+[workspace.package]
+version = "0.1.0"

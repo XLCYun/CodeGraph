@@ -1,0 +1,79 @@
+name: Publish verified CodeGraph prerelease
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Exact full main commit whose complete CI passed
+        required: true
+        type: string
+      ci_run_id:
+        description: Successful main push CodeGraph CI run for that commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: codegraph-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    outputs:
+      source_commit: ${{ steps.source.outputs.commit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate exact successful CI evidence before downloading artifacts
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+        run: |
+          node scripts/release/verify-evidence-run.mjs "$CI_RUN_ID" "$SOURCE_COMMIT"
+          echo "commit=$SOURCE_COMMIT" >> "$GITHUB_OUTPUT"
+  publish:
+    needs: prepare
+    runs-on: macos-15
+    timeout-minutes: 30
+    environment: codegraph-release
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.source_commit }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.13.1
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.ci_run_id }}
+          pattern: codegraph-*
+          merge-multiple: true
+          path: artifacts
+      - name: Verify exact source and all archives before obtaining write credentials
+        env:
+          SOURCE_COMMIT: ${{ needs.prepare.outputs.source_commit }}
+        run: node scripts/release/release-artifacts.mjs artifacts "$SOURCE_COMMIT" dist/reviewed-release
+      - name: Publish immutable prerelease after final evidence and byte checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_COMMIT: ${{ needs.prepare.outputs.source_commit }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+        run: node scripts/release/publish-release.mjs artifacts "$SOURCE_COMMIT" "$CI_RUN_ID" dist/published-release
