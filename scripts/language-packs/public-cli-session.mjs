@@ -27,23 +27,52 @@ export function publicEnvironment(environment = process.env) {
 /** 原生进程快照只用于核对本次调用方拥有的子树。 */
 async function processSnapshot() {
   if (process.platform === 'win32') {
-    const { stdout } = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,CommandLine | ConvertTo-Json -Compress'], { timeout: 10_000, maxBuffer: 8 * 1024 * 1024 });
-    return [].concat(JSON.parse(stdout)).map(item => ({ pid: item.ProcessId, parent: item.ParentProcessId, command: item.CommandLine ?? '' }));
+    const command = 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,CommandLine,@{Name="Started";Expression={if ($_.CreationDate) {$_.CreationDate.ToUniversalTime().Ticks.ToString()}}} | ConvertTo-Json -Compress';
+    const { stdout } = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { timeout: 10_000, maxBuffer: 8 * 1024 * 1024 });
+    return [].concat(JSON.parse(stdout)).map(item => ({ pid: item.ProcessId, parent: item.ParentProcessId, command: item.CommandLine ?? '', started: item.Started ?? null }));
   }
   const { stdout } = await run('ps', ['-axo', 'pid=,ppid=,command='], { timeout: 10_000, maxBuffer: 8 * 1024 * 1024 });
   return stdout.split('\n').flatMap(line => { const match = line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/); return match ? [{ pid: Number(match[1]), parent: Number(match[2]), command: match[3] }] : []; });
 }
 
-/** 保存后代的实际命令身份，父节点退出后也保留退出核对集合。 */
-function observeTree(snapshot, observed) {
+/** Windows 以出生时间绑定同一个进程；Unix 保留原有命令观察方式。 */
+function sameBirth(recorded, current) {
+  return recorded && current && typeof recorded === 'object' && recorded.started === current.started;
+}
+
+/** 已知自有进程必须有可比较的 Windows 出生身份，系统中的无关受保护进程不参与判断。 */
+function requireBirth(item) {
+  assert.ok(item.started === undefined || typeof item.started === 'string' && /^\d+$/.test(item.started), `Owned process creation time unavailable: ${item.pid}`);
+}
+
+/** 仅沿当前仍匹配的父进程扩展子树，已记录成员在父进程退出后仍保留。 */
+export function observeTree(snapshot, observed) {
+  const current = new Map(snapshot.map(item => [item.pid, item]));
+  for (const [pid, recorded] of observed) {
+    const item = current.get(pid);
+    if (item && (recorded === undefined || typeof recorded === 'string' || sameBirth(recorded, item))) {
+      requireBirth(item);
+      observed.set(pid, item);
+    }
+  }
   let changed;
   do {
     changed = false;
     for (const item of snapshot) {
-      if (observed.has(item.pid)) observed.set(item.pid, item.command);
-      if (observed.has(item.parent) && !observed.has(item.pid)) { observed.set(item.pid, item.command); changed = true; }
+      if (sameBirth(observed.get(item.pid), item)) continue;
+      const parent = current.get(item.parent);
+      if (!sameBirth(observed.get(item.parent), parent)) continue;
+      requireBirth(item);
+      if (item.started !== undefined && BigInt(item.started) < BigInt(parent.started)) continue;
+      observed.set(item.pid, item);
+      changed = true;
     }
   } while (changed);
+}
+
+/** PID 被复用的新进程不能冒充原来的成员，真实存活成员仍须通过退出断言。 */
+export function liveObservedProcesses(snapshot, observed) {
+  return snapshot.filter(item => sameBirth(observed.get(item.pid), item) && observed.get(item.pid).command === item.command);
 }
 
 /** 只在真实加载标记出现后触发调用方终止；stdin 已正常 EOF，不发送控制消息。 */
@@ -68,7 +97,7 @@ export async function cancelLoadedProject(child, pack, request, observed, closed
       const current = await processSnapshot();
       observeTree(current, observed);
       assert.ok(Number.isSafeInteger(marker.pid) && marker.pid > 0 && observed.has(marker.pid), 'Discovery observer is outside the owned process tree');
-      assert.ok(current.some(item => item.pid === marker.pid && analyzer.test(item.command)), 'Discovery analyzer exited before cancellation');
+      assert.ok(liveObservedProcesses(current, observed).some(item => item.pid === marker.pid && analyzer.test(item.command)), 'Discovery analyzer exited before cancellation');
       assert.ok(!closed(), `${pack}: request completed before real load cancellation`);
       break;
     }
@@ -76,6 +105,7 @@ export async function cancelLoadedProject(child, pack, request, observed, closed
     await delay(25);
   }
   console.log(`Public discovery milestone: ${JSON.stringify({ pack, ...marker })}`);
+  console.log(`Public discovery process identities: ${JSON.stringify([...observed.values()].filter(item => item && typeof item === 'object').map(({ pid, parent, started }) => ({ pid, parent, started })))}`);
   assert.equal(typeof terminate, 'function', 'Loading cancellation requires a retained caller owner');
   await terminate();
   return marker;
@@ -87,7 +117,7 @@ async function assertTreeExited(observed) {
   while (true) {
     const snapshot = await processSnapshot();
     observeTree(snapshot, observed);
-    const live = snapshot.filter(item => observed.get(item.pid) === item.command);
+    const live = liveObservedProcesses(snapshot, observed);
     if (!live.length) return;
     assert.ok(Date.now() < deadline, `Public CLI descendants survived: ${JSON.stringify(live)}`);
     await delay(50);
