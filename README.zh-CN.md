@@ -18,7 +18,7 @@ CodeGraph 提供七个可独立运行的**语言分析器（Language Analyzer）
 
 **当前版本**：**v0.1.1**，修复 Go 指令文本误判，支持
 **macOS ARM64** 和 **Windows x64**。分析器包经双平台 CI 验证后在
-[对应发布页](https://github.com/XLCYun/CodeGraph/releases/tag/v0.1.1)。
+[对应发布页](https://github.com/XLCYun/CodeGraph/releases/tag/v0.1.1) 提供下载。
 每份清单记录构建使用的完整源码提交，包与引擎版本均为 `0.1.1`，
 协议继续使用 `codegraph.analyzer/1`。目前没有包管理器安装方式。
 从发布页下载对应归档和清单，按[分发约定](docs/distribution.md)及

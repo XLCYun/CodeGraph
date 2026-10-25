@@ -149,5 +149,5 @@ Configure the `codegraph-release` environment protection as appropriate before u
 The final draft read rechecks its release ID, tag, exact target commit and prerelease
 identity. The publication PATCH also pins that tag and target commit, while the
 existing-tag commit checks remain mandatory before and after publication.
-The public `v0.1.1` release uses release ID `422619176`, source `0552cc97f217d772b6d883ba75cc9007d3fc8309`,
+The earlier public `v0.1.0` release uses release ID `422619176`, source `0552cc97f217d772b6d883ba75cc9007d3fc8309`,
 and the 29 exact CI assets. It remains a prerelease with `make_latest: false`.

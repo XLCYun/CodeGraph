@@ -108,5 +108,5 @@ stdin 接收一个 UTF-8 公共 JSON 对象后 EOF，尾换行可选；stdout �
 
 公开入口使用 `--help`、`analyze --help` 和 `--version`。当前版本为 `0.1.1`。
 当前包直接交付原生 `bin/codegraph-rust`，七语言联合验收使用上述分发接口。
-2026-10-22 的 PR CI 39777180923 中 macOS 成功，Windows 因 Python junction 诊断断言失败；
-须取得修复后的完整自动 CI，首个固定发布仍待人工合并及确切 main CI。
+2026-10-22 的 PR CI 39777180923 是迁移期间的历史记录，不能替代当前版本的发布证据。
+每个版本都须通过完整双平台验收，并使用确切 main 提交的 CI 资产发布，见[分发约定](../../docs/distribution.md)。
