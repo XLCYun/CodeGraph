@@ -13,8 +13,8 @@ function fixtureContent(id, target) {
   const content = Object.fromEntries(analyzerPackageFiles(id, target).map(name => [name, 'fixture bytes']));
   content['licenses/fixture-LICENSE'] = 'fixture license';
   content['licenses/codegraph/CodeGraph-dependencies.json'] = '[]';
-  content['control/codegraph.json'] = JSON.stringify({ schema_version: 1, pack_id: id, pack_version: '0.1.0', engine_version: '0.1.0', protocol: 'codegraph.analyzer/1' });
-  content['control/native.json'] = JSON.stringify({ schema_version: 1, helper_version: '0.1.0', platforms: [], ...({ go: 'go', java: 'java', csharp: 'dotnet' }[id] ? { target_sdk: { kind: { go: 'go', java: 'java', csharp: 'dotnet' }[id] } } : {}) });
+  content['control/codegraph.json'] = JSON.stringify({ schema_version: 1, pack_id: id, pack_version: '0.1.1', engine_version: '0.1.1', protocol: 'codegraph.analyzer/1' });
+  content['control/native.json'] = JSON.stringify({ schema_version: 1, helper_version: '0.1.1', platforms: [], ...({ go: 'go', java: 'java', csharp: 'dotnet' }[id] ? { target_sdk: { kind: { go: 'go', java: 'java', csharp: 'dotnet' }[id] } } : {}) });
   return content;
 }
 
@@ -65,7 +65,7 @@ test('target archives validate runtime permissions without host POSIX executable
     await writePayload(payload, fixtureContent('java', target));
     assert.equal((await fs.stat(path.join(payload, runtime))).mode & 0o111, 0);
     const executables = new Set([`bin/codegraph-java${suffix}`, runtime]);
-    const build = () => archiveFixture({ id: 'java', version: '0.1.0', target }, payload, path.join(root, 'output'), executables);
+    const build = () => archiveFixture({ id: 'java', version: '0.1.1', target }, payload, path.join(root, 'output'), executables);
     const { manifest } = await verifyAnalyzerDistribution(await build());
     assert.equal(manifest.files.find(file => file.path === runtime).executable, true);
     executables.delete(runtime);
@@ -88,7 +88,7 @@ test('all fourteen package identities reject generic, foreign and incomplete pay
     await writePayload(payload, content);
     const output = path.join(root, 'output');
     const executables = new Set(files.filter(name => name === `bin/codegraph-${id}${suffix}` || name === `bin/node${suffix}` || name === `runtime/jdk/bin/java${suffix}`));
-    const build = () => archiveFixture({ id, version: '0.1.0', target }, payload, output, executables);
+    const build = () => archiveFixture({ id, version: '0.1.1', target }, payload, output, executables);
     await verifyAnalyzerDistribution(await build());
     verifiedIdentities.add(`${id}-${target}`);
     for (const unwanted of [`bin/codegraph${suffix}`, `bin/codegraph-${id === 'go' ? 'rust' : 'go'}${suffix}`, `runtime/codegraph-python${suffix}`, `bin/codegraph-process-owner${suffix}`, `runtime/analyzer/codegraph-process-owner${suffix}`, 'bin/unrelated-tool']) {
@@ -105,7 +105,7 @@ test('all fourteen package identities reject generic, foreign and incomplete pay
       await fs.writeFile(path.join(payload, required), content[required], { mode: 0o644 });
     }
     const descriptor = path.join(payload, 'control/codegraph.json');
-    for (const bad of [content['control/codegraph.json'].replace('0.1.0', '9.9.9'), content['control/codegraph.json'].replace('{', '{"extra":true,'), content['control/codegraph.json'].replace('{', '{"pack_id":"wrong",')]) {
+    for (const bad of [content['control/codegraph.json'].replace('0.1.1', '9.9.9'), content['control/codegraph.json'].replace('{', '{"extra":true,'), content['control/codegraph.json'].replace('{', '{"pack_id":"wrong",')]) {
       await fs.writeFile(descriptor, bad);
       await assert.rejects(verifyAnalyzerDistribution(await build()), /descriptor/);
     }

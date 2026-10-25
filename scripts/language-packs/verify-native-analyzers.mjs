@@ -17,7 +17,7 @@ export async function validateNativeFixtures(environment, language = 'all') {
   const ids = selectedNativePacks(language), suffix = process.platform === 'win32' ? '.exe' : '';
   const target = nativeTargets[`${process.platform}-${process.arch}`];
   for (const id of ids) {
-    const executable = path.join(environment.CODEGRAPH_NATIVE_PACKS, 'smoke-installed', id, '0.1.0', target, 'bin', `codegraph-${id}${suffix}`);
+    const executable = path.join(environment.CODEGRAPH_NATIVE_PACKS, 'smoke-installed', id, '0.1.1', target, 'bin', `codegraph-${id}${suffix}`);
     if (!(await fs.stat(executable)).isFile()) throw new Error(`Missing direct analyzer fixture: ${id}`);
   }
   const required = [];
@@ -82,7 +82,7 @@ export async function verifyNativeAnalyzers(artifacts, build = false, language =
   artifacts = path.resolve(artifacts);
   const environment = { ...process.env, CODEGRAPH_TEST_NODE: process.execPath, CODEGRAPH_NATIVE_LANGUAGE: language, CODEGRAPH_NATIVE_PACKS: artifacts };
   for (const id of ids) {
-    const pack = path.join(artifacts, 'smoke-installed', id, '0.1.0', target);
+    const pack = path.join(artifacts, 'smoke-installed', id, '0.1.1', target);
     if (id === 'typescript-javascript') environment.CODEGRAPH_TYPESCRIPT_PACK = pack;
   }
   if (ids.includes('rust')) Object.assign(environment, await prepareRustNativeTests(environment));

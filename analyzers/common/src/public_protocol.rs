@@ -8,7 +8,7 @@ use std::{
 };
 
 pub const PROTOCOL: &str = "codegraph.analyzer/1";
-pub const ENGINE_VERSION: &str = "0.1.0";
+pub const ENGINE_VERSION: &str = "0.1.1";
 pub const MAX_BYTES: usize = 128 * 1024 * 1024;
 
 /// Rust 的三档依赖政策；其他语言接受该公共字段但不应用它。

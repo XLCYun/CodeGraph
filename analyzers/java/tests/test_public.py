@@ -23,7 +23,7 @@ class PublicTests(unittest.TestCase):
                                     cwd=tempfile.gettempdir())
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout), {
-                "protocol": "codegraph.analyzer/1", "engine_version": "0.1.0", "pack_id": "java",
+                "protocol": "codegraph.analyzer/1", "engine_version": "0.1.1", "pack_id": "java",
                 "type": "completed", "id": "direct", "outcome": "ok",
                 "graph": {"root_contains": [], "nodes": [], "external_symbols": []}})
             self.assertEqual(result.stderr, "")
@@ -60,7 +60,7 @@ class PublicConformanceTests(unittest.TestCase):
             return result
         message = json.loads(result.stdout)
         self.assertEqual(message["protocol"], "codegraph.analyzer/1")
-        self.assertEqual(message["engine_version"], "0.1.0")
+        self.assertEqual(message["engine_version"], "0.1.1")
         self.assertEqual(message["pack_id"], "java")
         self.assertEqual(message["type"], "completed")
         self.assertNotIn("evidence", message)

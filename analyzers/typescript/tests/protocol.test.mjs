@@ -30,7 +30,7 @@ for (const vector of vectors) test(`shared public conformance: ${vector.name}`, 
   const result = exchange(JSON.stringify(request) + vector.suffix);
   assert.equal(result.status, vector.outcome === 'ok' ? 0 : 1, result.stderr);
   assert.equal(result.message.protocol, protocol);
-  assert.equal(result.message.engine_version, '0.1.0');
+  assert.equal(result.message.engine_version, '0.1.1');
   assert.equal(result.message.pack_id, 'typescript-javascript');
   assert.equal(result.message.type, 'completed');
   assert.equal(result.message.outcome, vector.outcome);

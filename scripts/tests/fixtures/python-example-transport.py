@@ -20,7 +20,7 @@ assert sys.stdin.buffer.read() == b''
 node = {'category':'callable', 'id':'rust:丁', 'language':'rust', 'native_kind':'function',
         'name':'丁', 'signature':'fn 丁()', 'code':'{}', 'source':'fn 丁() {}',
         'contains':[], 'references':[], 'extensions':{}}
-completed = {'protocol':request['protocol'], 'engine_version':'0.1.0', 'pack_id':'rust', 'type':'completed', 'id':request['id'], 'outcome':'ok',
+completed = {'protocol':request['protocol'], 'engine_version':'0.1.1', 'pack_id':'rust', 'type':'completed', 'id':request['id'], 'outcome':'ok',
              'graph':{'root_contains':['rust:丁'], 'nodes':[node], 'external_symbols':[]}}
 sys.stdout.buffer.write((''.join(json.dumps(row, ensure_ascii=False)+'\\n' for row in [completed])).encode('utf-8'))
 sys.stderr.buffer.write('诊断丁\\n'.encode('utf-8'))

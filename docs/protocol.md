@@ -1,6 +1,6 @@
 # CodeGraph analyzer protocol 1
 
-This is the direct language-program contract confirmed on 2026-10-22. It supersedes the unreleased ready/cancel transport. The protocol remains `codegraph.analyzer/1`, with engine/package version `0.1.0`, as shipped in the public `v0.1.0` prerelease. The earlier ready/cancel transport was never released and has no legacy mode.
+This is the direct language-program contract confirmed on 2026-10-22. It supersedes the unreleased ready/cancel transport. The protocol remains `codegraph.analyzer/1`, with engine/package version `0.1.1`. The same protocol first shipped in the public `v0.1.0` prerelease. The earlier ready/cancel transport was never released and has no legacy mode.
 
 ## Entry and ownership
 
@@ -36,13 +36,13 @@ Discovery uses native project configuration and existing read-only policy, not a
 Every final result carries compiled identity: `protocol`, `engine_version`, `pack_id`. This replaces the removed ready message. The caller checks all three against its fixed package before using the result. An invalid request cannot choose or overwrite this identity.
 
 ```json
-{"protocol":"codegraph.analyzer/1","engine_version":"0.1.0","pack_id":"rust","type":"completed","id":"example-1","outcome":"ok","graph":{"root_contains":[],"nodes":[],"external_symbols":[]}}
+{"protocol":"codegraph.analyzer/1","engine_version":"0.1.1","pack_id":"rust","type":"completed","id":"example-1","outcome":"ok","graph":{"root_contains":[],"nodes":[],"external_symbols":[]}}
 ```
 
 Success exits 0. A handled failure has no graph and exits 1:
 
 ```json
-{"protocol":"codegraph.analyzer/1","engine_version":"0.1.0","pack_id":"rust","type":"completed","id":"example-1","outcome":"error","error":{"code":"analysis_failed","message":"源码分析失败"}}
+{"protocol":"codegraph.analyzer/1","engine_version":"0.1.1","pack_id":"rust","type":"completed","id":"example-1","outcome":"error","error":{"code":"analysis_failed","message":"源码分析失败"}}
 ```
 
 When no valid request ID was accepted, `id` is null. Stable error codes remain `invalid_request`, `incompatible_protocol`, `invalid_input`, `invalid_pack`, `analysis_failed`, `resource_limit`, `timeout`, `io_failure`, `cleanup_failed`, `internal_failure`; messages may evolve. No graph is attached to errors. Normal unresolved symbols are valid graph data, not whole-analysis failure.

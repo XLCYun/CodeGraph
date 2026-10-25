@@ -9,7 +9,7 @@ j::Object analyze(Request &r) {
 }
 // 错误终结不带部分图和证据。
 j::Object error(const std::string &id,const Failure &f) {
-  return j::Object{{"protocol",Protocol},{"engine_version","0.1.0"},{"pack_id","c-cpp"},{"type","completed"},{"id",id.empty()?j::Value(nullptr):j::Value(id)},{"outcome","error"},{"error",j::Object{{"code",f.code},{"message",std::string(f.what())}}}};
+  return j::Object{{"protocol",Protocol},{"engine_version","0.1.1"},{"pack_id","c-cpp"},{"type","completed"},{"id",id.empty()?j::Value(nullptr):j::Value(id)},{"outcome","error"},{"error",j::Object{{"code",f.code},{"message",std::string(f.what())}}}};
 }
 
 } // namespace codegraph::clang_analyzer::detail

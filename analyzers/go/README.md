@@ -2,7 +2,7 @@
 
 The fixed `bin/codegraph-go[.exe] analyze` entry directly implements
 `codegraph.analyzer/1`. It reads one UTF-8 JSON object through EOF, writes one
-final result with `protocol`, `engine_version: "0.1.0"`, and `pack_id: "go"`, then
+final result with `protocol`, `engine_version: "0.1.1"`, and `pack_id: "go"`, then
 exits. EOF completes input normally. The caller owns deadlines and process-tree
 termination; no ready/cancel messages, worker or stdin listener exists.
 

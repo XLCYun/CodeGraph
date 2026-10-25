@@ -21,7 +21,7 @@ fn failure(
     id: Value,
     request: Value,
 ) -> Result<crate::code_graph::CodeGraph, crate::code_graph::AnalysisError> {
-    let value = json!({"protocol":"codegraph.analyzer/1","engine_version":"0.1.0","pack_id":"python","type":"completed","id":id,"outcome":"error","error":{"code":code,"message":"backend failure"}});
+    let value = json!({"protocol":"codegraph.analyzer/1","engine_version":"0.1.1","pack_id":"python","type":"completed","id":id,"outcome":"error","error":{"code":code,"message":"backend failure"}});
     let bytes = format!("{value}\n");
     decode_final(
         bytes.as_bytes(),
