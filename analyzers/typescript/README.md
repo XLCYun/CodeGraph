@@ -1,7 +1,7 @@
 # TypeScript / JavaScript 语言分析器
 
 公开入口为 `bin/codegraph-typescript-javascript analyze`。JS 程序直接实现
-`codegraph.analyzer/1`，固定版本 `0.1.0`。stdin 接收一个 UTF-8 JSON 对象后 EOF，
+`codegraph.analyzer/1`，固定版本 `0.1.1`。stdin 接收一个 UTF-8 JSON 对象后 EOF，
 尾换行可选；stdout 只有一条带固定语言、版本和协议身份的最终结果。成功退出 0，
 可处理失败退出 1，CLI 用法错误退出 2。`--help`、`analyze --help` 和 `--version`
 输出文本后退出。完整契约见 [公共协议](../../docs/protocol.md)。

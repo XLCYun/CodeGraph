@@ -102,7 +102,7 @@ fn exchange(repository: &Path, sdk: &Path, scope: &str, empty: bool) -> (Output,
         .unwrap_or_else(|error| panic!("{error}: {output:?}"));
     assert!(output.stdout.ends_with(b"\n"));
     assert_eq!(value["protocol"], "codegraph.analyzer/1");
-    assert_eq!(value["engine_version"], "0.1.0");
+    assert_eq!(value["engine_version"], "0.1.1");
     assert_eq!(value["pack_id"], "rust");
     assert_eq!(value["id"], "sdk-boundary");
     (output, value)

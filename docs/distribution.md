@@ -1,23 +1,22 @@
-# CodeGraph 0.1.0 distribution contract
+# CodeGraph 0.1.1 distribution contract
 
-Status: [**v0.1.0 public prerelease**](https://github.com/XLCYun/CodeGraph/releases/tag/v0.1.0),
-published from exact source `0552cc97f217d772b6d883ba75cc9007d3fc8309` after successful
-main CI run [40075547966](https://github.com/XLCYun/CodeGraph/actions/runs/40075547966).
-All 29 assets cover macOS ARM64 and Windows x64. The published bytes, tag and source
-remain immutable; subsequent catalog/documentation commits do not replace those bytes.
-Existing Narrant language-pack releases are a separate channel.
+CodeGraph v0.1.1 fixes Go directive detection while retaining `codegraph.analyzer/1`.
+Publication requires complete successful CI on macOS ARM64 and Windows x64; every
+manifest binds its archive to the exact clean source commit. The earlier
+[v0.1.0 prerelease](https://github.com/XLCYun/CodeGraph/releases/tag/v0.1.0) and all
+of its bytes remain immutable. Narrant application releases use a separate channel.
 
 ## Fixed assets and provenance
 
-Repository `XLCYun/CodeGraph`, tag `v0.1.0`, package/engine version `0.1.0`, protocol
+Repository `XLCYun/CodeGraph`, tag `v0.1.1`, package/engine version `0.1.1`, protocol
 `codegraph.analyzer/1`. Targets are `aarch64-apple-darwin` and
 `x86_64-pc-windows-msvc`. Each target has seven archive/manifest pairs for `rust`,
 `typescript-javascript`, `python`, `java`, `go`, `csharp`, `c-cpp`.
 
 ```text
-https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/<id>-<target>-pack.tar.gz
-https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/<id>-<target>-manifest.json
-https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/SHA256SUMS
+https://github.com/XLCYun/CodeGraph/releases/download/v0.1.1/<id>-<target>-pack.tar.gz
+https://github.com/XLCYun/CodeGraph/releases/download/v0.1.1/<id>-<target>-manifest.json
+https://github.com/XLCYun/CodeGraph/releases/download/v0.1.1/SHA256SUMS
 ```
 
 One release contains 29 assets: 14 archives, 14 manifests and `SHA256SUMS` covering
@@ -37,14 +36,14 @@ not a signature. Existing artifact paths are never overwritten by the builder.
 
 ## Local candidates and consumer use
 
-Builds use `<output>/<id>/0.1.0/<target>/{manifest.json,pack.tar.gz}`. Verified extracted
-copies are `<output>/smoke-installed/<id>/0.1.0/<target>`. An unrelated-cwd public
+Builds use `<output>/<id>/0.1.1/<target>/{manifest.json,pack.tar.gz}`. Verified extracted
+copies are `<output>/smoke-installed/<id>/0.1.1/<target>`. An unrelated-cwd public
 acceptance run removes all producer-only `CODEGRAPH_*` environment variables and
 executes the real packaged entry. Successful clean-source all-seven acceptance
 writes `candidates.json` with exactly the public six-field rows:
 
 ```json
-{"id":"typescript-javascript","version":"0.1.0","engineVersion":"0.1.0","protocol":"codegraph.analyzer/1","target":"aarch64-apple-darwin","root":"/absolute/output/smoke-installed/typescript-javascript/0.1.0/aarch64-apple-darwin"}
+{"id":"typescript-javascript","version":"0.1.1","engineVersion":"0.1.1","protocol":"codegraph.analyzer/1","target":"aarch64-apple-darwin","root":"/absolute/output/smoke-installed/typescript-javascript/0.1.1/aarch64-apple-darwin"}
 ```
 
 `candidate-receipt.json` separately binds archive/manifest SHA256, all seven installed
@@ -140,7 +139,7 @@ that exact commit and validates every archive and the two complete per-test rece
 No rebuild substitutes different bytes. All hashes and file limits are checked again
 before the publishing step receives its write credential.
 
-The publisher creates `v0.1.0` as a draft prerelease at that exact commit, uploads all
+The publisher creates `v0.1.1` as a draft prerelease at that exact commit, uploads all
 29 assets, reads back every byte and only then publishes with `make_latest: false`.
 Existing tags at another commit, different assets, extra assets, incomplete published
 releases, failed CI or partial evidence stop the operation. No `--clobber`, asset
@@ -150,5 +149,5 @@ Configure the `codegraph-release` environment protection as appropriate before u
 The final draft read rechecks its release ID, tag, exact target commit and prerelease
 identity. The publication PATCH also pins that tag and target commit, while the
 existing-tag commit checks remain mandatory before and after publication.
-The public `v0.1.0` release uses release ID `422619176`, source `0552cc97f217d772b6d883ba75cc9007d3fc8309`,
+The earlier public `v0.1.0` release uses release ID `422619176`, source `0552cc97f217d772b6d883ba75cc9007d3fc8309`,
 and the 29 exact CI assets. It remains a prerelease with `make_latest: false`.

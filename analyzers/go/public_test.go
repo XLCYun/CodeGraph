@@ -37,7 +37,7 @@ func TestPublicConformance(t *testing.T) {
 			var out bytes.Buffer
 			err := runProtocol(strings.NewReader(string(encoded)+test.Suffix), &out)
 			var result publicResult
-			if json.Unmarshal(out.Bytes(), &result) != nil || result.Outcome != test.Outcome || result.Protocol != protocol || result.EngineVersion != "0.1.0" || result.PackID != "go" {
+			if json.Unmarshal(out.Bytes(), &result) != nil || result.Outcome != test.Outcome || result.Protocol != protocol || result.EngineVersion != "0.1.1" || result.PackID != "go" {
 				t.Fatalf("%v: %s", err, out.String())
 			}
 			if test.ErrorCode != "" && (result.Error == nil || result.Error.Code != test.ErrorCode) {
@@ -101,7 +101,7 @@ func TestEvidenceDoesNotConsumePublicResultLimit(t *testing.T) {
 	if first.Outcome != "ok" {
 		t.Fatal(first.Error)
 	}
-	result := publicResult{Protocol: protocol, EngineVersion: "0.1.0", PackID: "go", Type: "completed", ID: &req.ID, Outcome: "ok", Graph: first.Graph}
+	result := publicResult{Protocol: protocol, EngineVersion: "0.1.1", PackID: "go", Type: "completed", ID: &req.ID, Outcome: "ok", Graph: first.Graph}
 	wire, _ := json.Marshal(result)
 	internal, _ := json.Marshal(first)
 	if len(internal) <= len(wire)+1 {

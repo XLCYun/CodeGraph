@@ -63,7 +63,7 @@ test('a valid native graph with 140000 children remains complete and reachable',
       origins: nodes.map(node => ({ node_id: node.id, selected_paths: ['main.ts'] })),
     },
   };
-  const output = { protocol: 'codegraph.analyzer/1', engine_version: '0.1.0', pack_id: 'typescript-javascript',
+  const output = { protocol: 'codegraph.analyzer/1', engine_version: '0.1.1', pack_id: 'typescript-javascript',
     type: 'completed', id: 'review-high-fanout', outcome: 'ok', graph: result.graph };
   const bytes = Buffer.byteLength(JSON.stringify(output)) + 1;
   assert.ok(bytes < 128 * 1024 * 1024);

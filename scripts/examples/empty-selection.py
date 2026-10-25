@@ -20,8 +20,8 @@ def main():
         (pack / "bin").mkdir()
         entry = pack / "bin" / ("codegraph-rust.exe" if sys.platform == "win32" else "codegraph-rust")
         shutil.copy2(binary, entry)
-        descriptor = {"schema_version": 1, "pack_id": "rust", "pack_version": "0.1.0",
-                      "engine_version": "0.1.0", "protocol": "codegraph.analyzer/1"}
+        descriptor = {"schema_version": 1, "pack_id": "rust", "pack_version": "0.1.1",
+                      "engine_version": "0.1.1", "protocol": "codegraph.analyzer/1"}
         (pack / "control/codegraph.json").write_text(json.dumps(descriptor), encoding="utf-8")
         request = {"protocol": "codegraph.analyzer/1", "type": "analyze", "id": "example-1",
                    "repository_root": str(repository), "files": [],
@@ -31,7 +31,7 @@ def main():
                                 timeout=15, check=True, cwd=repository)
         completed = json.loads(result.stdout)
         assert completed["protocol"] == "codegraph.analyzer/1" and completed["type"] == "completed"
-        assert completed["engine_version"] == "0.1.0" and completed["pack_id"] == "rust"
+        assert completed["engine_version"] == "0.1.1" and completed["pack_id"] == "rust"
         assert completed["id"] == request["id"] and completed["outcome"] == "ok"
         assert completed["graph"] == {"root_contains": [], "nodes": [], "external_symbols": []}
         print(result.stdout, end="")

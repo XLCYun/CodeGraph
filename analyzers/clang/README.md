@@ -3,7 +3,7 @@
 Clang 21.1.8 LibTooling 原生分析器。分析 module 直接使用 `ClangTool`、AST visitor、
 `SourceManager`、`Lexer`、`PPCallbacks` 和 USR 绑定证据；不运行 clang AST JSON 子进程。
 固定 `bin/codegraph-c-cpp[.exe] analyze` 直接读取公共 `codegraph.analyzer/1` JSON 后 EOF，
-输出一个带固定 `engine_version: "0.1.0"` 与 `pack_id: "c-cpp"` 的最终结果。
+输出一个带固定 `engine_version: "0.1.1"` 与 `pack_id: "c-cpp"` 的最终结果。
 调用方负责取消与超时的整棵进程树终止；没有 ready/cancel、分析 worker 或控制监听器。
 
 ## 实现结构

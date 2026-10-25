@@ -16,15 +16,16 @@ CodeGraph 提供七个可独立运行的**语言分析器（Language Analyzer）
 分析器可独立于 Narrant 和 Tauri 运行，被分析目录也不必是 Git 仓库。
 代码图差异计算、多语言代码图合并由调用方实现。
 
-**项目状态**：[v0.1.0 预发布版](https://github.com/XLCYun/CodeGraph/releases/tag/v0.1.0) 已公开，
-包含 **macOS ARM64** 和 **Windows x64** 的全部七种分析器。
-发布包来自源码 `0552cc97f217d772b6d883ba75cc9007d3fc8309`，包与引擎版本均为 `0.1.0`，
-协议为 `codegraph.analyzer/1`。目前没有包管理器安装方式。
+**当前版本**：**v0.1.1**，修复 Go 指令文本误判，支持
+**macOS ARM64** 和 **Windows x64**。分析器包经双平台 CI 验证后在
+[对应发布页](https://github.com/XLCYun/CodeGraph/releases/tag/v0.1.1) 提供下载。
+每份清单记录构建使用的完整源码提交，包与引擎版本均为 `0.1.1`，
+协议继续使用 `codegraph.analyzer/1`。目前没有包管理器安装方式。
 从发布页下载对应归档和清单，按[分发约定](docs/distribution.md)及
-[SHA256SUMS](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/SHA256SUMS)
+[SHA256SUMS](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.1/SHA256SUMS)
 完成校验后，即可调用包内的独立入口。例如，Python 包提供
-[macOS ARM64 下载](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/python-aarch64-apple-darwin-pack.tar.gz)
-和 [Windows x64 下载](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.0/python-x86_64-pc-windows-msvc-pack.tar.gz)。
+[macOS ARM64 下载](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.1/python-aarch64-apple-darwin-pack.tar.gz)
+和 [Windows x64 下载](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.1/python-x86_64-pc-windows-msvc-pack.tar.gz)。
 
 ## 选择分析器
 
@@ -161,8 +162,8 @@ pnpm build:packs --output /absolute/fresh/codegraph-packs
 构建器使用 `--id`，工具链准备与完整验证命令使用 `--language`。
 已有产物目录不会被覆盖，每次构建应使用新的输出目录。
 
-归档与清单位于 `<output>/<id>/0.1.0/<target>/`；
-校验并解包后的分析器包位于 `<output>/smoke-installed/<id>/0.1.0/<target>/`。
+归档与清单位于 `<output>/<id>/0.1.1/<target>/`；
+校验并解包后的分析器包位于 `<output>/smoke-installed/<id>/0.1.1/<target>/`。
 
 根 Cargo workspace 只构建 TypeScript/Java 薄入口。Rust 和 Python 使用各自的
 manifest，以及 Rust **1.98.0**。所有 Cargo 命令均需经 `scripts/cargo-agent.sh`

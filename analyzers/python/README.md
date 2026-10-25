@@ -30,7 +30,7 @@
 装饰器证明、字段归属和外部身份规则，再在同一进程的输出边界检查来源和最终 Code Graph。
 
 `codegraph-python analyze` 直接接受公共 `codegraph.analyzer/1`。stdin 是一个 UTF-8 JSON
-后 EOF，尾换行可选；stdout 只输出一个带固定协议、版本 `0.1.0` 和 `pack_id: python`
+后 EOF，尾换行可选；stdout 只输出一个带固定协议、版本 `0.1.1` 和 `pack_id: python`
 的最终 JSON。可处理失败退出 1，CLI 用法错误退出 2。`--help`、`analyze --help` 与
 `--version` 输出文本。不存在 ready/cancel、私有协议模式、控制线程或分析 worker。
 

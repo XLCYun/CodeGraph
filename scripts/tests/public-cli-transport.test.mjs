@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { preparePublicCliOwner, spawnOwnedCli } from '../language-packs/public-cli-owner.mjs';
 import { decodePublicResult, exchangeCli } from '../language-packs/public-cli-session.mjs';
 
-const identity = { protocol: 'codegraph.analyzer/1', engineVersion: '0.1.0' };
+const identity = { protocol: 'codegraph.analyzer/1', engineVersion: '0.1.1' };
 const request = { protocol: identity.protocol, type: 'analyze', id: 'transport', repository_root: '/unused', files: [], options: { include_tests: false, rust_dependency_scope: 'repository-only' } };
 const graph = { root_contains: [], nodes: [], external_symbols: [] };
 const result = { ...identity, engine_version: identity.engineVersion, pack_id: 'go', type: 'completed', id: request.id, outcome: 'ok', graph };
