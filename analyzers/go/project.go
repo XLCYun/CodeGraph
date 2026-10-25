@@ -684,7 +684,7 @@ func rejectSpecialSources(root string, selected []string, includeTests bool) *an
 		if err != nil {
 			return fail("invalid_input", err.Error(), rel)
 		}
-		if strings.Contains(string(data), "import \"C\"") || strings.Contains(string(data), "//go:embed") {
+		if hasSpecialSource(rel, data) {
 			return fail("unsupported_configuration", "cgo and embed directives are outside the verified static profile", rel)
 		}
 	}
