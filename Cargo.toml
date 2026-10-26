@@ -4,4 +4,4 @@ members = ["launchers"]
 exclude = ["analyzers/common", "analyzers/rust", "analyzers/python", "analyzers/windows-process-probe", "analyzers/integration-tests"]
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"

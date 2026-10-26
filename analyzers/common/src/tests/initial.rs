@@ -65,7 +65,7 @@ fn shared_public_conformance_vectors() {
             case["name"]
         );
         assert_eq!(value["protocol"], "codegraph.analyzer/1");
-        assert_eq!(value["engine_version"], "0.1.1");
+        assert_eq!(value["engine_version"], "0.1.2");
         assert_eq!(value["pack_id"], identity().1);
         assert_eq!(value["type"], "completed");
         assert_eq!(value["outcome"], case["outcome"], "{}", case["name"]);

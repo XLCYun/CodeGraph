@@ -3,7 +3,7 @@
 `bin/codegraph-csharp[.exe] analyze` is a .NET SDK generated self-contained
 apphost. It executes C# / Roslyn in-process and implements `codegraph.analyzer/1`
 directly. One UTF-8 JSON object followed by EOF produces one final graph or error
-with fixed `engine_version: "0.1.1"` and `pack_id: "csharp"`. The caller owns
+with fixed `engine_version: "0.1.2"` and `pack_id: "csharp"`. The caller owns
 cancellation and process-tree termination. See [the public protocol](../../docs/protocol.md).
 
 ## Fixed compiler and runtime

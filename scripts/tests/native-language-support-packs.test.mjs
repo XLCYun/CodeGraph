@@ -24,7 +24,7 @@ test('native runtime executable survives archive extraction', async () => {
     if (windows) await fs.copyFile(process.execPath, path.join(input, entry));
     else await fs.writeFile(path.join(input, entry), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     const target = windows ? 'x86_64-pc-windows-msvc' : 'aarch64-apple-darwin';
-    const output = await packageDirectory({ id: 'java', version: '0.1.1', target }, input, path.join(root, 'output'));
+    const output = await packageDirectory({ id: 'java', version: '0.1.2', target }, input, path.join(root, 'output'));
     const manifest = JSON.parse(await fs.readFile(path.join(output, 'manifest.json')));
     assert.equal(manifest.files.find(file => file.path === entry)?.executable, true);
     const extracted = path.join(root, 'extracted');
@@ -48,7 +48,7 @@ test('runtime executable metadata follows target platform', async () => {
     await fs.writeFile(path.join(input, 'runtime/jdk/bin/java.exe'), 'fixture', { mode: 0o644 });
     await fs.writeFile(path.join(input, 'runtime/jdk/bin/java.dll'), 'fixture', { mode: 0o644 });
     for (const target of ['x86_64-pc-windows-msvc', 'aarch64-apple-darwin']) {
-      const output = await packageDirectory({ id: 'java', version: '0.1.1', target }, input, path.join(root, 'output'));
+      const output = await packageDirectory({ id: 'java', version: '0.1.2', target }, input, path.join(root, 'output'));
       const manifest = JSON.parse(await fs.readFile(path.join(output, 'manifest.json')));
       assert.equal(manifest.files.find(file => file.path.endsWith('java.exe')).executable, target === 'x86_64-pc-windows-msvc');
       assert.equal(manifest.files.find(file => file.path.endsWith('java.dll')).executable, false);
@@ -74,14 +74,14 @@ test('SDK tree copy materializes internal files and rejects escape', { skip: pro
 
 /** 最终身份必须来自唯一公共结果，旧 ready 或错语言不能蒙混通过。 */
 test('direct smoke rejects mismatched final identity and old ready transport', async () => {
-  for (const expression of ["{protocol:'codegraph.analyzer/1',engine_version:'0.1.1',pack_id:'other',type:'completed',id:'pack-smoke',outcome:'ok',graph:{root_contains:[],nodes:[],external_symbols:[]}}", "{protocol:'codegraph.engine/1',type:'ready',helper_id:'other'}"]) {
+  for (const expression of ["{protocol:'codegraph.analyzer/1',engine_version:'0.1.2',pack_id:'other',type:'completed',id:'pack-smoke',outcome:'ok',graph:{root_contains:[],nodes:[],external_symbols:[]}}", "{protocol:'codegraph.engine/1',type:'ready',helper_id:'other'}"]) {
     await assert.rejects(smokeAnalyzer({ executable: process.execPath, args: ['-e', `process.stdin.resume();process.stdin.on('end',()=>console.log(JSON.stringify(${expression})))`], id: 'go' }), /identity mismatch/);
   }
 });
 
 /** JSON 对象字段顺序不影响空图语义，任何多余节点仍须明确拒绝。 */
 test('direct smoke accepts reordered empty fields and rejects nonempty graphs', async () => {
-  const smoke = graph => smokeAnalyzer({ executable: process.execPath, args: ['-e', `process.stdin.resume();process.stdin.on('end',()=>console.log(JSON.stringify({protocol:'codegraph.analyzer/1',engine_version:'0.1.1',pack_id:'go',type:'completed',id:'pack-smoke',outcome:'ok',graph:${graph}})))`], id: 'go' });
+  const smoke = graph => smokeAnalyzer({ executable: process.execPath, args: ['-e', `process.stdin.resume();process.stdin.on('end',()=>console.log(JSON.stringify({protocol:'codegraph.analyzer/1',engine_version:'0.1.2',pack_id:'go',type:'completed',id:'pack-smoke',outcome:'ok',graph:${graph}})))`], id: 'go' });
   await smoke('{external_symbols:[],nodes:[],root_contains:[]}');
   await assert.rejects(smoke('{external_symbols:[],nodes:[{}],root_contains:[]}'), /Empty public graph mismatch/);
 });
@@ -101,7 +101,7 @@ test('smoke waits for killed child close before rejecting and removing cwd', asy
 test('smoke preserves primary failure and reports cleanup-only failure', async t => {
   const cleanupError = new Error('fixture cleanup failure'), remove = fs.rm;
   t.mock.method(fs, 'rm', async (root, options) => { await remove(root, options); if (path.basename(root).startsWith('codegraph-direct-pack-smoke-')) throw cleanupError; });
-  const smoke = pack => smokeAnalyzer({ executable: process.execPath, id: 'go', args: ['-e', `process.stdin.resume();process.stdin.on('end',()=>console.log(JSON.stringify({protocol:'codegraph.analyzer/1',engine_version:'0.1.1',pack_id:'${pack}',type:'completed',id:'pack-smoke',outcome:'ok',graph:{root_contains:[],nodes:[],external_symbols:[]}})))`] });
+  const smoke = pack => smokeAnalyzer({ executable: process.execPath, id: 'go', args: ['-e', `process.stdin.resume();process.stdin.on('end',()=>console.log(JSON.stringify({protocol:'codegraph.analyzer/1',engine_version:'0.1.2',pack_id:'${pack}',type:'completed',id:'pack-smoke',outcome:'ok',graph:{root_contains:[],nodes:[],external_symbols:[]}})))`] });
   await assert.rejects(smoke('other'), error => /identity mismatch/.test(error.message) && /scratch cleanup failed: fixture cleanup failure/.test(error.message));
   await assert.rejects(smoke('go'), error => error === cleanupError);
 });
@@ -110,11 +110,11 @@ test('smoke preserves primary failure and reports cleanup-only failure', async t
 test('native catalog pins the published seven-pack dual-platform release', async () => {
   const catalog = JSON.parse(await fs.readFile(new URL('../../resources/language-support-packs.json', import.meta.url)));
   assert.equal(catalog.repository, 'XLCYun/CodeGraph');
-  assert.equal(catalog.engineVersion, '0.1.1');
+  assert.equal(catalog.engineVersion, '0.1.2');
   assert.equal(catalog.protocol, 'codegraph.analyzer/1');
   assert.deepEqual(Object.keys(catalog.packs).sort(), ['rust', 'typescript-javascript', 'python', 'java', 'go', 'csharp', 'c-cpp'].sort());
   for (const pack of Object.values(catalog.packs)) {
-    assert.equal(pack.version, '0.1.1');
+    assert.equal(pack.version, '0.1.2');
     assert.equal(pack.published, true);
     assert.deepEqual(pack.verifiedTargets, ['aarch64-apple-darwin', 'x86_64-pc-windows-msvc']);
   }
@@ -198,17 +198,17 @@ test('Cargo license packaging excludes unreachable development dependencies and 
     for (const name of ['source', 'development']) {
       await fs.mkdir(path.join(root, name));
       await fs.writeFile(path.join(root, name, 'lib.rs'), '');
-      await fs.writeFile(path.join(root, name, 'Cargo.toml'), `[package]\nname="license_${name}"\nversion="0.1.1"\nedition="2021"\nlicense="MIT"\n[workspace]\n[lib]\npath="lib.rs"\n${name === 'source' ? '[dev-dependencies]\nlicense_development={path="../development"}\n' : ''}`);
+      await fs.writeFile(path.join(root, name, 'Cargo.toml'), `[package]\nname="license_${name}"\nversion="0.1.2"\nedition="2021"\nlicense="MIT"\n[workspace]\n[lib]\npath="lib.rs"\n${name === 'source' ? '[dev-dependencies]\nlicense_development={path="../development"}\n' : ''}`);
       await fs.writeFile(path.join(root, name, 'LICENSE'), `actual ${name} license bytes`);
     }
-    await fs.writeFile(path.join(root, 'source/Cargo.lock'), 'version = 4\n[[package]]\nname = "license_source"\nversion = "0.1.1"\ndependencies = ["license_development"]\n[[package]]\nname = "license_development"\nversion = "0.1.1"\n');
+    await fs.writeFile(path.join(root, 'source/Cargo.lock'), 'version = 4\n[[package]]\nname = "license_source"\nversion = "0.1.2"\ndependencies = ["license_development"]\n[[package]]\nname = "license_development"\nversion = "0.1.2"\n');
     const payload = path.join(root, 'payload');
     await fs.mkdir(path.join(payload, 'licenses'), { recursive: true });
     await packageCargoLicenses(path.join(root, 'source'), process.platform === 'win32' ? 'x86_64-pc-windows-msvc' : 'aarch64-apple-darwin', payload, 'Fixture');
     const notices = JSON.parse(await fs.readFile(path.join(payload, 'licenses/Fixture-dependencies.json')));
     assert.deepEqual(notices.map(item => item.name), ['license_source']);
-    assert.equal(await fs.readFile(path.join(payload, 'licenses/license_source-0.1.1/LICENSE'), 'utf8'), 'actual source license bytes');
-    await assert.rejects(fs.stat(path.join(payload, 'licenses/license_development-0.1.1')), { code: 'ENOENT' });
+    assert.equal(await fs.readFile(path.join(payload, 'licenses/license_source-0.1.2/LICENSE'), 'utf8'), 'actual source license bytes');
+    await assert.rejects(fs.stat(path.join(payload, 'licenses/license_development-0.1.2')), { code: 'ENOENT' });
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
 
@@ -220,25 +220,25 @@ test('Cargo license packaging fetches uncached locked metadata without distribut
   let server;
   try {
     const source = path.join(root, 'source'), cargoHome = path.join(root, 'cargo-home');
-    const crate = path.join(root, 'license_development-0.1.1');
+    const crate = path.join(root, 'license_development-0.1.2');
     for (const directory of [source, cargoHome, crate]) await fs.mkdir(directory);
     await fs.writeFile(path.join(source, 'lib.rs'), '');
     await fs.writeFile(path.join(source, 'LICENSE'), 'actual distributed source license');
-    await fs.writeFile(path.join(source, 'Cargo.toml'), '[package]\nname="license_source"\nversion="0.1.1"\nedition="2021"\nlicense="MIT"\n[workspace]\n[lib]\npath="lib.rs"\n[dev-dependencies]\nlicense_development="=0.1.1"\n');
+    await fs.writeFile(path.join(source, 'Cargo.toml'), '[package]\nname="license_source"\nversion="0.1.2"\nedition="2021"\nlicense="MIT"\n[workspace]\n[lib]\npath="lib.rs"\n[dev-dependencies]\nlicense_development="=0.1.2"\n');
     await fs.writeFile(path.join(crate, 'lib.rs'), '');
     await fs.writeFile(path.join(crate, 'LICENSE'), 'development license must not be distributed');
-    await fs.writeFile(path.join(crate, 'Cargo.toml'), '[package]\nname="license_development"\nversion="0.1.1"\nedition="2021"\nlicense="MIT"\n[workspace]\n[lib]\npath="lib.rs"\n');
+    await fs.writeFile(path.join(crate, 'Cargo.toml'), '[package]\nname="license_development"\nversion="0.1.2"\nedition="2021"\nlicense="MIT"\n[workspace]\n[lib]\npath="lib.rs"\n');
     const archive = path.join(root, 'development.crate');
-    execFileSync(systemTar(), ['-czf', archive, '-C', root, 'license_development-0.1.1'], { env: { ...process.env, COPYFILE_DISABLE: '1' } });
+    execFileSync(systemTar(), ['-czf', archive, '-C', root, 'license_development-0.1.2'], { env: { ...process.env, COPYFILE_DISABLE: '1' } });
     const bytes = await fs.readFile(archive), checksum = createHash('sha256').update(bytes).digest('hex');
-    const lock = `version = 4\n[[package]]\nname = "license_source"\nversion = "0.1.1"\ndependencies = ["license_development"]\n[[package]]\nname = "license_development"\nversion = "0.1.1"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\nchecksum = "${checksum}"\n`;
+    const lock = `version = 4\n[[package]]\nname = "license_source"\nversion = "0.1.2"\ndependencies = ["license_development"]\n[[package]]\nname = "license_development"\nversion = "0.1.2"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\nchecksum = "${checksum}"\n`;
     await fs.writeFile(path.join(source, 'Cargo.lock'), lock);
     let downloads = 0, address;
     // 本机稀疏索引和真实 crate 归档让测试不依赖公网或预热的用户缓存。
     server = createServer((request, response) => {
       if (request.url === '/index/config.json') response.end(JSON.stringify({ dl: `${address}/api/v1/crates`, api: address }));
-      else if (request.url === '/index/li/ce/license_development') response.end(`${JSON.stringify({ name: 'license_development', vers: '0.1.1', deps: [], cksum: checksum, features: {}, yanked: false })}\n`);
-      else if (request.url === '/api/v1/crates/license_development/0.1.1/download') { downloads++; response.end(bytes); }
+      else if (request.url === '/index/li/ce/license_development') response.end(`${JSON.stringify({ name: 'license_development', vers: '0.1.2', deps: [], cksum: checksum, features: {}, yanked: false })}\n`);
+      else if (request.url === '/api/v1/crates/license_development/0.1.2/download') { downloads++; response.end(bytes); }
       else { response.statusCode = 404; response.end(); }
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -251,7 +251,7 @@ test('Cargo license packaging fetches uncached locked metadata without distribut
     assert.equal(downloads, 1);
     for (const directory of ['cache', 'src']) {
       for (const registry of await fs.readdir(path.join(cargoHome, 'registry', directory))) {
-        await fs.rm(path.join(cargoHome, 'registry', directory, registry, `license_development-0.1.1${directory === 'cache' ? '.crate' : ''}`), { recursive: true });
+        await fs.rm(path.join(cargoHome, 'registry', directory, registry, `license_development-0.1.2${directory === 'cache' ? '.crate' : ''}`), { recursive: true });
       }
     }
     const payload = path.join(root, 'payload');
@@ -263,8 +263,8 @@ test('Cargo license packaging fetches uncached locked metadata without distribut
     assert.equal(await fs.readFile(path.join(source, 'Cargo.lock'), 'utf8'), lock);
     const notices = JSON.parse(await fs.readFile(path.join(payload, 'licenses/Fixture-dependencies.json')));
     assert.deepEqual(notices.map(item => item.name), ['license_source']);
-    assert.equal(await fs.readFile(path.join(payload, 'licenses/license_source-0.1.1/LICENSE'), 'utf8'), 'actual distributed source license');
-    await assert.rejects(fs.stat(path.join(payload, 'licenses/license_development-0.1.1')), { code: 'ENOENT' });
+    assert.equal(await fs.readFile(path.join(payload, 'licenses/license_source-0.1.2/LICENSE'), 'utf8'), 'actual distributed source license');
+    await assert.rejects(fs.stat(path.join(payload, 'licenses/license_development-0.1.2')), { code: 'ENOENT' });
   } finally {
     if (server) await new Promise(resolve => server.close(resolve));
     await fs.rm(root, { recursive: true, force: true });

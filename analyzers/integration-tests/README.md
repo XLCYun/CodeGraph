@@ -13,7 +13,7 @@ assertions and frozen TypeScript/Python/PR31 fixtures remain identifiable in
 `resources/semantic-acceptance.json` and `resources/direct-test-migration.json`.
 
 Set `CODEGRAPH_NATIVE_PACKS` to an exact-source artifact output containing
-`smoke-installed/<id>/0.1.1/<target>`, and expose already-installed target SDKs through
+`smoke-installed/<id>/0.1.2/<target>`, and expose already-installed target SDKs through
 standard discovery variables. Rust additionally uses
 `CODEGRAPH_PROJECT_RUST_TOOLCHAIN=stable`; the actual Cargo/rustc probes preserve
 per-project override tests. The Python deadline/panic fixture waits for its actual

@@ -101,7 +101,7 @@ j::Object finish(Graph &g) {
   j::Array configs,files;
   for(auto &c:r.configs) { auto &p=r.platforms[c.platform]; j::Array ids{p.id,p.resourceId},sources; for(auto &id:p.additionalIds) ids.push_back(id); for(auto &path:c.sourcePaths) sources.push_back(path); configs.push_back(j::Object{{"id",c.id},{"source_paths",std::move(sources)},{"platform_ids",std::move(ids)}}); }
   for(auto &file:r.selected) { auto &coverage=g.coverage[file]; require(!coverage.empty(),"selected file has no complete TU context: "+file,"object_extraction_failed"); j::Array ids; for(auto &id:coverage) ids.push_back(id); files.push_back(j::Object{{"path",file},{"disposition","analyzed"},{"configuration_ids",std::move(ids)}}); }
-  return j::Object{{"protocol",Protocol},{"engine_version","0.1.1"},{"pack_id","c-cpp"},{"type","completed"},{"id",r.id},{"outcome","ok"},{"graph",j::Object{{"root_contains",std::move(roots)},{"nodes",std::move(nodes)},{"external_symbols",std::move(externals)}}},{"evidence",j::Object{{"configurations",std::move(configs)},{"files",std::move(files)},{"origins",std::move(origins)}}}};
+  return j::Object{{"protocol",Protocol},{"engine_version","0.1.2"},{"pack_id","c-cpp"},{"type","completed"},{"id",r.id},{"outcome","ok"},{"graph",j::Object{{"root_contains",std::move(roots)},{"nodes",std::move(nodes)},{"external_symbols",std::move(externals)}}},{"evidence",j::Object{{"configurations",std::move(configs)},{"files",std::move(files)},{"origins",std::move(origins)}}}};
 }
 
 } // namespace codegraph::clang_analyzer::detail

@@ -15,16 +15,16 @@ test('pack artifact binds identity, bytes and executable metadata to the complet
   try {
     await fs.mkdir(path.join(root, 'input/bin'), { recursive: true });
     await fs.writeFile(path.join(root, 'input/bin/codegraph-rust'), 'analyzer fixture');
-    const result = await packageDirectory({ id: 'rust', version: '0.1.1', target: 'aarch64-apple-darwin' }, path.join(root, 'input'), path.join(root, 'output'));
+    const result = await packageDirectory({ id: 'rust', version: '0.1.2', target: 'aarch64-apple-darwin' }, path.join(root, 'input'), path.join(root, 'output'));
     const manifest = JSON.parse(await fs.readFile(path.join(result, 'manifest.json')));
     assert.equal(manifest.id, 'rust');
-    assert.equal(manifest.version, '0.1.1');
+    assert.equal(manifest.version, '0.1.2');
     assert.deepEqual(manifest.files.map(file => [file.path, file.executable]), [['bin/codegraph-rust', true]]);
     const bytes = await fs.readFile(path.join(result, 'pack.tar.gz'));
     assert.equal(manifest.archiveSize, bytes.length);
     assert.equal(manifest.archiveSha256, createHash('sha256').update(bytes).digest('hex'));
     await fs.utimes(path.join(root, 'input/bin/codegraph-rust'), new Date(), new Date());
-    const second = await packageDirectory({ id: 'rust', version: '0.1.1', target: 'aarch64-apple-darwin' }, path.join(root, 'input'), path.join(root, 'repeat'));
+    const second = await packageDirectory({ id: 'rust', version: '0.1.2', target: 'aarch64-apple-darwin' }, path.join(root, 'input'), path.join(root, 'repeat'));
     assert.deepEqual(await fs.readFile(path.join(second, 'pack.tar.gz')), bytes);
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
@@ -36,7 +36,7 @@ test('Python pack preserves its native executable, fixed control file and standa
     await fs.writeFile(path.join(root, 'payload/bin/codegraph-python'), 'fixed native Python fixture');
     await fs.writeFile(path.join(root, 'payload/control/native.json'), '{}');
     await fs.writeFile(path.join(root, 'payload/licenses/typeshed-LICENSE'), 'typeshed license fixture');
-    const result = await packageDirectory({ id: 'python', version: '0.1.1', target: 'aarch64-apple-darwin' }, path.join(root, 'payload'), path.join(root, 'output'));
+    const result = await packageDirectory({ id: 'python', version: '0.1.2', target: 'aarch64-apple-darwin' }, path.join(root, 'payload'), path.join(root, 'output'));
     const manifest = JSON.parse(await fs.readFile(path.join(result, 'manifest.json')));
     assert.equal(manifest.id, 'python');
     assert.deepEqual(manifest.files.map(file => [file.path, file.executable]), [['bin/codegraph-python', true], ['control/native.json', false], ['licenses/typeshed-LICENSE', false]]);
@@ -51,10 +51,10 @@ test('distribution verifies real bytes before extraction and rejects tampering a
   try {
     await fs.mkdir(path.join(root, 'payload/bin'), { recursive: true });
     await fs.writeFile(path.join(root, 'payload/bin/codegraph-rust'), 'binary fixture');
-    const directory = await packageDirectory({ id: 'rust', version: '0.1.1', target: 'aarch64-apple-darwin' }, path.join(root, 'payload'), path.join(root, 'artifacts'));
+    const directory = await packageDirectory({ id: 'rust', version: '0.1.2', target: 'aarch64-apple-darwin' }, path.join(root, 'payload'), path.join(root, 'artifacts'));
     const { manifest } = await verifyAndExtract(directory, path.join(root, 'extracted'));
     assert.equal(await fs.readFile(path.join(root, 'extracted/bin/codegraph-rust'), 'utf8'), 'binary fixture');
-    assert.equal(manifest.engineVersion, '0.1.1');
+    assert.equal(manifest.engineVersion, '0.1.2');
     assert.equal(manifest.protocol, 'codegraph.analyzer/1');
     for (const mutation of [{ version: '1.1.0' }, { engineVersion: '9.0.0' }, { archiveSize: 256 * 1024 * 1024 + 1 }, { sourceCommit: 'main' }, { sourceDirty: null }, { files: [{ ...manifest.files[0], size: 1024 * 1024 * 1024 + 1 }] }, { files: [...manifest.files, manifest.files[0]] }]) {
       assert.throws(() => parseManifest(Buffer.from(`${JSON.stringify({ ...manifest, ...mutation })}\n`)));

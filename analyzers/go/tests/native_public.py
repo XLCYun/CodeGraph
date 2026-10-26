@@ -54,7 +54,7 @@ class NativePublicTests(unittest.TestCase):
         result = json.loads(proc.stdout.decode('utf-8', errors='strict'))
         self.assertTrue(proc.stdout.endswith(b'\n'))
         self.assertEqual(result['protocol'], 'codegraph.analyzer/1')
-        self.assertEqual(result['engine_version'], '0.1.1')
+        self.assertEqual(result['engine_version'], '0.1.2')
         self.assertEqual(result['pack_id'], self.PACK)
         self.assertEqual(result['type'], 'completed')
         self.assertEqual(proc.returncode, 0 if result['outcome'] == 'ok' else 1, proc.stderr.decode())

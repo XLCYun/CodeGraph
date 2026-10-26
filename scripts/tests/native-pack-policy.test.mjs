@@ -16,7 +16,7 @@ test('verified native archives reject bundled targets and incorrect discovery po
     for (const defect of ['none', 'wrong-kind', 'bundled-catalog', 'bundled-files']) {
       const payload = path.join(root, `${id}-${defect}`);
       await fs.mkdir(path.join(payload, 'control'), { recursive: true });
-      const control = { schema_version: 1, helper_version: '0.1.1', target_sdk: { kind }, platforms: [] };
+      const control = { schema_version: 1, helper_version: '0.1.2', target_sdk: { kind }, platforms: [] };
       if (defect === 'wrong-kind') control.target_sdk.kind = 'unrelated';
       if (defect === 'bundled-catalog') control.platforms.push({ id: 'fixed-build-target', root: 'runtime/platform' });
       if (defect === 'bundled-files') {
@@ -24,9 +24,9 @@ test('verified native archives reject bundled targets and incorrect discovery po
         await fs.writeFile(path.join(payload, 'runtime/platform/declaration'), 'unintended target declarations');
       }
       await fs.writeFile(path.join(payload, 'control/native.json'), JSON.stringify(control));
-      const archive = await packageDirectory({ id, version: '0.1.1', target }, payload, path.join(root, `output-${defect}`));
+      const archive = await packageDirectory({ id, version: '0.1.2', target }, payload, path.join(root, `output-${defect}`));
       const extracted = path.join(root, `${id}-${defect}-installed`);
-      await verifyAndExtract(archive, extracted, { id, target, version: '0.1.1' });
+      await verifyAndExtract(archive, extracted, { id, target, version: '0.1.2' });
       if (defect === 'none') await verifyNativePackPolicy(id, extracted);
       else await assert.rejects(verifyNativePackPolicy(id, extracted), {
         name: 'AssertionError',

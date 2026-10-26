@@ -1,22 +1,23 @@
-# CodeGraph 0.1.1 distribution contract
+# CodeGraph 0.1.2 distribution contract
 
-CodeGraph v0.1.1 fixes Go directive detection while retaining `codegraph.analyzer/1`.
+CodeGraph v0.1.2 adds source-first C/C++ analysis and retains the Go directive fix
+and `codegraph.analyzer/1`.
 Publication requires complete successful CI on macOS ARM64 and Windows x64; every
 manifest binds its archive to the exact clean source commit. The earlier
-[v0.1.0 prerelease](https://github.com/XLCYun/CodeGraph/releases/tag/v0.1.0) and all
-of its bytes remain immutable. Narrant application releases use a separate channel.
+[v0.1.0 prerelease](https://github.com/XLCYun/CodeGraph/releases/tag/v0.1.0) and
+[v0.1.1 prerelease](https://github.com/XLCYun/CodeGraph/releases/tag/v0.1.1) remain immutable. Narrant application releases use a separate channel.
 
 ## Fixed assets and provenance
 
-Repository `XLCYun/CodeGraph`, tag `v0.1.1`, package/engine version `0.1.1`, protocol
+Repository `XLCYun/CodeGraph`, tag `v0.1.2`, package/engine version `0.1.2`, protocol
 `codegraph.analyzer/1`. Targets are `aarch64-apple-darwin` and
 `x86_64-pc-windows-msvc`. Each target has seven archive/manifest pairs for `rust`,
 `typescript-javascript`, `python`, `java`, `go`, `csharp`, `c-cpp`.
 
 ```text
-https://github.com/XLCYun/CodeGraph/releases/download/v0.1.1/<id>-<target>-pack.tar.gz
-https://github.com/XLCYun/CodeGraph/releases/download/v0.1.1/<id>-<target>-manifest.json
-https://github.com/XLCYun/CodeGraph/releases/download/v0.1.1/SHA256SUMS
+https://github.com/XLCYun/CodeGraph/releases/download/v0.1.2/<id>-<target>-pack.tar.gz
+https://github.com/XLCYun/CodeGraph/releases/download/v0.1.2/<id>-<target>-manifest.json
+https://github.com/XLCYun/CodeGraph/releases/download/v0.1.2/SHA256SUMS
 ```
 
 One release contains 29 assets: 14 archives, 14 manifests and `SHA256SUMS` covering
@@ -36,14 +37,14 @@ not a signature. Existing artifact paths are never overwritten by the builder.
 
 ## Local candidates and consumer use
 
-Builds use `<output>/<id>/0.1.1/<target>/{manifest.json,pack.tar.gz}`. Verified extracted
-copies are `<output>/smoke-installed/<id>/0.1.1/<target>`. An unrelated-cwd public
+Builds use `<output>/<id>/0.1.2/<target>/{manifest.json,pack.tar.gz}`. Verified extracted
+copies are `<output>/smoke-installed/<id>/0.1.2/<target>`. An unrelated-cwd public
 acceptance run removes all producer-only `CODEGRAPH_*` environment variables and
 executes the real packaged entry. Successful clean-source all-seven acceptance
 writes `candidates.json` with exactly the public six-field rows:
 
 ```json
-{"id":"typescript-javascript","version":"0.1.1","engineVersion":"0.1.1","protocol":"codegraph.analyzer/1","target":"aarch64-apple-darwin","root":"/absolute/output/smoke-installed/typescript-javascript/0.1.1/aarch64-apple-darwin"}
+{"id":"typescript-javascript","version":"0.1.2","engineVersion":"0.1.2","protocol":"codegraph.analyzer/1","target":"aarch64-apple-darwin","root":"/absolute/output/smoke-installed/typescript-javascript/0.1.2/aarch64-apple-darwin"}
 ```
 
 `candidate-receipt.json` separately binds archive/manifest SHA256, all seven installed
@@ -140,7 +141,7 @@ that exact commit and validates every archive and the two complete per-test rece
 No rebuild substitutes different bytes. All hashes and file limits are checked again
 before the publishing step receives its write credential.
 
-The publisher creates `v0.1.1` as a draft prerelease at that exact commit, uploads all
+The publisher creates `v0.1.2` as a draft prerelease at that exact commit, uploads all
 29 assets, reads back every byte and only then publishes with `make_latest: false`.
 Existing tags at another commit, different assets, extra assets, incomplete published
 releases, failed CI or partial evidence stop the operation. No `--clobber`, asset
