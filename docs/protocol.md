@@ -29,7 +29,9 @@ All fields except `files` are required. Unknown and duplicate fields are invalid
 - Nonempty `files`: exact graph membership; other source may provide context or external symbols.
 - `null`, duplicates and malformed paths are invalid.
 
-Discovery uses native project configuration and existing read-only policy, not a recursive extension scan. Valid configured zero-source projects may succeed empty; missing or invalid required configuration fails. C/C++ retains its compilation-database requirements. See [selection policies](engine-selection.md).
+Discovery follows each language's [selection policy](engine-selection.md) and the existing read-only boundary. Most languages use native project configuration; C/C++ discovers source and header files directly and accepts missing compilation context. Valid zero-source projects may succeed empty. Other languages still reject missing or invalid configuration when their project model requires it.
+
+C/C++ is source-review first. Every selected file retains its original text in a `SourceFile` container. Confirmed declarations become ordinary nodes; uncertain source becomes opaque extension nodes and uncertain references remain `unresolved`. Compilation databases and installed target headers may enhance binding but never determine source membership. `#` directives are retained as source objects; a general conditional block is one opaque `ConditionalBlock` containing every branch. Canonical outer include guards are exempt so their contained declarations remain visible. Ordinary macro invocations remain in the owner's raw code, without exported expansion objects. Both ordinary and opaque objects put normalized self-content in `code`; `source` remains display text. No project configuration or build command is executed.
 
 ## Final identity and result
 

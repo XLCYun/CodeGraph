@@ -3,6 +3,7 @@ namespace codegraph::clang_analyzer::detail {
 
 // 每个请求仅有一个并集状态，全部 TU 完成后才收尾。
 j::Object analyze(Request &r) {
+  if(r.sourceReview) return analyzeReview(r);
   Graph graph(r);
   for (auto &config : r.configs) collectTranslationUnit(graph, config);
   return finish(graph);

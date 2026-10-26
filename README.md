@@ -151,6 +151,11 @@ C# needs matching reference assemblies, which a runtime-only .NET installation
 does not provide. Target SDK discovery only reads existing installations. It
 never installs or upgrades SDKs or runs project build scripts.
 
+C/C++ can generate a source graph without `compile_commands.json` or installed
+project headers. Missing semantic context leaves uncertain fragments opaque and
+references unresolved. A usable compilation database adds verified bindings;
+it does not change which selected source is represented. See the [C/C++ policy](docs/engine-selection.md#c--c-resolution).
+
 ## Build and verify
 
 Use Node **24.18.0** and pnpm **11.13.1**. Prepare the fixed native toolchains and host build tools

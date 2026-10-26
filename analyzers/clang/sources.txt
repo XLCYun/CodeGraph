@@ -1,5 +1,7 @@
 src/support.cpp
 src/source_text.cpp
+src/source_document.cpp
+src/source_review.cpp
 src/project.cpp
 src/sdk_discovery.cpp
 src/extraction.cpp

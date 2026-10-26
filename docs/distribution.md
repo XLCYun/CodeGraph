@@ -115,7 +115,8 @@ Public package acceptance covers the shared 21 conformance vectors, no-final-new
 EOF, final compiled identity, configured discovery, exact selection and graph-outside
 references, test roles, configured empty and explicit empty graphs, required/malformed
 models, six graph categories and read-only inputs. Rust covers all scopes. C/C++
-preserves its native test-role policy and requires a nonempty CDB. Expected negative
+also covers source discovery without a CDB, opaque conditional branches, include-guard
+structure and optional binding enrichment. Expected negative
 results require exit 1, an error and no graph. Actual loaded requests are terminated
 by the caller's complete tree ownership and observed descendants must exit; Unix
 process groups are not Windows evidence. Format/script tests cannot substitute for

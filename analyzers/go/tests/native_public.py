@@ -201,10 +201,13 @@ class NativePublicTests(unittest.TestCase):
                     process.communicate(timeout=10)
 
     def test_source_boundary_and_missing_configuration(self):
-        """缺失配置、普通文件根、越界链接和物理别名均明确失败。"""
+        """按语言约定处理缺配置，越界链接与物理别名始终明确失败。"""
         source = self.root / ('Only.cs' if self.PACK == 'csharp' else 'Only.go' if self.PACK == 'go' else 'Only.cpp')
         source.write_text('invalid source', encoding='utf-8')
-        self.assertEqual(self.run_public(self.request([source.name]))['outcome'], 'error')
+        result = self.run_public(self.request([source.name]))
+        self.assertEqual(result['outcome'], 'ok' if self.PACK == 'c-cpp' else 'error')
+        if self.PACK == 'c-cpp':
+            self.assertTrue(any(node['source'] == 'invalid source' for node in result['graph']['nodes']))
         if os.name != 'nt':
             outside = Path(self.temp.name) / 'outside'
             outside.write_text('outside', encoding='utf-8')

@@ -29,6 +29,7 @@ static void decodePublic(Request &request,const j::Object &message) {
   require(str(message,"type")=="analyze","expected analyze request");
   auto options=message.getObject("options"); require(options,"options must be an object"); keys(*options,{"include_tests","rust_dependency_scope"});
   require(options->getBoolean("include_tests").has_value(),"include_tests must be boolean"); auto scope=str(*options,"rust_dependency_scope");
+  request.includeTests=*options->getBoolean("include_tests"); request.sourceReview=true;
   require(scope=="repository-only" || scope=="standard-library" || scope=="all-dependencies","invalid rust_dependency_scope");
   auto root=str(message,"repository_root"); require(root.find('\0')==std::string::npos && fs::u8path(root).is_absolute(),"repository_root must be an absolute directory"); request.root=fs::u8path(root);
   request.discovery=!message.get("files");
@@ -62,7 +63,7 @@ static void validateOutput(const Request &request,const j::Object &result) {
     for(auto &source:*sources) { auto file=source.getAsString(); require(file.has_value(),"invalid configuration source","internal_failure"); auto full=real(request.root/relativePath(file->str())); require(under(full,request.root) && fs::is_regular_file(full),"configuration source escapes root","internal_failure"); }
     for(auto &id:*ids) { auto value=id.getAsString(); require(value && platformIds.count(value->str()),"configuration uses unapproved SDK","internal_failure"); }
   }
-  require(!request.discovery || !configIds.empty(),"discovery lacks configuration","internal_failure");
+  require(!request.discovery || request.selected.empty() || !configIds.empty(),"discovery lacks configuration","internal_failure");
   require(files->size()<=MaxFiles,"coverage exceeds limit","internal_failure"); std::set<fs::path> physical;
   for(auto &entry:*files) {
     auto file=entry.getAsObject(); require(file,"invalid file evidence","internal_failure"); auto path=str(*file,"path"),disposition=str(*file,"disposition");
@@ -121,7 +122,7 @@ int runPublicAnalysis(std::istream &input, std::ostream &outputStream) {
       require(j::isUTF8(bytes),"request must be UTF-8"); auto value=parse(bytes); auto object=value.getAsObject(); require(object,"request must be an object"); decodePublic(request,*object);
     } catch(const Failure &failure) { throw Failure(failure.code=="incompatible_protocol" || failure.code=="resource_limit"?failure.code:"invalid_request",failure.what()); }
     validateSourceRoot(request);
-    if(request.discovery || !request.selected.empty()) { discoverPlatforms(request); configureProject(request); }
+    if(request.discovery || !request.selected.empty()) prepareReviewProject(request);
     for(auto name:{"CPATH","C_INCLUDE_PATH","CPLUS_INCLUDE_PATH","OBJC_INCLUDE_PATH","SDKROOT","MACOSX_DEPLOYMENT_TARGET","CCC_OVERRIDE_OPTIONS","CLANG_CONFIG_FILE_SYSTEM_DIR","CLANG_CONFIG_FILE_USER_DIR","INCLUDE","CL","_CL_"}) clearEnvironment(name);
     result=analyze(request); validateOutput(request,result); result.erase("evidence"); success=true;
   } catch(const Failure &failure) { result=error(request.id,Failure(publicCode(failure.code),failure.what())); }
