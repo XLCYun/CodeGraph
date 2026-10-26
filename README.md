@@ -100,13 +100,13 @@ package directories must not overlap.
 
 | `files` in the request | Meaning |
 | --- | --- |
-| Omitted | Discover source through the language's supported project configuration. |
+| Omitted | Discover source using the language's selection policy. |
 | Nonempty, such as `["src/main.ts"]` | Select exactly these files for complete graph nodes. Unselected source may provide semantic context or external symbols. |
 | `[]` | Return an empty graph without project configuration or target SDK discovery. Source and installation boundary checks still apply. |
 
 Selection paths are unique, repository-relative POSIX paths. `null`, duplicate
-paths and unsafe paths are invalid. Configured discovery follows the language's
-project membership, configuration and include/exclude policies. See
+paths and unsafe paths are invalid. Discovery follows the language's project
+membership, source inventory and include/exclude policies. See
 [selection policies](docs/engine-selection.md).
 
 The process reads one UTF-8 JSON object followed by EOF; a trailing newline is

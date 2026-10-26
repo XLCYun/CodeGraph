@@ -24,7 +24,7 @@ All fields except `files` are required. Unknown and duplicate fields are invalid
 
 `include_tests` is boolean. `rust_dependency_scope` is `repository-only`, `standard-library` or `all-dependencies`; non-Rust analyzers ignore this required Rust-only option. Requests cannot inject commands, execution environment, compiler flags, SDK roots or internal catalogs.
 
-- Omitted `files`: use the language's configured project source discovery.
+- Omitted `files`: use the language's source discovery policy.
 - `files: []`: valid empty graph, without project configuration or SDK discovery.
 - Nonempty `files`: exact graph membership; other source may provide context or external symbols.
 - `null`, duplicates and malformed paths are invalid.
