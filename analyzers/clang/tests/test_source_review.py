@@ -44,7 +44,7 @@ class SourceReviewTests(unittest.TestCase):
         if not discover:
             request["files"] = files
         result = subprocess.run(
-            [str(self.entry), "analyze"], input=json.dumps(request), text=True,
+            [str(self.entry), "analyze"], input=json.dumps(request), encoding="utf-8",
             capture_output=True, timeout=30, env=environment,
         )
         response = json.loads(result.stdout)
