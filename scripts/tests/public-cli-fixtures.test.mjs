@@ -71,7 +71,7 @@ test('public C++ project has a concrete static compilation database', async t =>
   const project = await preparePublicProject('c-cpp', root);
   const database = JSON.parse(await fs.readFile(path.join(root, 'compile_commands.json'), 'utf8'));
   assert.deepEqual(database, [{ directory: await fs.realpath(root), file: 'main.cpp', arguments: ['clang++', '-std=c++20', '-c', 'main.cpp'] }]);
-  assert.deepEqual(project.files, ['main.cpp', 'api.inc']);
+  assert.deepEqual(project.files, ['main.cpp', 'api.hpp']);
   assert.equal(project.prerequisite, 'compile_commands.json');
   assert.ok((await fs.stat(path.join(database[0].directory, database[0].file))).isFile());
   await assertPublicProjectUnchanged(project);

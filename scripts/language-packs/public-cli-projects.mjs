@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 
-/** 各语言声明真实成员、独立测试角色和未参与文件；不以统一后缀扫描代替原生配置。 */
+/** 各语言声明真实成员、测试角色和选集边界；C/C++ 使用源码审查政策。 */
 export const fixtures = {
   rust: {
     files: ['src/lib.rs', 'src/api.rs'], selected: ['src/lib.rs'], prerequisite: 'Cargo.toml',
@@ -40,8 +40,8 @@ export const fixtures = {
     missing: { 'Sample.cs': 'class Sample { int caller()=>1; }\n' },
   },
   'c-cpp': {
-    files: ['main.cpp', 'api.inc'], selected: ['main.cpp'], prerequisite: 'compile_commands.json', testRole: false,
-    content: { 'main.cpp': '#include "api.inc"\nint caller() { return target(); }\nvoid test_only() {}\n', 'api.inc': 'inline int target() { return 1; }\n', 'unused.cpp': 'void excluded_member() {}\n' },
+    files: ['main.cpp', 'api.hpp'], selected: ['main.cpp'], prerequisite: 'compile_commands.json', testRole: false,
+    content: { 'main.cpp': '#include "api.hpp"\nint caller() { return target(); }\nvoid test_only() {}\n', 'api.hpp': 'inline int target() { return 1; }\n', 'build/unused.cpp': 'void excluded_member() {}\n' },
     empty: { 'main.cpp': '' },
   },
 };
@@ -88,7 +88,7 @@ export async function prepareCancellationProject(id, directory) {
     if (id === 'go') content[`part_${index}.go`] = 'package acceptance\n' + functions.map(name => `func ${name}() int { return 1 }`).join('\n');
     if (id === 'java') content[`src/Part${index}.java`] = `class Part${index} {` + functions.map(name => `int ${name}(){return 1;}`).join('\n') + '}';
     if (id === 'csharp') content[`App/Part${index}.cs`] = `class Part${index} {` + functions.map(name => `int ${name}()=>1;`).join('\n') + '}';
-    if (id === 'c-cpp') { content['main.cpp'] += `#include "part_${index}.inc"\n`; content[`part_${index}.inc`] = functions.map(name => `int ${name}(){return 1;}`).join('\n'); }
+    if (id === 'c-cpp') { content['main.cpp'] += `#include "part_${index}.hpp"\n`; content[`part_${index}.hpp`] = functions.map(name => `int ${name}(){return 1;}`).join('\n'); }
   }
   if (id === 'typescript-javascript') content['tsconfig.json'] = '{"compilerOptions":{"allowJs":true},"include":["*.ts","*.js"],"exclude":["unused.ts"]}\n';
   return writePublicProject(directory, content, id === 'c-cpp');
