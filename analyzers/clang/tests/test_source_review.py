@@ -30,7 +30,7 @@ class SourceReviewTests(unittest.TestCase):
         """只在测试根写入源码或静态配置。"""
         target = self.root / path
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(source, encoding="utf-8")
+        target.write_bytes(source.encode("utf-8"))
 
     def analyze(self, files, *, discover=False, environment=None):
         """通过一次 JSON/EOF 公共调用返回完整图，并检查分析没有改写输入文件。"""
@@ -76,6 +76,20 @@ class SourceReviewTests(unittest.TestCase):
         self.assertIn("int enabled()", blocks[0]["source"])
         self.assertIn("int disabled()", blocks[0]["source"])
         self.assertFalse(any(n.get("name") in {"enabled", "disabled"} for n in graph["nodes"]))
+
+    def test_crlf_source_is_exact_and_line_endings_do_not_change_content(self):
+        """UTF-8 与 CRLF 原文字节保留，只有换行格式变化不产生自身内容差异。"""
+        source = "#ifndef BOX_H\n#define BOX_H\n// 中文注释\nstruct Box { int value(){return 1;} };\n#endif\n"
+        self.put("box.h", source)
+        before = self.analyze(["box.h"])
+        crlf = source.replace("\n", "\r\n")
+        self.put("box.h", crlf)
+        self.assertEqual((self.root / "box.h").read_bytes(), crlf.encode("utf-8"))
+        after = self.analyze(["box.h"])
+        file = next(n for n in after["nodes"] if n["native_kind"] == "SourceFile")
+        self.assertEqual(file["source"], crlf)
+        self.assertEqual({n["id"]: (n["code"], n["signature"]) for n in before["nodes"]},
+                         {n["id"]: (n["code"], n["signature"]) for n in after["nodes"]})
 
     def test_include_guard_keeps_inner_structure(self):
         """标准头文件保护只遮盖保护指令，不将整个头文件吞成一个节点。"""
