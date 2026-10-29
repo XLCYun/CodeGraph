@@ -44,3 +44,45 @@ python3 -m unittest discover -s analyzers/java/tests -v
 - 当前平台扩展侧重目标/可用性/版本；更丰富的模型上下文来源可在后续接入时扩展，候选来源已保存在 SdkDiscovery.Candidate 中。
 - JPMS 的模块关系未实现；结构恢复不承诺推断损坏源码中无法确认的声明。独立源码根间没有猜测依赖关系。
 - 尚未运行 Windows x64 公开打包验收或全仓最新 CI，这些属于后续集成验收。本任务已完成本机真实 Java 核心/公开入口验证。
+
+## Review fix round 1（FIX_BASE d69d2be）
+
+修正评审指出的异常分类错误：`ProjectModel.readRoots` 对 `source_roots` 中非对象元素抛普通 `Failure("unsupported_configuration", ...)`，而不再抛 `BoundaryFailure`。该处仅代表坏模型值，不是路径或 I/O 边界。真实越界、外向链接和不可访问目录继续沿原边界错误处理。
+
+变更文件：
+
+- `analyzers/java/src/dev/codegraph/java/ProjectModel.java`：一处异常类型修正。
+- `analyzers/java/tests/test_out_of_box.py`：新增有效 JSON 的坏根元素回归，覆盖 null、字符串、数字、数组；每种值均经真实公共入口验证明确 `A.java` 选集成功、目录发现失败且无 graph。公共协议将内部 unsupported_configuration 映射为 analysis_failed，测试遵守现有映射。
+- 本报告：追加修复与验证记录。
+
+执行命令：
+
+```sh
+python3 analyzers/java/build.py /private/tmp/codegraph-java-capability-probe/jdk-25.0.4.1+1/Contents/Home /private/tmp/codegraph-java-capability-probe/lib --tests
+
+CODEGRAPH_JAVA_RUNTIME=/private/tmp/codegraph-java-capability-probe/jdk-25.0.4.1+1/Contents/Home \
+CODEGRAPH_JAVA_TARGET=/private/tmp/codegraph-java-capability-probe/jdk-17.0.20.1+1/Contents/Home \
+CODEGRAPH_JAVA_LIB=/private/tmp/codegraph-java-capability-probe/lib \
+PYTHONPATH=analyzers/java/tests \
+python3 -m unittest -v test_out_of_box \
+  test_discovery.DiscoveryTests.test_source_root_cannot_escape_repository \
+  test_discovery.DiscoveryTests.test_inaccessible_source_root_ancestor_is_not_empty \
+  test_helper.JavaHelperTests.test_external_metadata_symlink_rejected \
+  test_public.PublicConformanceTests.test_physical_alias_and_source_overlap
+
+git diff --check
+```
+
+构建输出：`/Users/lizhanfa/.codex/worktrees/codegraph-java-issue10/CodeGraph/analyzers/java/build/classes`。针对性测试日志：`/tmp/task1-fix-round1.log`。没有无理由重跑整个测试集。
+
+自查：检查了读取根列表的所有错误分支及 discover 的降级判定。只有非对象根元素这一格式错误更换异常类型；绝对路径、相对路径逃逸、外向 metadata/source 链接、不可访问目录没有放宽。没有修改构造器/方法引用逻辑或扩大后续任务范围。
+
+最终测试输出：
+
+```text
+Ran 19 tests in 13.791s
+
+OK
+```
+
+`git diff --check` 无输出，退出码 0。

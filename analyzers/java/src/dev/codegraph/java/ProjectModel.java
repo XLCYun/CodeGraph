@@ -392,7 +392,7 @@ final class ProjectModel {
         Set<String> paths = new HashSet<>();
         for (JsonElement item : Main.array(metadata, "source_roots")) {
                 checkpoint.check();
-                if (!item.isJsonObject()) throw new BoundaryFailure("unsupported_configuration", "invalid source root");
+                if (!item.isJsonObject()) throw new Failure("unsupported_configuration", "invalid source root");
                 JsonObject entry = item.getAsJsonObject();
                 Main.fields(entry, Set.of("path", "role"));
                 String path = Main.string(entry, "path");

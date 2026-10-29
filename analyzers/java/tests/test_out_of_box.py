@@ -156,3 +156,17 @@ class OutOfBoxTests(unittest.TestCase):
         result = self.public(["A.java"])
         self.assertEqual(result["outcome"], "ok", result)
         self.assertTrue(any(n["id"].endswith("/method:run()") for n in result["graph"]["nodes"]))
+
+    def test_malformed_source_root_recovers_selection_but_fails_discovery(self):
+        write(self.root, "A.java", "class A {}")
+        for invalid_root in (None, "src", 1, []):
+            with self.subTest(source_root=invalid_root):
+                write(self.root, "narrant-java.json", json.dumps({
+                    "schema": "java-static-v1", "source_roots": [invalid_root]}))
+                selected = self.public(["A.java"])
+                self.assertEqual(selected["outcome"], "ok", selected)
+                self.assertEqual(selected["graph"]["root_contains"], ["java:A.java#file"])
+                discovered = self.public()
+                self.assertEqual(discovered["outcome"], "error", discovered)
+                self.assertEqual(discovered["error"]["code"], "analysis_failed")
+                self.assertNotIn("graph", discovered)
