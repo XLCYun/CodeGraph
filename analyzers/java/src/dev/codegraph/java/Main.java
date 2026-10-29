@@ -204,7 +204,7 @@ public final class Main {
     }
 
     /** 受控失败及其仓内相对来源；公共输出只保留代码与说明。 */
-    static final class Failure extends Exception {
+    static class Failure extends Exception {
         final String code;
         final List<String> paths;
 

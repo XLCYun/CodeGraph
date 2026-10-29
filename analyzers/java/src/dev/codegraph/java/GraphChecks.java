@@ -38,6 +38,11 @@ final class GraphChecks {
                 if (value == null || !value.isJsonNull() && (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString())) fail("missing nullable self content");
             }
             for (String key : Main.object(node, "extensions").keySet()) if (!namespaced(key, '.')) fail("invalid extension namespace");
+            JsonObject expectedExtensions = new JsonObject();
+            String sourcePath = strings(Main.array(origins.get(entry.getKey()), "selected_paths")).iterator().next();
+            model.addPlatformExtensions(sourcePath, expectedExtensions);
+            if (!expectedExtensions.get("java.platforms").equals(Main.object(node, "extensions").get("java.platforms")))
+                fail("platform provenance differs from model");
             children(Main.array(node, "contains"), nodes, parents);
             Set<String> facts = new HashSet<>();
             for (JsonElement element : Main.array(node, "references")) {

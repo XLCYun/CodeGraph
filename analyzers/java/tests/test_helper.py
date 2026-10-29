@@ -179,8 +179,8 @@ class JavaHelperTests(unittest.TestCase):
         self.assertTrue(all(hashlib.sha256((self.root / path).read_bytes()).hexdigest() == before[path] for path in files))
         self.assertEqual(len(completed["evidence"]["origins"]), len(graph["nodes"]))
 
-    def test_malformed_syntax_fails_without_graph_or_evidence(self):
-        """缺依赖可恢复，真正畸形语法必须完整失败，不能交付部分图。"""
+    def test_malformed_syntax_retains_confirmed_structure(self):
+        """缺依赖和局部畸形语法保留原文与可确认结构。"""
         metadata(self.root)
         path = "src/main/java/p/Main.java"
         write(self.root, path, "package p; class Main { void run(){ missing.Type.nope(); } }")
@@ -192,10 +192,8 @@ class JavaHelperTests(unittest.TestCase):
         write(self.root, path, "package p; class Main { void broken( { } }")
         before = snapshot_files(self.root)
         malformed = run(request(self.root, [path]))
-        self.assertEqual(malformed["outcome"], "error", malformed)
-        self.assertEqual(malformed["error"]["code"], "object_extraction_failed")
-        self.assertNotIn("graph", malformed)
-        self.assertNotIn("evidence", malformed)
+        self.assertEqual(malformed["outcome"], "ok", malformed)
+        self.assertTrue(any(n["native_kind"] == "file" for n in malformed["graph"]["nodes"]))
         self.assertEqual(snapshot_files(self.root), before)
 
     def test_lombok_processor_candidate_is_not_loaded(self):
@@ -219,8 +217,8 @@ class JavaHelperTests(unittest.TestCase):
         self.assertFalse(marker.exists(), "annotation processor class was loaded")
         self.assertEqual(snapshot_files(self.root), before)
 
-    def test_maven_lombok_processor_configuration_rejected_without_execution(self):
-        """声明 Maven Lombok 处理器的 POM 静态拒绝，不能调用构建或加载处理器。"""
+    def test_unimported_maven_processor_configuration_keeps_structure(self):
+        """本阶段尚未导入的 Maven 插件配置允许明确选集保结构，不加载处理器。"""
         scratch = pathlib.Path(self.temp.name) / "processor-work"
         marker = scratch / "processor-loaded.txt"
         build_lombok_sentinel(scratch, self.root, marker)
@@ -236,10 +234,7 @@ class JavaHelperTests(unittest.TestCase):
         write(self.root, path, "package p; @lombok.Getter class Model { int value; }")
         before = snapshot_files(self.root)
         result = run(request(self.root, [path]))
-        self.assertEqual(result["outcome"], "error", result)
-        self.assertEqual(result["error"]["code"], "unsupported_configuration")
-        self.assertNotIn("graph", result)
-        self.assertNotIn("evidence", result)
+        self.assertEqual(result["outcome"], "ok", result)
         self.assertFalse(marker.exists(), "annotation processor class was loaded")
         self.assertEqual(snapshot_files(self.root), before)
 
@@ -255,8 +250,8 @@ class JavaHelperTests(unittest.TestCase):
                             for ref in method["references"]))
         self.assertFalse(any("getFirst" in item["symbol"] for item in completed["graph"]["external_symbols"]))
         wrong = run(request(self.root, [path], target=RUNTIME))
-        self.assertEqual(wrong["outcome"], "error")
-        self.assertEqual(wrong["error"]["code"], "target_unavailable")
+        self.assertEqual(wrong["outcome"], "ok", wrong)
+        self.assertFalse(any("getFirst" in item["symbol"] for item in wrong["graph"]["external_symbols"]))
 
     def test_content_projection_and_identity(self):
         """Whitespace and child-body changes do not alter parent own content."""
@@ -290,18 +285,18 @@ class JavaHelperTests(unittest.TestCase):
         included = run(request(self.root, [main, test], include_tests=True))
         self.assertTrue(any("Checks" in x["id"] for x in included["graph"]["nodes"]))
 
-    def test_gradle_and_jpms_rejected_without_execution(self):
-        """Unknown project logic and JPMS descriptors fail before a partial graph."""
+    def test_unimported_gradle_and_jpms_keep_structure(self):
+        """Unimported project logic and JPMS descriptors retain confirmed structure."""
         write(self.root, "build.gradle", "throw new RuntimeException('MUST_NOT_EXECUTE')")
         path = "src/main/java/p/Main.java"
         write(self.root, path, "package p; class Main {}")
         completed = run(request(self.root, [path]))
-        self.assertEqual(completed["error"]["code"], "unsupported_configuration")
+        self.assertEqual(completed["outcome"], "ok", completed)
         metadata(self.root)
         module = "src/main/java/module-info.java"
         write(self.root, module, "module p { exports p; }")
         completed = run(request(self.root, [path]))
-        self.assertEqual(completed["error"]["code"], "unsupported_configuration")
+        self.assertEqual(completed["outcome"], "ok", completed)
         self.assertFalse((self.root / "MUST_NOT_EXECUTE").exists())
 
     def test_maven_literal_model_after_eof(self):
@@ -394,7 +389,7 @@ class Shapes {
         path = "child/src/main/java/p/Child.java"
         write(self.root, path, "package p; class Child {}")
         result = run(request(self.root, [path]))
-        self.assertEqual(result["error"]["code"], "target_unavailable")
+        self.assertEqual(result["outcome"], "ok", result)
 
     def test_same_source_configuration_union(self):
         """同一声明汇合多个隔离配置的确定与未知关系。"""
@@ -439,15 +434,14 @@ class Shapes {
         self.assertEqual(constructor[0]["scope"], "repository")
         self.assertFalse(any(entry["native_kind"] == "constructor" for entry in result["graph"]["nodes"]))
 
-    def test_real_configuration_error_after_eof(self):
-        """完整输入后的配置错误保留明确失败，不返回图。"""
+    def test_unimported_configuration_recovers_exact_selection_after_eof(self):
+        """完整输入后的未导入配置允许明确选集返回基础图。"""
         path = "src/main/java/p/Foo.java"
         write(self.root, path, "package p; class Foo {}")
         write(self.root, "build.gradle", "throw new Error('never run')")
         for _ in range(5):
             result = run(request(self.root, [path]))
-            self.assertEqual(result["outcome"], "error", result)
-            self.assertEqual(result["error"]["code"], "unsupported_configuration")
+            self.assertEqual(result["outcome"], "ok", result)
 
     def test_annotation_brace_does_not_truncate_signature(self):
         """字符串中的左花括号不能截断类型或方法声明头。"""
@@ -485,7 +479,7 @@ class Shapes {
         for path, name in [(main, "B"), (test, "Check"), (default, "A")]:
             write(self.root, path, "class " + name + " {}")
         rejected = run(request(self.root, [default]))
-        self.assertEqual(rejected["outcome"], "error", rejected)
+        self.assertEqual(rejected["outcome"], "ok", rejected)
         excluded = run(request(self.root, [main, test]))
         self.assertEqual(excluded["outcome"], "ok", excluded)
         self.assertEqual({x["path"]: x["disposition"] for x in excluded["evidence"]["files"]},

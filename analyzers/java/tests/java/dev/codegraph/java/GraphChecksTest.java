@@ -39,6 +39,8 @@ public final class GraphChecksTest {
                 JsonObject reference = new JsonObject(); reference.addProperty("semantic", "code.calls"); reference.add("target", target);
                 value.getAsJsonObject("graph").getAsJsonArray("nodes").get(0).getAsJsonObject().getAsJsonArray("references").add(reference);
             });
+            reject(result, model, value -> value.getAsJsonObject("graph").getAsJsonArray("nodes").get(0)
+                .getAsJsonObject().getAsJsonObject("extensions").add("java.platforms", new JsonArray()));
             System.out.println("graph boundary assertions passed");
         } finally {
             try (var paths = Files.walk(root)) { for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.delete(path); }

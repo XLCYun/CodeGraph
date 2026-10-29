@@ -83,7 +83,7 @@ class DiscoveryTests(unittest.TestCase):
         message["environment"]["platforms"] = None
         self.assertEqual(run(message)["error"]["code"], "invalid_input")
         message["environment"]["platforms"] = []
-        self.assertEqual(run(discover(self.root))["error"]["code"], "unsupported_configuration")
+        self.assertEqual(run(discover(self.root))["outcome"], "ok")
         for invalid in (None, "file.java", {}, [None]):
             message["input"]["files"] = invalid
             self.assertEqual(run(message)["error"]["code"], "invalid_input")
@@ -92,7 +92,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(result["outcome"], "ok", result)
         self.assertEqual(result["evidence"]["files"], [])
         self.assertEqual(len(result["evidence"]["configurations"]), 1)
-        self.assertEqual(run(discover(self.root, platforms=[]))["error"]["code"], "target_unavailable")
+        self.assertEqual(run(discover(self.root, platforms=[]))["outcome"], "ok")
         write(self.root, "pom.xml", "<invalid")
         self.assertEqual(run(discover(self.root))["error"]["code"], "unsupported_configuration")
 

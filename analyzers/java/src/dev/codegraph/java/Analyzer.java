@@ -160,6 +160,7 @@ final class Analyzer {
     private void parseConfiguration(ProjectModel.ParseConfiguration config) throws Failure {
         try {
             ConfigState state = new ConfigState();
+            Set<String> parsed = new HashSet<>();
             final Failure[] callbackFailure = new Failure[1];
             config.parse(new FileASTRequestor() {
                 /** 不让 JDT 回调异常消失在解析器内部。 */
@@ -171,7 +172,8 @@ final class Analyzer {
                         String source = model.readSource(relative);
                         FilePart part = new FilePart(relative, source, unit);
                         parts.put(relative, part);
-                        rejectMalformed(part);
+                        parsed.add(relative);
+                        rejectDuplicateDeclarations(part);
                         config.verifyPackage(relative, unit.getPackage() == null ? "" : unit.getPackage().getName().getFullyQualifiedName());
                         new Visitor(part, config.selects(relative), state).extract();
                     } catch (Failure problem) { callbackFailure[0] = problem; }
@@ -192,7 +194,7 @@ final class Analyzer {
                 }
             });
             if (callbackFailure[0] != null) throw callbackFailure[0];
-            config.requireParsed(parts.keySet());
+            config.requireParsed(parsed);
         } catch (Failure e) { throw e; }
         catch (DuplicateDeclaration e) { throw new Failure("object_extraction_failed", "duplicate Java declaration: " + e.getMessage()); }
         catch (UnionConflict e) { throw new Failure("union_conflict", "incompatible source identity: " + e.getMessage()); }
@@ -202,25 +204,14 @@ final class Analyzer {
         }
     }
 
-    /** 语法恢复可能遗漏声明，因此拒绝畸形选中树。 */
-    private static void rejectMalformed(FilePart part) throws Failure {
-        final boolean[] malformed = {false};
-        part.unit.accept(new ASTVisitor() {
-            /** 仅标记结构损坏；缺依赖诊断仍可保留对象。 */
-            @Override public void preVisit(ASTNode node) {
-                if ((node.getFlags() & ASTNode.MALFORMED) != 0) malformed[0] = true;
-            }
-        });
-        if (malformed[0]) throw new Failure("object_extraction_failed", "malformed Java syntax", List.of(part.path));
+    /** 重复声明不能被恢复或合并成同一个确定对象。 */
+    private static void rejectDuplicateDeclarations(FilePart part) throws Failure {
         Set<Integer> duplicates = Set.of(IProblem.DuplicateMethod, IProblem.DuplicateField,
             IProblem.DuplicateTypes, IProblem.DuplicateNestedType, IProblem.DuplicateMethodErasure,
             IProblem.DuplicateParameterizedMethods, IProblem.DuplicateAnnotationMember,
             IProblem.RecordDuplicateComponent);
         for (IProblem problem : part.unit.getProblems()) {
             if (!problem.isError()) continue;
-            if ((problem.getID() & (IProblem.Syntax | IProblem.Compliance | IProblem.PreviewRelated)) != 0)
-                throw new Failure("object_extraction_failed", "invalid Java syntax or disabled language feature: " +
-                    problem.getMessage(), List.of(part.path));
             if (duplicates.contains(problem.getID()))
                 throw new Failure("object_extraction_failed", "duplicate Java declaration", List.of(part.path));
         }
@@ -232,6 +223,7 @@ final class Analyzer {
         private final boolean selected;
         private final ConfigState state;
         private final Deque<GraphNode> owners = new ArrayDeque<>();
+        private ASTNode current;
         private final Map<ASTNode, GraphNode> opened = new HashMap<>();
         private final Map<String, Integer> slots = new HashMap<>();
 
@@ -310,8 +302,17 @@ final class Analyzer {
             if (opened.remove(node) != null) owners.pop();
         }
 
+        /** Recovered declarations may have invented names/ranges; retain their sound siblings. */
+        @Override public boolean preVisit2(ASTNode ast) {
+            if ((ast.getFlags() & ASTNode.RECOVERED) != 0 &&
+                (ast instanceof BodyDeclaration || ast instanceof VariableDeclaration)) return false;
+            preVisit(ast);
+            return true;
+        }
+
         /** 按 AST 具体形态创建源码声明。 */
         @Override public void preVisit(ASTNode ast) {
+            current = ast;
             if (ast instanceof TypeDeclaration node) {
                 checkTopLevel(node.getName().getIdentifier(), ast);
                 String kind = node.isInterface() ? "interface" : "class";
@@ -456,6 +457,15 @@ final class Analyzer {
 
         /** 将关系归属最近的独立源码对象。 */
         private void refer(String semantic, String observed, IBinding binding) {
+            if (current != null) for (IProblem problem : part.unit.getProblems()) {
+                if (!problem.isError()) continue;
+                ASTNode affected = current;
+                if ((problem.getID() & (IProblem.Syntax | IProblem.Compliance | IProblem.PreviewRelated)) != 0) {
+                    while (affected.getParent() != null && !(affected instanceof BodyDeclaration)) affected = affected.getParent();
+                }
+                if (problem.getSourceStart() < affected.getStartPosition() + affected.getLength() &&
+                    problem.getSourceEnd() >= affected.getStartPosition()) { binding = null; break; }
+            }
             if (selected && !owners.isEmpty()) owners.peek().pending.add(new Pending(semantic, observed, binding, state));
         }
 
@@ -515,6 +525,7 @@ final class Analyzer {
             entry.add("references", refs);
             JsonObject extensions = new JsonObject();
             extensions.addProperty("java.declaration_kind", node.nativeKind);
+            model.addPlatformExtensions(node.path, extensions);
             entry.add("extensions", extensions);
             entries.add(entry);
         }

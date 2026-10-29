@@ -27,6 +27,18 @@ public final class SdkDiscoveryTest {
                 require(SdkDiscovery.stableVersion(value) == null, "unstable version accepted: " + value);
             require(SdkDiscovery.stableVersion("25.0.4.1+1")[4] == 1, "build version");
             require(SdkDiscovery.stableVersion("17.0.1-LTS")[0] == 17, "LTS version");
+            require(SdkDiscovery.inRoots(List.of(incomplete)).isEmpty(), "missing SDK must allow structural analysis");
+            Path repository = Files.createDirectories(root.resolve("repository"));
+            Files.writeString(repository.resolve("Main.java"), "class Main {}");
+            var input = new AnalysisInput("default", repository, List.of("Main.java"), false, 30000, Main.MAX_BYTES);
+            var installed = new SdkDiscovery.Candidate("java42", "42.0.2", bundle, "42", "installation");
+            var bundled = new SdkDiscovery.Candidate("java17", "17.0.20.1", modern, "17", "bundled");
+            var model = ProjectModel.discover(input, () -> List.of(installed, bundled), () -> {});
+            var extensions = new com.google.gson.JsonObject();
+            model.addPlatformExtensions("Main.java", extensions);
+            require(extensions.getAsJsonArray("java.platforms").get(0).getAsJsonObject().get("version").getAsString()
+                .equals("17.0.20.1"), "installation maximum must not become the default");
+            require(installed.source().equals("installation"), "candidate source retained");
             System.out.println("SDK discovery assertions passed");
         } finally {
             try (var paths = Files.walk(root)) { for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.delete(path); }
