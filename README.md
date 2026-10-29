@@ -15,18 +15,18 @@ Source directory + file selection → chosen Language Analyzer → Code Graph (J
 The analyzers run independently of Narrant or Tauri. The analyzed directory does not need to be
 a Git repository. Graph differences and multi-language graph merging belong to consumers.
 
-**Version:** This checkout targets **v0.1.1**, including the Go directive-text fix,
+**Version:** This checkout targets **v0.1.2**, including source-first C/C++ analysis and the Go directive-text fix,
 for **macOS ARM64** and **Windows x64**. Published builds appear on the
-[release page](https://github.com/XLCYun/CodeGraph/releases/tag/v0.1.1) after both
+[release page](https://github.com/XLCYun/CodeGraph/releases/tag/v0.1.2) after both
 native CI targets pass. Each manifest records the exact source commit;
-package/engine version is `0.1.1` and protocol is `codegraph.analyzer/1`.
+package/engine version is `0.1.2` and protocol is `codegraph.analyzer/1`.
 There is no package-manager installation.
 Download the matching archive and manifest from the release and verify them against
-[SHA256SUMS](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.1/SHA256SUMS)
+[SHA256SUMS](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.2/SHA256SUMS)
 using the [distribution contract](docs/distribution.md) before invoking its direct entry.
 For example, Python packages are available for
-[macOS ARM64](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.1/python-aarch64-apple-darwin-pack.tar.gz)
-and [Windows x64](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.1/python-x86_64-pc-windows-msvc-pack.tar.gz).
+[macOS ARM64](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.2/python-aarch64-apple-darwin-pack.tar.gz)
+and [Windows x64](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.2/python-x86_64-pc-windows-msvc-pack.tar.gz).
 
 ## Choose an analyzer
 
@@ -100,13 +100,13 @@ package directories must not overlap.
 
 | `files` in the request | Meaning |
 | --- | --- |
-| Omitted | Discover source through the language's supported project configuration. |
+| Omitted | Discover source using the language's selection policy. |
 | Nonempty, such as `["src/main.ts"]` | Select exactly these files for complete graph nodes. Unselected source may provide semantic context or external symbols. |
 | `[]` | Return an empty graph without project configuration or target SDK discovery. Source and installation boundary checks still apply. |
 
 Selection paths are unique, repository-relative POSIX paths. `null`, duplicate
-paths and unsafe paths are invalid. Configured discovery follows the language's
-project membership, configuration and include/exclude policies. See
+paths and unsafe paths are invalid. Discovery follows the language's project
+membership, source inventory and include/exclude policies. See
 [selection policies](docs/engine-selection.md).
 
 The process reads one UTF-8 JSON object followed by EOF; a trailing newline is
@@ -151,6 +151,11 @@ C# needs matching reference assemblies, which a runtime-only .NET installation
 does not provide. Target SDK discovery only reads existing installations. It
 never installs or upgrades SDKs or runs project build scripts.
 
+C/C++ can generate a source graph without `compile_commands.json` or installed
+project headers. Missing semantic context leaves uncertain fragments opaque and
+references unresolved. A usable compilation database adds verified bindings;
+it does not change which selected source is represented. See the [C/C++ policy](docs/engine-selection.md#c--c-resolution).
+
 ## Build and verify
 
 Use Node **24.18.0** and pnpm **11.13.1**. Prepare the fixed native toolchains and host build tools
@@ -171,8 +176,8 @@ to build only Rust. The builder uses `--id`; provisioning and full verification
 use `--language`. Existing artifact destinations are not overwritten, so use a
 fresh output directory for each build.
 
-Archives and manifests go under `<output>/<id>/0.1.1/<target>/`; verified extracted
-packages go under `<output>/smoke-installed/<id>/0.1.1/<target>/`.
+Archives and manifests go under `<output>/<id>/0.1.2/<target>/`; verified extracted
+packages go under `<output>/smoke-installed/<id>/0.1.2/<target>/`.
 
 The root Cargo workspace builds only the TypeScript/Java thin launchers. Rust and Python use their
 own manifests and Rust **1.98.0**. Run all Cargo commands through `scripts/cargo-agent.sh`; keep

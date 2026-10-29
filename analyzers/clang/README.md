@@ -3,7 +3,7 @@
 Clang 21.1.8 LibTooling 原生分析器。分析 module 直接使用 `ClangTool`、AST visitor、
 `SourceManager`、`Lexer`、`PPCallbacks` 和 USR 绑定证据；不运行 clang AST JSON 子进程。
 固定 `bin/codegraph-c-cpp[.exe] analyze` 直接读取公共 `codegraph.analyzer/1` JSON 后 EOF，
-输出一个带固定 `engine_version: "0.1.1"` 与 `pack_id: "c-cpp"` 的最终结果。
+输出一个带固定 `engine_version: "0.1.2"` 与 `pack_id: "c-cpp"` 的最终结果。
 调用方负责取消与超时的整棵进程树终止；没有 ready/cancel、分析 worker 或控制监听器。
 
 ## 实现结构
@@ -15,7 +15,9 @@ Clang 21.1.8 LibTooling 原生分析器。分析 module 直接使用 `ClangTool`
 | 文件 | 职责 |
 | --- | --- |
 | `src/protocol.cpp` | 一次性 JSON、公共校验、错误映射与最终输出 |
-| `src/analyzer.cpp` | 单请求生命周期、顺序运行全部 TU 后收尾 |
+| `src/analyzer.cpp` | 单请求生命周期，选择公共源码审查或非交付语义夹具 |
+| `src/source_document.cpp` | 原始逻辑指令、条件块、保护宏与等长语法视图 |
+| `src/source_review.cpp` | 源码选集、原文覆盖、不透明缺口与可选引用增强 |
 | `src/project.cpp`、`src/sdk_discovery.cpp` | 现有 CDB 解释、目标 SDK 发现和批准策略 |
 | `src/extraction.cpp` | 同进程 Clang、VFS、AST、宏和参与文件提取 |
 | `src/graph.cpp` | 跨 TU 并集后的稳定身份、引用、自身内容与图结果 |
@@ -25,7 +27,7 @@ Clang 21.1.8 LibTooling 原生分析器。分析 module 直接使用 `ClangTool`
 
 `sources.txt` 是 CMake 与 `build.sh` 共用的核心源文件清单。核心先编译为静态 archive，
 再由公共入口和夹具链接；archive 不安装、不随包交付。夹具操作是可选的独立成员，
-生产入口不引用它。公共与夹具原有的资源限制、校验和错误处理差异保持原样。
+生产入口不引用它。公共入口以源码覆盖为先，夹具保留严格语义验收；二者共用原生提取和图收尾。
 
 ## 固定开发环境与构建
 
@@ -44,56 +46,47 @@ rpath，不含开发机绝对 SDK 路径。resource headers 从安装根的 `run
 `build/` 被忽略，不提交二进制、动态库或下载的 SDK。当前构建与运行验收为 macOS ARM64；
 Windows 增量由专门原生 CI 验收，不能把本机构建成功当作 Windows 成功。
 
-## 内部目标模型
+## 公共源码审查
 
-- `clang-target`：`root` 为批准的目标 SDK，`version` 为 SDK 版本；metadata 精确包含
-  `target_triple`、`system_include_directories`（root 相对目录数组）、`resource_platform_id`。
-  语言标准属于每个 TU 的编译参数，catalog 不再携带 `c_standard` / `cpp_standard`。
-- `clang-resource`：`root` 为固定 LLVM 的 `lib/clang/21`，`version: "21.1.8"`，metadata 为 `{}`。
-- 两个来源分别入 evidence，禁止为了共同根目录而批准 `/` 或复制目标头文件到 scratch。
-- C++ `c++` 路径组件下的包装头优先，然后 resource/include，再目标 C headers；其它读取被
-  VFS 拒绝。实际验收包含 MacOSX27.0 SDK 的 C `<stdint.h>/<stdio.h>` 和 C++ `<vector>`。
+无需 `compile_commands.json` 或目标 SDK 就能构图。每个选中文件有一个 `SourceFile` 容器，
+`source` 逐字保存完整原文。可确认的声明正常提取；缺头文件、未知类型或不完整声明不会让
+选中源码消失，无法确认的声明区域保留为 `OpaqueSourceFragment`，未知引用为 `unresolved`。
+源码恢复使用固定 Clang 的 C23/C++23 语法模式，不表示项目使用或可编译于这些标准。
 
-本语言程序从本机开发工具发现目标 SDK，并读取其实际版本及头文件目录；不再限定 macOS SDK
-版本白名单，也不要求平台指纹。缺少标准头仍明确失败，程序只读取静态安装发现批准的具体根。
-CI 的固定 SDK 是复现测试样本；用户不必安装相同版本，也不会随支持包下载系统 SDK。
+`#` 开头的预处理指令是 `PreprocessorDirective`。一般条件块从起始指令到匹配的 `#endif`
+整体保存为 `ConditionalBlock`，保留全部分支，不提取块内声明。标准外层头文件保护宏例外：
+`#ifndef NAME` 或 `#if !defined(NAME)`、对应 `#define NAME` 和最终 `#endif` 分别保存，
+内部结构照常提取；保护层不能带 `else`/`elif`，允许前置 `#pragma once`。
+普通宏调用留在所属对象原文中，不额外建模展开对象或展开后的调用关系。
 
-## 明确的配置边界
+不透明节点也将原文规范化后写入参与比较的 `code`，因此非激活分支变化不会被隐藏。
+父对象的自身内容用子对象锚点代替子对象原文；`source` 仅供显示，不单独驱动差异。
 
-本侧根目录必须有 `compile_commands.json`；仅接受 `arguments` 数组，拒绝 `command`、wrapper、
-response file、插件、modules、自动配置、未知参数与非批准 include/sysroot。每个 TU 的语言标准、
-宏、include、target 都分别解析；绝不执行 CDB 中的程序、CMake、query-driver 或构建脚本。
+目录发现直接扫描 C/C++ 源码与头文件，沿用依赖排除并跳过构建缓存；测试开关对目录发现
+生效。显式选集保持精确范围，包括特殊后缀文件；空目录与显式空集返回空图。
+后缀、排除路径和其他边界见[完整选集政策](../../docs/engine-selection.md#c--c-resolution)。
 
-每条编译命令必须明确提供 `-std=`（也支持 Clang 的 `--std=` / `--std` 写法）。标准及别名
-直接由固定 LLVM 21.1.8 的 `LangStandard` 识别，包括 C89–C23、C++98–C++23 和对应 GNU 方言；
-例如 `c18`、`iso9899:2011`、`gnu++17` 都保留其真实解析模式。LLVM 已归入稳定标准的历史别名
-（如 `c2x` 对应 C23、`c++2b` 对应 C++23）也遵从原生映射。LLVM 的 C2y / C++26 特性标记用于
-拒绝仍在预览阶段的模式及其别名，不另维护一份很窄的标准名称白名单。
+## 可选编译上下文
 
-语言模式按 Clang 的源文件类型表、C++ driver 规则与输入之前生效的 `-x c` / `-x c++` 判定；
-`-x none` 恢复推断，`-xc` / `-xc++` 同样有效。标准必须与该 TU 的 C / C++ 模式匹配，最后一个
-受支持的标准选项原样传入 Clang。缺 CDB、缺标准、非法标准、预览标准或语言错配都会明确失败，
-不会补入 C17 / C++20。固定 LLVM 不保证实现每个已发布标准的全部特性；具体语法仍由真实 Clang
-验证，错误终结不会携带部分图，也不会被成功解析的其它 TU 掩盖。
-ISO 模式保留严格标准诊断；GNU 模式允许 Clang 原生的 `typeof`、statement expression 等 GNU
-扩展，并从 LLVM 诊断表发现当前语言的标准扩展分组，将超出所选 ISO 版本的语法诊断提升为错误。
-这既保留 GNU 语义，也防止 GNU 低版本通过警告悄悄接受后续标准语法。
+已有的根目录 CDB 可增强可靠引用绑定。接受 `arguments` 数组，或只通过 LLVM 参数分词器
+读取标准 `command` 字符串；两者都只是数据。绝不执行其中的程序、CMake、query-driver
+或项目构建脚本。上下文不能改变源文件选集或增加源码对象，宏展开内容也不会导出。
+上下文缺失、过大、参数不支持、目标 SDK 不可用或语义诊断失败时，继续返回源码图。
+请求超时、资源上限、读取失败及真正的内部错误仍明确失败。
 
-同一请求可以含 C 与 C++ TU。成功解析为 C 的共同 header 声明统一标为 `c`；只在 C++ 上下文
-出现的声明标为 `cpp`。同一 header 的多个语言标准上下文分别分析，再合并条件分支和关系；
-归并仍校验原始声明、类别、native kind 和父级；不因语言模式或标准生成重复
-header。普通 C record/C++ record 的同一源 struct 使用 `StructDecl`，不能把 AST 实现类名差异
-误当成源码对象冲突。真正不能归并的源码映射返回 `union_conflict`。
+上下文仍要求白名单参数、明确的稳定 `-std=`、正确的 C/C++ 语言模式和批准的目标头文件根。
+固定 LLVM 原生 `LangStandard` 解释 C89–C23、C++98–C++23 及 GNU 方言和稳定别名，
+不接受 C2y/C++26 预览模式。wrapper、response file、插件、modules 和未知 include/sysroot
+不能借增强步骤获得执行或额外读取权限。唯一已证实定义可以作为调用目标，不按同名猜绑定。
 
-源片段先按当前快照物理位置关联，再生成相对文件、词法 owner、名字、原始参数类型槽、
-声明/定义角色及重复槽序号组成的 ID。位置和 USR 不进入生产 ID。prototype 与 definition
-分别保留，唯一已证实定义可以成为调用目标；未决调用不按同名猜测。宏定义是 extension，
-宏引用来自真实预处理展开回调；宏内容变化参与比较。模板只保留显式源码声明，不添加隐式实例。
+本语言程序只发现本机已有的目标 SDK，不下载或安装。内部 `clang-target` 保存批准的目标
+triple、系统 include 根与 `clang-resource` 引用；`clang-resource` 是随包固定 LLVM 21.1.8
+资源。C++ 包装头、resource headers 和目标 C headers 分别授权，VFS 不批准共同的 `/` 根，
+也不复制项目源码到 scratch。上下文是否可用不进入节点的比较字段。
 
-测试脚本创建自身临时源码并核对分析前后完整文件摘要；helper 从原位置读取。VFS/AST 保留资源期限检查；调用方通过整棵进程树终止回收原生解析。
-标准验收同时检查 `__STDC_VERSION__` / `__cplusplus`、GNU 模式和版本专属语法：C99 循环声明、
-C11 `_Generic`、C23 `constexpr`，以及 C++11–C++23 的已实现特性。相同语法在较旧标准下必须失败；
-共享 header 还覆盖 C99、C23、C++11、C++23 四种上下文的并集及顺序稳定性。
+非交付组件夹具保留严格语义模式，覆盖标准版本、GNU 扩展、目标头、多 TU 并集、宏回调和
+失败边界。其 CDB 必需、语义错误终结等规则只用于组件验收；公共入口使用上述源码审查政策。
+两类测试都检查源文件路径与字节未被改写。取消由调用方终止整棵进程树。
 
 ## Windows 增量与附加标准头
 

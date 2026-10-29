@@ -334,32 +334,55 @@ remain rejected; no project build or SDK installation is performed.
 
 ## C / C++ resolution
 
-Discovery requires the existing nonempty root `compile_commands.json` with
-supported `arguments` entries. Every configured translation unit is selected,
-including unconventional suffixes when native `-x`/driver rules establish its
-language. Each TU still requires its explicit supported language standard and
-an unambiguous approved target. An empty CDB remains invalid in this static profile;
-an empty TU is valid and still has file/configuration evidence.
+The public analyzer prioritizes the selected original source. It does not require
+`compile_commands.json`, a successful build, installed target headers or resolved
+types. It never runs CMake, a compiler driver, project configuration or build scripts.
+The fixed Clang 21.1.8 raw lexer and recoverable AST run in the analyzer process.
 
-Headers join selection only when Clang's `LexedFileChanged` callback proves that
-lexing actually entered them in a successfully analyzed TU. Their physical paths
-must be ordinary files inside the repository and outside the existing dependency
-and cache exclusions. Empty headers, macro-only headers, `.inc`/`.def` files and
-files without suffixes are eligible. Unused files, `__has_include` probes, inactive
-includes and other VFS observations cannot select a file. `-isystem` headers,
-approved external SDK headers and files finally classified as system headers by
-`#pragma ... system_header` remain context. `#line` does not replace physical
-membership. C/C++ has no reliable test-role metadata, so `include_tests` does not
-invent test exclusions from filenames.
+When `files` is omitted, enumerate ordinary repository source/header files with
+suffixes `.c`, `.C`, `.cc`, `.cpp`, `.cxx`, `.h`, `.H`, `.hh`, `.hpp`, `.hxx`.
+Dependency exclusions still apply; `build`, `target`, `.tools`, `.cache` and
+`.superpowers` directories are excluded. With `include_tests: false`, exclude
+`test`, `tests`, `__tests__` directories and `_test` filename stems. Symlinks must
+resolve inside the allowed source root. Physical aliases are deduplicated during
+discovery; an explicit list retains exact membership and rejects duplicate physical
+aliases. Explicit lists may include other suffixes and test paths. An empty directory
+or explicit empty selection returns an empty graph.
 
-Each participating file records every successful non-system TU configuration in
-which it was entered, and the existing declaration/content/conflict union remains
-in force. Explicit lists retain exact selection and their existing TU-context
-coverage requirement. The same Clang run produces membership and graph evidence;
-there is no extension scan, dependency-file subprocess or second compiler pass.
-Configuration loading runs in the same process as parsing; CDB loops,
-VFS access, participation collection and AST traversal share the request deadline.
-The file limit applies during TU and header collection. The caller terminates the complete process tree to bound native work on cancellation or timeout.
+Each selected file has a `SourceFile` container whose `source` retains the complete
+original UTF-8 text. `.c` uses recoverable C23 syntax; other selected suffixes use
+recoverable C++23 syntax. These are local structure-recognition modes, not a claim
+that the project compiles in those standards. Known declarations use ordinary graph
+categories. Ambiguous declarations and unmodeled declaration gaps become opaque
+`OpaqueSourceFragment` extension nodes. Missing headers/types do not suppress source
+coverage; unknown reference targets remain `unresolved` without name-based guessing.
+
+`#` logical directives are retained as `PreprocessorDirective` extension nodes,
+including line continuations. A general `#if`/`#ifdef`/`#ifndef` through matching
+`#endif` is one opaque `ConditionalBlock`, with all branches and nested directives
+intact and no declaration extraction inside it. An unterminated block retains text
+through EOF. Canonical outer `#ifndef NAME` or `#if !defined(NAME)` include guards,
+followed by their matching `#define NAME` and without outer `else`/`elif`, are exempt:
+the guard directives remain separate and interior classes/functions are extracted.
+An optional preceding `#pragma once` is allowed. Ordinary macro invocations stay in
+their owner's original code; no expanded declarations or call relationships are
+exported. Opaque content participates in normalized `code`, so inactive-branch edits
+remain visible in structural comparison. The complete `source` field is for display.
+
+An existing root CDB of at most 1 MiB may add verified semantic relationships.
+Both standard `arguments` and platform-tokenized `command` forms are data only.
+The existing compiler/argument, standard, target SDK and VFS approval checks apply
+to this optional context. Unsupported flags, missing target SDKs, diagnostics or an
+unusable database leave the source graph intact. Valid bindings attach only to
+already selected, directly sourced objects outside opaque regions; unselected
+repository targets remain external. Target contexts cannot add or remove source
+objects. Context availability is provenance, not node comparison content.
+
+Non-shipped semantic component fixtures still exercise the strict CDB profiles,
+explicit language standards, approved native target headers, multi-TU union and
+source-boundary failures. Their stricter success criteria do not gate public source
+coverage. All work shares the request deadline and file limits; callers terminate
+the complete process tree on cancellation or timeout.
 
 The four native suites include directory behavior and lifecycle cases. Their real
 Public integration fixtures live under `analyzers/integration-tests/src/tests/directory/` and are
@@ -391,7 +414,7 @@ result, and normal EOF remains successful input completion.
 | Go | Native module/project configurations loaded | Member discovery and type checking |
 | Java | Nonempty static project configurations parsed | Target binding, source inventory and JDT parsing |
 | C# | First configured source text read | Roslyn parsing and compilation |
-| C/C++ | Nonempty compilation database read and parsed | TU configuration and Clang parsing |
+| C/C++ | Selected source text read and raw directive regions prepared | Recoverable Clang structure parsing and optional binding enrichment |
 
 These are phase observations for producer acceptance, not a new consumer
 workflow or a guarantee that every project supports every milestone (for example,

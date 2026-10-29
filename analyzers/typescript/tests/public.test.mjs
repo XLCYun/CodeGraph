@@ -23,7 +23,7 @@ test('direct entry emits one fixed public empty result after EOF without loading
   fs.writeFileSync(path.join(root, 'tsconfig.json'), '{ broken');
   const result = exchange(JSON.stringify(request(root)));
   assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(JSON.parse(result.stdout), { protocol: 'codegraph.analyzer/1', engine_version: '0.1.1',
+  assert.deepEqual(JSON.parse(result.stdout), { protocol: 'codegraph.analyzer/1', engine_version: '0.1.2',
     pack_id: 'typescript-javascript', type: 'completed', id: 'direct', outcome: 'ok',
     graph: { root_contains: [], nodes: [], external_symbols: [] } });
   assert.equal(result.stderr, '');

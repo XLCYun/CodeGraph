@@ -24,7 +24,7 @@ def main():
     assert result.stdout.endswith(b"\n")
     completed = json.loads(result.stdout.decode("utf-8"))
     assert completed["protocol"] == request["protocol"]
-    assert completed["engine_version"] == "0.1.1" and completed["pack_id"] == pack_id
+    assert completed["engine_version"] == "0.1.2" and completed["pack_id"] == pack_id
     assert completed["id"] == request["id"] and completed["type"] == "completed"
     assert completed["outcome"] == "ok"
     assert set(completed["graph"]) == {"root_contains", "nodes", "external_symbols"}

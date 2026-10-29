@@ -11,7 +11,7 @@ internal static class Program
     {
         if (args.SequenceEqual(["--help"]) || args.SequenceEqual(["analyze", "--help"]) || args.SequenceEqual(["--version"]))
         {
-            Console.WriteLine(args[0] == "--version" ? "codegraph-csharp 0.1.1" : "Usage: codegraph-csharp analyze\nReads one UTF-8 JSON request followed by EOF.");
+            Console.WriteLine(args[0] == "--version" ? "codegraph-csharp 0.1.2" : "Usage: codegraph-csharp analyze\nReads one UTF-8 JSON request followed by EOF.");
             return 0;
         }
         if (!args.SequenceEqual(["analyze"])) { Console.Error.WriteLine("Usage: codegraph-csharp analyze"); return 2; }
@@ -38,7 +38,7 @@ internal static class Program
             using var deadline = new CancellationTokenSource(request.Limits.AnalysisTimeoutMs);
             var output = Analyzer.Analyze(request, deadline.Token);
             OutputChecks.Sources(request, output.Evidence);
-            result = new { protocol = Protocol.Version, engine_version = "0.1.1", pack_id = "csharp", type = "completed", id,
+            result = new { protocol = Protocol.Version, engine_version = "0.1.2", pack_id = "csharp", type = "completed", id,
                 outcome = "ok", graph = output.Graph };
             success = true;
         }
@@ -63,7 +63,7 @@ internal static class Program
 
     /// <summary>公共失败不带内部路径数组、来源或部分图。</summary>
     private static object Error(string? id, string code, string message) => new
-    { protocol = Protocol.Version, engine_version = "0.1.1", pack_id = "csharp", type = "completed", id, outcome = "error", error = new { code, message } };
+    { protocol = Protocol.Version, engine_version = "0.1.2", pack_id = "csharp", type = "completed", id, outcome = "error", error = new { code, message } };
 
     /// <summary>将语言静态模型的细分失败映射到固定公共错误码。</summary>
     private static string Code(string code) => code is "invalid_request" or "incompatible_protocol" or "invalid_input" or

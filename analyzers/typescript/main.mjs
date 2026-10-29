@@ -4,7 +4,7 @@ import { decodeRequest, validateInput, MAX_BYTES, AnalysisFailure } from './requ
 import { runtimeContext } from './runtime.mjs';
 import { analyze } from './analyze.mjs';
 
-const identity = { protocol: 'codegraph.analyzer/1', engine_version: '0.1.1', pack_id: 'typescript-javascript' };
+const identity = { protocol: 'codegraph.analyzer/1', engine_version: '0.1.2', pack_id: 'typescript-javascript' };
 
 /** Windows 标准管道的 stream.write 会同步阻塞；回调式 fs.write 在 libuv 工作线程写入。 */
 export async function writeWindowsPipe(fd, text) {
@@ -27,7 +27,7 @@ function writeOutput(stream, text) {
 
 /** 编译期固定语言的 CLI，只转入一次公开分析。 */
 function command(args) {
-  if (args.length === 1 && args[0] === '--version') return 'codegraph-typescript-javascript 0.1.1\n';
+  if (args.length === 1 && args[0] === '--version') return 'codegraph-typescript-javascript 0.1.2\n';
   if (args.length === 1 && args[0] === '--help' || args.length === 2 && args[0] === 'analyze' && args[1] === '--help')
     return 'Usage: codegraph-typescript-javascript analyze\nOne UTF-8 JSON request on stdin followed by EOF.\n';
   if (args.length === 1 && args[0] === 'analyze') return null;

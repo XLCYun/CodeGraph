@@ -3,7 +3,7 @@
 该分析器使用 `dependencies.lock.json` 锁定的 Eclipse JDT 解析源码。分析器自身的运行 JDK、JDT 工具版本与被分析项目的目标 Java release 相互独立。分析不执行 Maven、Gradle、项目脚本、注解处理器或目标 JDK，也不下载项目依赖。
 
 公开入口为 `bin/codegraph-java analyze`，由 Java 主线程直接实现 `codegraph.analyzer/1`，
-固定版本 `0.1.1`。stdin 接收一个 UTF-8 JSON 对象后 EOF，尾换行可选；stdout 只有一个
+固定版本 `0.1.2`。stdin 接收一个 UTF-8 JSON 对象后 EOF，尾换行可选；stdout 只有一个
 带固定身份的最终结果。成功退出 0，可处理失败退出 1，用法错误退出 2。
 `--help`、`analyze --help` 和 `--version` 输出文本后退出。详见 [公共协议](../../docs/protocol.md)。
 

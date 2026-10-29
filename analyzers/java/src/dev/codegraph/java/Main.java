@@ -70,7 +70,7 @@ public final class Main {
 
     /** 固定语言入口只接受 analyze 或一次帮助、版本查询。 */
     private static String command(String[] args) {
-        if (args.length == 1 && args[0].equals("--version")) return "codegraph-java 0.1.1\n";
+        if (args.length == 1 && args[0].equals("--version")) return "codegraph-java 0.1.2\n";
         if (args.length == 1 && args[0].equals("--help") || args.length == 2 && args[0].equals("analyze") && args[1].equals("--help"))
             return "Usage: codegraph-java analyze\nOne UTF-8 JSON request on stdin followed by EOF.\n";
         if (args.length == 1 && args[0].equals("analyze")) return null;
@@ -94,7 +94,7 @@ public final class Main {
     private static JsonObject base(String id, String outcome) {
         JsonObject object = new JsonObject();
         object.addProperty("protocol", PROTOCOL);
-        object.addProperty("engine_version", "0.1.1");
+        object.addProperty("engine_version", "0.1.2");
         object.addProperty("pack_id", "java");
         object.addProperty("type", "completed");
         object.add("id", id == null ? JsonNull.INSTANCE : new JsonPrimitive(id));

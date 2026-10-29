@@ -10,7 +10,7 @@ static std::string escape(const std::string &s) {
   for(unsigned char c:s) { if(isalnum(c) || c=='_' || c=='-' || c=='.' || c=='/') out+=c; else { out+='%'; out+=hex[c>>4]; out+=hex[c&15]; } } return out;
 }
 // 按 AST 基础类型范围拆分共用声明前缀，保持每个 declarator 的初始化内容独立。
-static void splitDeclarators(Graph &graph) {
+void prepareDeclarators(Graph &graph) {
   std::map<std::tuple<std::string,std::string,unsigned>,std::vector<DeclInfo *>> groups;
   for(auto &entry:graph.decls) { auto &n=entry.second; if(n.typeEnd) groups[{n.path,n.parent,n.begin}].push_back(&n); }
   for(auto &group:groups) {
@@ -35,7 +35,7 @@ static void splitDeclarators(Graph &graph) {
 // 构造完成后的单图 DTO；任何未覆盖文件或不兼容归并都硬失败。
 j::Object finish(Graph &g) {
   if(g.request.discovery) for(auto &entry:g.decls) entry.second.selected=g.request.selected.count(entry.second.path);
-  splitDeclarators(g);
+  if(!g.request.sourceReview) prepareDeclarators(g);
   auto &r=g.request; std::map<std::string,std::vector<DeclInfo *>> slots;
   for(auto &use:g.macroUses) {
     DeclInfo *owner=nullptr;
@@ -63,7 +63,7 @@ j::Object finish(Graph &g) {
     auto raw=g.files[n.path].substr(n.begin,n.end-n.begin); auto child=children[n.key]; std::sort(child.begin(),child.end(),[](auto a,auto b){return a->begin>b->begin;}); unsigned boundary=n.end;
     for(auto c:child) {
       require(c->path==n.path && c->begin>=n.begin && c->end<=boundary,"overlapping/nonlocal child declaration","object_extraction_failed");
-      require(c->begin>n.begin || c->end<n.end,"ambiguous equal-span declarations","object_extraction_failed"); boundary=c->begin;
+      require(c->begin>n.begin || c->end<n.end || n.kind=="SourceFile","ambiguous equal-span declarations","object_extraction_failed"); boundary=c->begin;
       raw.replace(c->begin-n.begin,c->end-c->begin," __narrant_child_"+escape(c->id)+" "); if(c->selected) contains.push_back(c->id);
     }
     n.code=normalize(n.commonPrefix+raw);
@@ -76,7 +76,8 @@ j::Object finish(Graph &g) {
         std::vector<DeclInfo *> definitions; for(auto d:sym->second) if(d->role=="definition") definitions.push_back(d);
         if(definitions.size()==1) destination=definitions.front();
       }
-      if(destination && destination->selected) target=j::Object{{"kind","node"},{"id",destination->id}};
+      if(!edge.externalSymbol.empty()) { target=j::Object{{"kind","external"},{"symbol",edge.externalSymbol}}; externalMap.try_emplace(edge.externalSymbol,j::Object{{"symbol",edge.externalSymbol},{"name",edge.externalName},{"scope",edge.externalScope}}); }
+      else if(destination && destination->selected) target=j::Object{{"kind","node"},{"id",destination->id}};
       else if(destination) { target=j::Object{{"kind","external"},{"symbol",destination->id}}; externalMap.try_emplace(destination->id,j::Object{{"symbol",destination->id},{"name",destination->name},{"scope","repository"}}); }
       else if(!edge.usr.empty() && edge.target.empty()) {
         auto symbol=n.language+":dependency:"+escape(edge.usr); target=j::Object{{"kind","external"},{"symbol",symbol}};
@@ -86,14 +87,21 @@ j::Object finish(Graph &g) {
     }
     // 容器签名只包含声明头，独立子对象正文不能污染父节点。
     auto signature=n.signature;
-    nodes.push_back(j::Object{{"category",n.category},{"id",n.id},{"language",n.language},{"native_kind",n.kind},{"name",n.name},{"signature",signature},{"code",n.code},{"source",n.source},{"contains",std::move(contains)},{"references",std::move(refs)},{"extensions",j::Object{}}});
+    if(r.sourceReview && n.kind!="SourceFile") {
+      auto header=g.files.at(n.path).substr(n.begin,n.body-n.begin);
+      for(auto item:child) if(item->begin>=n.begin && item->end<=n.body)
+        header.replace(item->begin-n.begin,item->end-item->begin," __narrant_child_"+escape(item->id)+" ");
+      signature=normalize(n.commonPrefix+header);
+    }
+    j::Object extensions;
+    nodes.push_back(j::Object{{"category",n.category},{"id",n.id},{"language",n.language},{"native_kind",n.kind},{"name",n.name},{"signature",signature},{"code",n.code},{"source",n.source},{"contains",std::move(contains)},{"references",std::move(refs)},{"extensions",std::move(extensions)}});
     origins.push_back(j::Object{{"node_id",n.id},{"selected_paths",j::Array{n.path}}});
   }
   for(auto &entry:externalMap) externals.push_back(std::move(entry.second));
   j::Array configs,files;
-  for(auto &c:r.configs) { auto &p=r.platforms[c.platform]; j::Array ids{p.id,p.resourceId}; for(auto &id:p.additionalIds) ids.push_back(id); configs.push_back(j::Object{{"id",c.id},{"source_paths",j::Array{"compile_commands.json"}},{"platform_ids",std::move(ids)}}); }
+  for(auto &c:r.configs) { auto &p=r.platforms[c.platform]; j::Array ids{p.id,p.resourceId},sources; for(auto &id:p.additionalIds) ids.push_back(id); for(auto &path:c.sourcePaths) sources.push_back(path); configs.push_back(j::Object{{"id",c.id},{"source_paths",std::move(sources)},{"platform_ids",std::move(ids)}}); }
   for(auto &file:r.selected) { auto &coverage=g.coverage[file]; require(!coverage.empty(),"selected file has no complete TU context: "+file,"object_extraction_failed"); j::Array ids; for(auto &id:coverage) ids.push_back(id); files.push_back(j::Object{{"path",file},{"disposition","analyzed"},{"configuration_ids",std::move(ids)}}); }
-  return j::Object{{"protocol",Protocol},{"engine_version","0.1.1"},{"pack_id","c-cpp"},{"type","completed"},{"id",r.id},{"outcome","ok"},{"graph",j::Object{{"root_contains",std::move(roots)},{"nodes",std::move(nodes)},{"external_symbols",std::move(externals)}}},{"evidence",j::Object{{"configurations",std::move(configs)},{"files",std::move(files)},{"origins",std::move(origins)}}}};
+  return j::Object{{"protocol",Protocol},{"engine_version","0.1.2"},{"pack_id","c-cpp"},{"type","completed"},{"id",r.id},{"outcome","ok"},{"graph",j::Object{{"root_contains",std::move(roots)},{"nodes",std::move(nodes)},{"external_symbols",std::move(externals)}}},{"evidence",j::Object{{"configurations",std::move(configs)},{"files",std::move(files)},{"origins",std::move(origins)}}}};
 }
 
 } // namespace codegraph::clang_analyzer::detail

@@ -16,7 +16,7 @@ export function verificationCommands(environment, platform = process.platform, l
   for (const name of ids.flatMap(id => required[id].map(name => `CODEGRAPH_${name}`))) if (!environment[name]) throw new Error(`Missing fixed toolchain: ${name}`);
   const cargo = ['scripts/cargo-agent.sh', 'test', '--locked'];
   const target = platform === 'win32' ? 'x86_64-pc-windows-msvc' : 'aarch64-apple-darwin';
-  const installed = id => paths.join(environment.CODEGRAPH_NATIVE_PACKS ?? 'artifacts', 'smoke-installed', id, '0.1.1', target, 'bin', `codegraph-${id}${suffix}`);
+  const installed = id => paths.join(environment.CODEGRAPH_NATIVE_PACKS ?? 'artifacts', 'smoke-installed', id, '0.1.2', target, 'bin', `codegraph-${id}${suffix}`);
   // TOML 参数不经过 shell，Windows 用正斜杠避免 Git Bash 再解释反斜杠。
   const rustTestRunner = `target.'cfg(all())'.runner=${JSON.stringify([node, paths.join(root, 'scripts/language-packs/run-rust-helper-test.mjs')].map(file => platform === 'win32' ? file.replaceAll('\\', '/') : file))}`;
   const commands = [

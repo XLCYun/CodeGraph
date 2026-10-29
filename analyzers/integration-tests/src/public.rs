@@ -50,7 +50,7 @@ impl PublicAnalyzer {
         };
         let suffix = if cfg!(windows) { ".exe" } else { "" };
         let executable = artifacts.join(format!(
-            "smoke-installed/{pack}/0.1.1/{target}/bin/codegraph-{pack}{suffix}"
+            "smoke-installed/{pack}/0.1.2/{target}/bin/codegraph-{pack}{suffix}"
         ));
         assert!(
             executable.is_file(),
@@ -202,7 +202,7 @@ fn decode_final(
     });
     assert!(bytes.ends_with(b"\n"));
     assert_eq!(result["protocol"], "codegraph.analyzer/1");
-    assert_eq!(result["engine_version"], "0.1.1");
+    assert_eq!(result["engine_version"], "0.1.2");
     assert_eq!(result["pack_id"], pack);
     assert_eq!(result["type"], "completed");
     assert!(

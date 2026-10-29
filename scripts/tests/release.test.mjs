@@ -10,7 +10,7 @@ import { verificationCommandIdentities, recordVerifiedCommands } from '../langua
 /** 完整双平台二十九资产和内存 GitHub，覆盖实际发布顺序与不可变规则。 */
 function fixture() {
   const assets = [...targets.flatMap(target => packIds.flatMap(id => assetNames(id, target))), 'SHA256SUMS'].map(name => ({ name, bytes: Buffer.from(name), size: Buffer.byteLength(name), sha256: sha256(Buffer.from(name)) }));
-  const bundle = { version: '0.1.1', tag: 'v0.1.1', sourceCommit: 'a'.repeat(40), sourceDirty: false, assets };
+  const bundle = { version: '0.1.2', tag: 'v0.1.2', sourceCommit: 'a'.repeat(40), sourceDirty: false, assets };
   let release, tag;
   const objects = new Map(), events = [];
   const github = {
@@ -140,7 +140,7 @@ test('a tag created at a different commit during upload prevents publication', a
 
 /** 直接检验实际 gh adapter 的 PATCH 字节，内存服务不会掩盖字段未发送的错误。 */
 test('GitHub publish adapter sends the exact target commit and tag in its PATCH body', async () => {
-  const calls = [], body = { tag_name: 'v0.1.1', target_commitish: 'a'.repeat(40), draft: false, prerelease: true, make_latest: 'false' };
+  const calls = [], body = { tag_name: 'v0.1.2', target_commitish: 'a'.repeat(40), draft: false, prerelease: true, make_latest: 'false' };
   const github = githubAdapter((command, args, options) => {
     calls.push({ command, args, options });
     return JSON.stringify({ id: 17, ...body });
@@ -172,27 +172,27 @@ function releaseLookupFixture(pages) {
 
 /** draft 必须通过认证 release 列表按完整 tag 查找，不能误取相似版本。 */
 test('GitHub release lookup discovers the exact draft tag with its existing identity and assets', async () => {
-  const release = { id: 422619176, tag_name: 'v0.1.1', target_commitish: 'a'.repeat(40), draft: true, prerelease: true, assets: [{ id: 81, name: 'SHA256SUMS', state: 'uploaded', size: 42 }] };
-  const f = releaseLookupFixture([[{ ...release, id: 18, tag_name: 'v0.1.10' }, release]]);
-  assert.deepEqual(await f.github.findRelease('v0.1.1'), release);
+  const release = { id: 422619176, tag_name: 'v0.1.2', target_commitish: 'a'.repeat(40), draft: true, prerelease: true, assets: [{ id: 81, name: 'SHA256SUMS', state: 'uploaded', size: 42 }] };
+  const f = releaseLookupFixture([[{ ...release, id: 18, tag_name: 'v0.1.20' }, release]]);
+  assert.deepEqual(await f.github.findRelease('v0.1.2'), release);
   assert.equal(f.calls.length, 1);
 });
 
 /** 满页之后仍须继续查找，已发布版本也必须按完整 tag 返回。 */
 test('GitHub release lookup discovers a published exact tag beyond the first page', async () => {
   const firstPage = Array.from({ length: 100 }, (_, index) => ({ id: index + 1, tag_name: `v2.0.${index}`, draft: false }));
-  const release = { id: 101, tag_name: 'v0.1.1', target_commitish: 'a'.repeat(40), draft: false, prerelease: true, assets: [] };
-  const f = releaseLookupFixture([firstPage, [{ ...release, id: 102, tag_name: 'V0.1.1' }, release]]);
-  assert.deepEqual(await f.github.findRelease('v0.1.1'), release);
+  const release = { id: 101, tag_name: 'v0.1.2', target_commitish: 'a'.repeat(40), draft: false, prerelease: true, assets: [] };
+  const f = releaseLookupFixture([firstPage, [{ ...release, id: 102, tag_name: 'V0.1.2' }, release]]);
+  assert.deepEqual(await f.github.findRelease('v0.1.2'), release);
   assert.equal(f.calls.length, 2);
 });
 
 /** 空页、末尾短页和满页后的空页都能确认 tag 确实不存在。 */
 test('GitHub release lookup returns undefined only after exhausting valid pages without an exact tag', async () => {
   const firstPage = Array.from({ length: 100 }, (_, index) => ({ id: index + 1, tag_name: `v2.0.${index}`, draft: false }));
-  for (const pages of [[[]], [[{ id: 1, tag_name: 'v0.1.10', draft: true }]], [firstPage, []]]) {
+  for (const pages of [[[]], [[{ id: 1, tag_name: 'v0.1.20', draft: true }]], [firstPage, []]]) {
     const f = releaseLookupFixture(pages);
-    assert.equal(await f.github.findRelease('v0.1.1'), undefined);
+    assert.equal(await f.github.findRelease('v0.1.2'), undefined);
     assert.equal(f.calls.length, pages.length);
   }
 });
@@ -205,7 +205,7 @@ test('GitHub release lookup propagates API and network failures on every page', 
   for (const failure of failures) {
     for (const pages of [[failure], [firstPage, failure]]) {
       const f = releaseLookupFixture(pages);
-      assert.throws(() => f.github.findRelease('v0.1.1'), error => error === failure);
+      assert.throws(() => f.github.findRelease('v0.1.2'), error => error === failure);
       assert.equal(f.calls.length, pages.length);
     }
   }
@@ -214,7 +214,7 @@ test('GitHub release lookup propagates API and network failures on every page', 
 /** JSON 解码失败不能被当成空列表或不存在的 tag。 */
 test('GitHub release lookup propagates malformed JSON output', () => {
   const f = releaseLookupFixture(['{ invalid JSON']);
-  assert.throws(() => f.github.findRelease('v0.1.1'), SyntaxError);
+  assert.throws(() => f.github.findRelease('v0.1.2'), SyntaxError);
   assert.equal(f.calls.length, 1);
 });
 
@@ -224,7 +224,7 @@ test('GitHub release lookup rejects malformed list and release records', () => {
   for (const malformed of [[{}], null, {}, { message: 'Bad credentials' }, [null], [{ tag_name: 17 }], [{ tag_name: '' }], [[]]]) {
     for (const pages of [[malformed], [firstPage, malformed]]) {
       const f = releaseLookupFixture(pages);
-      assert.throws(() => f.github.findRelease('v0.1.1'), /Invalid GitHub release list response/);
+      assert.throws(() => f.github.findRelease('v0.1.2'), /Invalid GitHub release list response/);
       assert.equal(f.calls.length, pages.length);
     }
   }
@@ -233,7 +233,7 @@ test('GitHub release lookup rejects malformed list and release records', () => {
 /** artifact 存在不能冒充测试成功；证据必须逐项匹配身份、语义清单与归档摘要。 */
 test('partial or stale local evidence is rejected before preparing release assets', async () => {
   const { validateVerificationEvidence } = await import('../release/release-artifacts.mjs');
-  const identity = { version: '0.1.1', engineVersion: '0.1.1', protocol: 'codegraph.analyzer/1', sourceCommit: 'a'.repeat(40) };
+  const identity = { version: '0.1.2', engineVersion: '0.1.2', protocol: 'codegraph.analyzer/1', sourceCommit: 'a'.repeat(40) };
   const target = targets[0], receipts = [{ id: 'rust', archiveSha256: 'b'.repeat(64) }];
   const inventory = JSON.parse(await fs.readFile(new URL('../../resources/semantic-acceptance.json', import.meta.url)));
   const evidence = { schemaVersion: 1, status: 'passed', ...identity, sourceDirty: false, target, languages: packIds, semanticTests: inventory.filter(test => test.platforms.includes('darwin')).map(test => test.name).sort(), commands: verificationCommandIdentities('darwin').map(command => ({ ...command, outcome: 'passed' })), artifacts: receipts };
@@ -246,7 +246,7 @@ test('complete receipt rejects omitted or duplicate command identities', async (
   const { validateVerificationEvidence } = await import('../release/release-artifacts.mjs');
   const inventory = JSON.parse(await fs.readFile(new URL('../../resources/semantic-acceptance.json', import.meta.url)));
   const environment = Object.fromEntries(['GO_SDK', 'GO_TARGET_SDK', 'DOTNET_SDK', 'DOTNET_REF8_ROOT', 'DOTNET_REF9_ROOT', 'JAVA_RUNTIME', 'JAVA_TARGET_JDK', 'JAVA_TARGET_8', 'LLVM_SDK', 'PROJECT_RUST_TOOLCHAIN', 'TEST_CARGO_TOOLCHAINS', 'TEST_CARGO_194'].map(name => [`CODEGRAPH_${name}`, '/fixture/tools']));
-  const identity = { version: '0.1.1', engineVersion: '0.1.1', protocol: 'codegraph.analyzer/1', sourceCommit: 'a'.repeat(40) };
+  const identity = { version: '0.1.2', engineVersion: '0.1.2', protocol: 'codegraph.analyzer/1', sourceCommit: 'a'.repeat(40) };
   for (const [platform, target] of [['darwin', targets[0]], ['win32', targets[1]]]) {
     const actual = verificationCommands(environment, platform);
     const commands = recordVerifiedCommands(actual, environment, platform);

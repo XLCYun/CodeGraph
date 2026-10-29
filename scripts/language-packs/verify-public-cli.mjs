@@ -17,7 +17,7 @@ export { fixtures, preparePublicProject, assertPublicProjectUnchanged } from './
 export { exchangeCli } from './public-cli-session.mjs';
 
 /** 图必须保留调用、源文本、完整 containment 和引用闭包。 */
-export function assertGraph(graph) {
+export function assertGraph(graph, { resolvedCall = true } = {}) {
   assert.deepEqual(Object.keys(graph).sort(), ['external_symbols', 'nodes', 'root_contains']);
   const nodes = new Map(graph.nodes.map(node => [node.id, node]));
   assert.equal(nodes.size, graph.nodes.length);
@@ -25,7 +25,8 @@ export function assertGraph(graph) {
   const target = graph.nodes.find(node => node.name === 'target');
   assert.ok(caller && target, 'Missing real callable graph');
   assert.ok(caller.source?.includes('target'), 'Original callable source lost');
-  assert.ok(caller.references.some(ref => ref.semantic === 'code.calls' && ref.target.kind === 'node' && ref.target.id === target.id), 'Local call is not resolved');
+  if (resolvedCall) assert.ok(caller.references.some(ref => ref.semantic === 'code.calls' && ref.target.kind === 'node' && ref.target.id === target.id), 'Local call is not resolved');
+  else assert.ok(caller.references.some(ref => ref.target.kind === 'unresolved' && ref.target.name.includes('target')), 'Missing context must retain an unresolved target');
   const seen = new Set();
   /** 递归验证每个节点只归一个父节点，且所有节点可达。 */
   function visit(id) {
@@ -129,14 +130,16 @@ export async function verifyPublicCli(artifacts, language = 'all') {
       else assert.deepEqual(emptyResult, emptyGraph);
       await assertPublicProjectUnchanged(configuredEmpty);
 
-      // TS/Python 支持无配置项目；其它语言缺少必需项目模型必须明确失败。
+      // C/C++ 缺少编译上下文继续源码图；其他语言按自身必需项目模型判断。
       const missingContent = fixture.missing ?? (fixture.implicit ? fixture.configless : Object.fromEntries(Object.entries(fixture.content).filter(([name]) => name !== fixture.prerequisite)));
       const missing = await writePublicProject(path.join(scratch, `${id}-missing`), missingContent);
-      const missingError = fixture.missing || !fixture.implicit ? ['analysis_failed', 'invalid_input'] : undefined;
+      const sourceFirst = id === 'c-cpp';
+      const missingError = !sourceFirst && (fixture.missing || !fixture.implicit) ? ['analysis_failed', 'invalid_input'] : undefined;
       const missingResult = await exchangeCli(executable, id, request(identity, id, missing.root, 'missing'), identity, missingError);
-      if (!missingError) assertGraph(missingResult);
-      // 保留原 Java/C++ 公开负例：显式选集也不能绕过必需配置。
-      if (['java', 'c-cpp'].includes(id)) await exchangeCli(executable, id, request(identity, id, missing.root, 'missing-explicit', fixture.files), identity, ['analysis_failed', 'invalid_input']);
+      if (!missingError) assertGraph(missingResult, { resolvedCall: !sourceFirst });
+      // Java 保留必需配置负例；C/C++ 的显式选集也必须在缺 CDB 时交付源码。
+      if (id === 'java') await exchangeCli(executable, id, request(identity, id, missing.root, 'missing-explicit', fixture.files), identity, ['analysis_failed', 'invalid_input']);
+      if (sourceFirst) assertGraph(await exchangeCli(executable, id, request(identity, id, missing.root, 'missing-explicit', fixture.files), identity), { resolvedCall: false });
       assert.deepEqual(await exchangeCli(executable, id, request(identity, id, missing.root, 'missing-empty', []), identity), emptyGraph);
       await assertPublicProjectUnchanged(missing);
       if (fixture.implicit && fixture.missing) {
@@ -148,7 +151,8 @@ export async function verifyPublicCli(artifacts, language = 'all') {
       const malformed = await preparePublicProject(id, path.join(scratch, `${id}-malformed`));
       malformed.content[fixture.prerequisite] = id === 'c-cpp' ? '[]' : '! invalid configuration [';
       await fs.writeFile(path.join(malformed.root, fixture.prerequisite), malformed.content[fixture.prerequisite]);
-      await exchangeCli(executable, id, request(identity, id, malformed.root, 'malformed'), identity, ['analysis_failed', 'invalid_input']);
+      const malformedResult = await exchangeCli(executable, id, request(identity, id, malformed.root, 'malformed'), identity, sourceFirst ? undefined : ['analysis_failed', 'invalid_input']);
+      if (sourceFirst) assertGraph(malformedResult, { resolvedCall: false });
       assert.deepEqual(await exchangeCli(executable, id, request(identity, id, malformed.root, 'malformed-empty', []), identity), emptyGraph);
       await assertPublicProjectUnchanged(malformed);
 

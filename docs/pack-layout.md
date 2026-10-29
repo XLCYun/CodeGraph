@@ -1,4 +1,4 @@
-# Language package layout (0.1.1)
+# Language package layout (0.1.2)
 
 Each verified package exposes exactly one public entry
 `bin/codegraph-<pack-id>[.exe] analyze`. There is no required umbrella program,
@@ -9,7 +9,7 @@ final Code Graph. See [protocol.md](protocol.md).
 Every package contains the exact public descriptor `control/codegraph.json`:
 
 ```json
-{"schema_version":1,"pack_id":"rust","pack_version":"0.1.1","engine_version":"0.1.1","protocol":"codegraph.analyzer/1"}
+{"schema_version":1,"pack_id":"rust","pack_version":"0.1.2","engine_version":"0.1.2","protocol":"codegraph.analyzer/1"}
 ```
 
 The descriptor is bounded to 1 MiB and has exactly these fields. The caller verifies

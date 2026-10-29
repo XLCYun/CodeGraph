@@ -16,7 +16,7 @@ export const discoveryMilestones = {
   java: ['codegraph-java', 'project-configurations-loaded', /dev\.codegraph\.java\.Main/],
   csharp: ['codegraph-csharp-engine', 'source-text-read', /codegraph-csharp/],
   'typescript-javascript': ['codegraph-typescript-javascript', 'repository-snapshot-read', /runtime[/\\]analyzer[/\\]main\.mjs/],
-  'c-cpp': ['codegraph-clang-engine', 'compilation-database-read', /codegraph-c-cpp/],
+  'c-cpp': ['codegraph-clang-engine', 'source-selection-prepared', /codegraph-c-cpp/],
 };
 
 /** 公开消费者只保留标准 SDK 环境；生产者私有配置不能帮助安装包通过验收。 */

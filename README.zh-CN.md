@@ -16,16 +16,16 @@ CodeGraph 提供七个可独立运行的**语言分析器（Language Analyzer）
 分析器可独立于 Narrant 和 Tauri 运行，被分析目录也不必是 Git 仓库。
 代码图差异计算、多语言代码图合并由调用方实现。
 
-**当前版本**：**v0.1.1**，修复 Go 指令文本误判，支持
+**当前版本**：**v0.1.2**，支持 C/C++ 源码审查优先，并包含 Go 指令文本误判修复；支持
 **macOS ARM64** 和 **Windows x64**。分析器包经双平台 CI 验证后在
-[对应发布页](https://github.com/XLCYun/CodeGraph/releases/tag/v0.1.1) 提供下载。
-每份清单记录构建使用的完整源码提交，包与引擎版本均为 `0.1.1`，
+[对应发布页](https://github.com/XLCYun/CodeGraph/releases/tag/v0.1.2) 提供下载。
+每份清单记录构建使用的完整源码提交，包与引擎版本均为 `0.1.2`，
 协议继续使用 `codegraph.analyzer/1`。目前没有包管理器安装方式。
 从发布页下载对应归档和清单，按[分发约定](docs/distribution.md)及
-[SHA256SUMS](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.1/SHA256SUMS)
+[SHA256SUMS](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.2/SHA256SUMS)
 完成校验后，即可调用包内的独立入口。例如，Python 包提供
-[macOS ARM64 下载](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.1/python-aarch64-apple-darwin-pack.tar.gz)
-和 [Windows x64 下载](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.1/python-x86_64-pc-windows-msvc-pack.tar.gz)。
+[macOS ARM64 下载](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.2/python-aarch64-apple-darwin-pack.tar.gz)
+和 [Windows x64 下载](https://github.com/XLCYun/CodeGraph/releases/download/v0.1.2/python-x86_64-pc-windows-msvc-pack.tar.gz)。
 
 ## 选择分析器
 
@@ -96,12 +96,12 @@ Windows JSON 路径可写成 `C:/project`，省去反斜杠转义。
 
 | 请求中的 `files` | 含义 |
 | --- | --- |
-| 省略 | 按该语言支持的项目配置发现源码。 |
+| 省略 | 按该语言的选集政策发现源码。 |
 | 非空数组，如 `["src/main.ts"]` | 完整图节点严格来自这些文件；未选源码可提供语义上下文或图外符号。 |
 | `[]` | 直接返回空图，不发现项目配置或目标 SDK；仍会检查源码与安装目录的边界。 |
 
 选集路径必须唯一，并采用相对于源码根目录的 POSIX 路径格式。
-`null`、重复路径及不安全路径均无效。发现哪些源码，取决于各语言的项目配置、
+`null`、重复路径及不安全路径均无效。发现哪些源码，取决于各语言的源码选集政策、
 文件归属和包含/排除规则。具体规则见[选集政策](docs/engine-selection.md)。
 
 进程从 stdin 读取一个 UTF-8 JSON 对象，随后等待 EOF；末尾换行可省略。
@@ -143,6 +143,11 @@ Java 17 项目仍需匹配的目标 JDK；C# 需要匹配的引用程序集，
 仅安装 .NET 运行时无法提供这些程序集。目标 SDK 发现只读取已有安装，
 不会安装或升级 SDK，也不会运行项目构建脚本。
 
+C/C++ 不要求先提供 `compile_commands.json` 或安装项目头文件，就能生成源码图。
+缺少语义信息时，无法确认的片段保留为不透明节点，引用标为未解析。
+可用的编译数据库只增强可靠绑定，不决定选中源码是否进入图。
+具体约定见 [C/C++ 选集政策](docs/engine-selection.md#c--c-resolution)。
+
 ## 构建与验证
 
 使用 Node **24.18.0** 和 pnpm **11.13.1**，先按[分发说明](docs/distribution.md)
@@ -162,8 +167,8 @@ pnpm build:packs --output /absolute/fresh/codegraph-packs
 构建器使用 `--id`，工具链准备与完整验证命令使用 `--language`。
 已有产物目录不会被覆盖，每次构建应使用新的输出目录。
 
-归档与清单位于 `<output>/<id>/0.1.1/<target>/`；
-校验并解包后的分析器包位于 `<output>/smoke-installed/<id>/0.1.1/<target>/`。
+归档与清单位于 `<output>/<id>/0.1.2/<target>/`；
+校验并解包后的分析器包位于 `<output>/smoke-installed/<id>/0.1.2/<target>/`。
 
 根 Cargo workspace 只构建 TypeScript/Java 薄入口。Rust 和 Python 使用各自的
 manifest，以及 Rust **1.98.0**。所有 Cargo 命令均需经 `scripts/cargo-agent.sh`

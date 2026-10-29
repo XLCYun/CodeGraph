@@ -1,6 +1,6 @@
 # CodeGraph analyzer protocol 1
 
-This is the direct language-program contract confirmed on 2026-10-22. It supersedes the unreleased ready/cancel transport. The protocol remains `codegraph.analyzer/1`, with engine/package version `0.1.1`. The same protocol first shipped in the public `v0.1.0` prerelease. The earlier ready/cancel transport was never released and has no legacy mode.
+This is the direct language-program contract confirmed on 2026-10-22. It supersedes the unreleased ready/cancel transport. The protocol remains `codegraph.analyzer/1`, with engine/package version `0.1.2`. The same protocol first shipped in the public `v0.1.0` prerelease. The earlier ready/cancel transport was never released and has no legacy mode.
 
 ## Entry and ownership
 
@@ -24,25 +24,27 @@ All fields except `files` are required. Unknown and duplicate fields are invalid
 
 `include_tests` is boolean. `rust_dependency_scope` is `repository-only`, `standard-library` or `all-dependencies`; non-Rust analyzers ignore this required Rust-only option. Requests cannot inject commands, execution environment, compiler flags, SDK roots or internal catalogs.
 
-- Omitted `files`: use the language's configured project source discovery.
+- Omitted `files`: use the language's source discovery policy.
 - `files: []`: valid empty graph, without project configuration or SDK discovery.
 - Nonempty `files`: exact graph membership; other source may provide context or external symbols.
 - `null`, duplicates and malformed paths are invalid.
 
-Discovery uses native project configuration and existing read-only policy, not a recursive extension scan. Valid configured zero-source projects may succeed empty; missing or invalid required configuration fails. C/C++ retains its compilation-database requirements. See [selection policies](engine-selection.md).
+Discovery follows each language's [selection policy](engine-selection.md) and the existing read-only boundary. Most languages use native project configuration; C/C++ discovers source and header files directly and accepts missing compilation context. Valid zero-source projects may succeed empty. Other languages still reject missing or invalid configuration when their project model requires it.
+
+C/C++ is source-review first. Every selected file retains its original text in a `SourceFile` container. Confirmed declarations become ordinary nodes; uncertain source becomes opaque extension nodes and uncertain references remain `unresolved`. Compilation databases and installed target headers may enhance binding but never determine source membership. `#` directives are retained as source objects; a general conditional block is one opaque `ConditionalBlock` containing every branch. Canonical outer include guards are exempt so their contained declarations remain visible. Ordinary macro invocations remain in the owner's raw code, without exported expansion objects. Both ordinary and opaque objects put normalized self-content in `code`; `source` remains display text. No project configuration or build command is executed.
 
 ## Final identity and result
 
 Every final result carries compiled identity: `protocol`, `engine_version`, `pack_id`. This replaces the removed ready message. The caller checks all three against its fixed package before using the result. An invalid request cannot choose or overwrite this identity.
 
 ```json
-{"protocol":"codegraph.analyzer/1","engine_version":"0.1.1","pack_id":"rust","type":"completed","id":"example-1","outcome":"ok","graph":{"root_contains":[],"nodes":[],"external_symbols":[]}}
+{"protocol":"codegraph.analyzer/1","engine_version":"0.1.2","pack_id":"rust","type":"completed","id":"example-1","outcome":"ok","graph":{"root_contains":[],"nodes":[],"external_symbols":[]}}
 ```
 
 Success exits 0. A handled failure has no graph and exits 1:
 
 ```json
-{"protocol":"codegraph.analyzer/1","engine_version":"0.1.1","pack_id":"rust","type":"completed","id":"example-1","outcome":"error","error":{"code":"analysis_failed","message":"源码分析失败"}}
+{"protocol":"codegraph.analyzer/1","engine_version":"0.1.2","pack_id":"rust","type":"completed","id":"example-1","outcome":"error","error":{"code":"analysis_failed","message":"源码分析失败"}}
 ```
 
 When no valid request ID was accepted, `id` is null. Stable error codes remain `invalid_request`, `incompatible_protocol`, `invalid_input`, `invalid_pack`, `analysis_failed`, `resource_limit`, `timeout`, `io_failure`, `cleanup_failed`, `internal_failure`; messages may evolve. No graph is attached to errors. Normal unresolved symbols are valid graph data, not whole-analysis failure.

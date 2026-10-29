@@ -299,7 +299,7 @@ func publicCode(code string) string {
 
 // runProtocol 等待真实 EOF 后在当前 goroutine 完成一次分析，EOF 永不触发取消。
 func runProtocol(in io.Reader, out io.Writer) error {
-	result := publicResult{Protocol: protocol, EngineVersion: "0.1.1", PackID: "go", Type: "completed", Outcome: "error"}
+	result := publicResult{Protocol: protocol, EngineVersion: "0.1.2", PackID: "go", Type: "completed", Outcome: "error"}
 	data, err := io.ReadAll(io.LimitReader(in, maxPublicBytes+1))
 	if err != nil {
 		result.Error = &publicError{"io_failure", err.Error()}
@@ -364,7 +364,7 @@ func runProtocol(in io.Reader, out io.Writer) error {
 func runCLI(args []string, in io.Reader, out, diagnostic io.Writer) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "--version") || len(args) == 2 && args[0] == "analyze" && args[1] == "--help" {
 		if args[0] == "--version" {
-			fmt.Fprintln(out, "codegraph-go 0.1.1")
+			fmt.Fprintln(out, "codegraph-go 0.1.2")
 		} else {
 			fmt.Fprintln(out, "Usage: codegraph-go analyze\nReads one UTF-8 JSON request followed by EOF.")
 		}

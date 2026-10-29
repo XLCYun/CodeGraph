@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cstdlib>
 #include <fstream>
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/StringSaver.h>
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -80,11 +82,26 @@ static std::string sourceLanguage(const fs::path &file,const std::string &driver
 }
 // 编译数据库参数是数据；只重建经过白名单校验的编译上下文。
 static Config configuration(Request &r,const j::Object &o,size_t index) {
-  for(auto &kv:o) require(kv.first=="directory" || kv.first=="file" || kv.first=="arguments" || kv.first=="output","unsupported compilation database field","unsupported_configuration");
+  for(auto &kv:o) require(kv.first=="directory" || kv.first=="file" || kv.first=="arguments" || kv.first=="command" || kv.first=="output","unsupported compilation database field","unsupported_configuration");
   Config c; c.id="tu-"+std::to_string(index); c.directory=real(fs::u8path(str(o,"directory"))); require(under(c.directory,r.root),"CDB directory outside repository","unsupported_configuration");
   auto path=fs::u8path(str(o,"file")); c.file=real(path.is_absolute()?path:c.directory/path); require(under(c.file,r.root) && !excluded(c.file.lexically_relative(r.root)),"CDB source outside allowed repository","unsupported_configuration");
-  auto args=o.getArray("arguments"); require(args && !args->empty(),"CDB requires arguments array, command strings are not executable input","unsupported_configuration");
-  std::vector<std::string> input; for(auto &v:*args) { r.checkpoint(); auto s=v.getAsString(); require(s.has_value() && s->find('\0')==llvm::StringRef::npos,"invalid CDB argument"); input.push_back(s->str()); }
+  std::vector<std::string> input;
+  if(auto args=o.getArray("arguments")) {
+    require(!args->empty(),"CDB arguments must not be empty","unsupported_configuration");
+    for(auto &v:*args) { r.checkpoint(); auto s=v.getAsString(); require(s.has_value() && s->find('\0')==llvm::StringRef::npos,"invalid CDB argument"); input.push_back(s->str()); }
+  } else {
+    require(!o.get("arguments"),"CDB arguments must be an array","unsupported_configuration");
+    auto command=o.getString("command"); require(command && !command->empty() && command->find('\0')==llvm::StringRef::npos,"CDB requires arguments or command","unsupported_configuration");
+    // 编译数据库的 command 只解码为参数；不交给 shell，也不执行其中的程序。
+    llvm::BumpPtrAllocator allocator; llvm::StringSaver saver(allocator); llvm::SmallVector<const char *,32> decoded;
+#ifdef _WIN32
+    llvm::cl::TokenizeWindowsCommandLine(*command,saver,decoded);
+#else
+    llvm::cl::TokenizeGNUCommandLine(*command,saver,decoded);
+#endif
+    for(auto argument:decoded) input.emplace_back(argument);
+    require(!input.empty(),"CDB command must not be empty","unsupported_configuration");
+  }
   auto driver=fs::u8path(input.front()).filename().u8string(); require(driver=="clang" || driver=="clang++" || driver=="clang.exe" || driver=="clang++.exe" || driver=="cc" || driver=="c++" || driver=="gcc" || driver=="g++","compiler wrappers are unsupported","unsupported_configuration");
   std::string triple,standard,explicitLanguage; std::vector<fs::path> roots; bool sourceSeen=false;
   // 参数值必须存在，禁止忽略截断的命令。
@@ -145,7 +162,7 @@ static Config configuration(Request &r,const j::Object &o,size_t index) {
   fixed.insert(fixed.end(),c.args.begin(),c.args.end()); c.args=std::move(fixed); return c;
 }
 // 真实 CDB 已读取后发布只读验收的外部观察；硬链接原子发布且绝不覆盖旧目标。
-static void observeDiscovery(const std::string &id) {
+void observeDiscovery(const std::string &id,const std::string &milestone) {
 #ifdef _WIN32
   auto value=_wgetenv(L"CODEGRAPH_TEST_DISCOVERY_PROBE"); if(!value) return;
   auto destination=fs::path(value);
@@ -156,7 +173,7 @@ static void observeDiscovery(const std::string &id) {
   auto pid=getpid();
 #endif
   auto pending=destination.parent_path()/"reached.pending";
-  auto bytes=jsonText(j::Object{{"schema_version",1},{"helper_id","codegraph-clang-engine"},{"request_id",id},{"pid",static_cast<int64_t>(pid)},{"milestone","compilation-database-read"}});
+  auto bytes=jsonText(j::Object{{"schema_version",1},{"helper_id","codegraph-clang-engine"},{"request_id",id},{"pid",static_cast<int64_t>(pid)},{"milestone",milestone}});
   require(bytes.size()<=4096,"acceptance observation exceeds limit");
   require(fs::create_directory(pending),"acceptance observation already exists");
   try {
