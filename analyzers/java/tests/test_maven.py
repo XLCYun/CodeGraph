@@ -34,12 +34,12 @@ class MavenTests(unittest.TestCase):
     def settings(self, extra=''):
         write(self.home, '.m2/settings.xml', '<settings><localRepository>' + str(self.local) + '</localRepository>' + extra + '</settings>')
 
-    def public(self, files=None, tests=False):
+    def public(self, files=None, tests=False, jvm_options=()):
         message = {'protocol': 'codegraph.analyzer/1', 'type': 'analyze', 'id': 'maven', 'repository_root': str(self.root),
                    'options': {'include_tests': tests, 'rust_dependency_scope': 'repository-only'}}
         if files is not None: message['files'] = files
         env = dict(os.environ, CODEGRAPH_JAVA_TARGET_JDK=str(TARGET))
-        result = subprocess.run([PUBLIC_COMMAND[0], '-Duser.home=' + str(self.home), *PUBLIC_COMMAND[1:], 'analyze'],
+        result = subprocess.run([PUBLIC_COMMAND[0], '-Duser.home=' + str(self.home), *jvm_options, *PUBLIC_COMMAND[1:], 'analyze'],
                                 input=json.dumps(message), text=True, capture_output=True, env=env, timeout=40)
         self.assertEqual(result.stderr, '', result.stderr)
         self.assertEqual(len(result.stdout.splitlines()), 1, result.stdout)
@@ -151,6 +151,11 @@ class MavenTests(unittest.TestCase):
         self.assertIn('PASS', result.stdout)
 
     def test_changed_source_during_public_model_import_fails(self):
+        result = self.import_with_mutation(lambda: write(self.root, 'src/main/java/p/App.java', 'package p; class Changed {}'))
+        self.assertEqual(result['outcome'], 'error', result)
+        self.assertNotIn('graph', result)
+
+    def import_with_mutation(self, mutate, settings_extra='', jvm_options=()):
         import http.server
         import threading
         self.install('parent', content='<packaging>pom</packaging>')
@@ -165,22 +170,21 @@ class MavenTests(unittest.TestCase):
                 super().do_GET()
         server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
-        self.settings('<mirrors><mirror><id>fixture</id><mirrorOf>*</mirrorOf><url>http://127.0.0.1:' + str(server.server_port) + '</url></mirror></mirrors>')
+        self.settings('<mirrors><mirror><id>fixture</id><mirrorOf>*</mirrorOf><url>http://127.0.0.1:' + str(server.server_port) + '</url></mirror></mirrors>' + settings_extra)
         write(self.root, 'pom.xml', '<project><modelVersion>4.0.0</modelVersion><parent><groupId>fixture</groupId><artifactId>parent</artifactId><version>1</version><relativePath/></parent><artifactId>app</artifactId></project>')
         write(self.root, 'src/main/java/p/App.java', 'package p; class App {}')
         result = []; failures = []
         def analyze():
-            try: result.append(self.public())
+            try: result.append(self.public(jvm_options=jvm_options))
             except BaseException as error: failures.append(error)
         worker = threading.Thread(target=analyze); worker.start()
         try:
             self.assertTrue(ready.wait(15), 'Resolver did not request actual parent')
-            write(self.root, 'src/main/java/p/App.java', 'package p; class Changed {}')
+            mutate()
         finally:
             resume.set(); worker.join(20); server.shutdown(); server.server_close(); thread.join(5)
         if failures: raise failures[0]
-        self.assertEqual(result[0]['outcome'], 'error', result)
-        self.assertNotIn('graph', result[0])
+        return result[0]
 
     def test_reactor_bom_and_transitive_sources(self):
         write(self.root, 'pom.xml', pom('root', '<packaging>pom</packaging><modules><module>app</module><module>middle</module><module>lib</module><module>bom</module></modules>'))
@@ -215,3 +219,111 @@ class MavenTests(unittest.TestCase):
         write(self.root, 'pom.xml', pom('app', '<build><sourceDirectory>vendor/code</sourceDirectory></build>'))
         write(self.root, 'vendor/code/p/App.java', 'package p; class App { void helper(){} void run(){helper();} }')
         self.assertTrue(any(t['kind'] == 'node' for t in self.calls(self.public(), '/method:run()')))
+
+    def test_source_target_and_toolchain_keep_distinct_api_evidence(self):
+        write(self.root, 'src/main/java/p/App.java', 'package p; class App { Object run(){return java.util.List.of();} }')
+        for toolchain in ('', '<jdkToolchain><version>17</version></jdkToolchain>'):
+            with self.subTest(toolchain=bool(toolchain)):
+                write(self.root, 'pom.xml', pom('app', '<build><plugins><plugin><artifactId>maven-compiler-plugin</artifactId><configuration><source>8</source><target>8</target>' + toolchain + '</configuration></plugin></plugins></build>'))
+                result = self.public()
+                self.assertTrue(any(t['kind'] == 'external' for t in self.calls(result, '/method:run()')), result)
+                platform = node(result['graph'], '/method:run()')['extensions']['java.platforms'][0]
+                self.assertEqual(platform['target'], 'unknown')
+                self.assertEqual(platform['api_source'], 'toolchain' if toolchain else 'default')
+                self.assertEqual(platform['compiler']['source'], '8')
+                self.assertEqual(platform['compiler']['target'], '8')
+                self.assertEqual(platform['version'].split('.')[0], '17')
+                self.assertNotIn('release', platform['compiler'])
+                if toolchain: self.assertEqual(platform['compiler']['toolchain'], '17')
+
+    def test_empty_directory_file_profile_conditions(self):
+        write(self.root, 'src/main/java/p/App.java', 'package p; class App {}')
+        directory = self.root / 'enable-dir'
+        for exists in (False, True):
+            if exists: directory.mkdir()
+            for condition in ('exists', 'missing'):
+                with self.subTest(exists=exists, condition=condition):
+                    write(self.root, 'pom.xml', pom('app', '<profiles><profile><id>directory</id><activation><file><' + condition + '>enable-dir</' + condition + '></file></activation><properties><maven.compiler.release>17</maven.compiler.release></properties></profile></profiles>'))
+                    result = self.public()
+                    self.assertEqual(result['outcome'], 'ok', result)
+                    active = exists if condition == 'exists' else not exists
+                    self.assertEqual(result['graph']['nodes'][0]['extensions']['java.platforms'][0]['target'], '17' if active else 'unknown')
+
+    def test_interpolated_reactor_bom_is_order_independent(self):
+        write(self.root, 'bom/pom.xml', pom('bom', '<packaging>pom</packaging><properties><revision>1</revision></properties><dependencyManagement><dependencies>' + dependency('lib') + '</dependencies></dependencyManagement>', version='${revision}'))
+        write(self.root, 'lib/pom.xml', pom('lib'))
+        write(self.root, 'app/pom.xml', pom('app', '<dependencyManagement><dependencies>' + dependency('bom', 'import', extra='<type>pom</type>') + '</dependencies></dependencyManagement><dependencies>' + dependency('lib', version=None) + '</dependencies>'))
+        write(self.root, 'lib/src/main/java/p/Lib.java', 'package p; public class Lib { public static void value(){} }')
+        write(self.root, 'app/src/main/java/p/App.java', 'package p; class App { void run(){Lib.value();} }')
+        graphs = []
+        for order in [('app', 'bom', 'lib'), ('bom', 'app', 'lib')]:
+            write(self.root, 'pom.xml', pom('root', '<packaging>pom</packaging><modules>' + ''.join('<module>' + m + '</module>' for m in order) + '</modules>'))
+            result = self.public()
+            self.assertTrue(any(t['kind'] == 'node' for t in self.calls(result, '/method:run()')), result)
+            graphs.append(result['graph'])
+        self.assertEqual(graphs[0], graphs[1])
+
+    def test_broken_descriptor_preserves_healthy_dependency(self):
+        self.install('api', 'package ext; public class Api { public static void value(){} }')
+        self.install('broken', content='<parent><groupId>fixture</groupId><artifactId>unavailable</artifactId><version>1</version><relativePath/></parent>')
+        self.settings('<mirrors><mirror><id>fixture</id><mirrorOf>*</mirrorOf><url>' + self.remote.as_uri() + '</url></mirror></mirrors>')
+        write(self.root, 'src/main/java/p/App.java', 'package p; class App { void run(){ext.Api.value();} }')
+        for broken in (False, True):
+            write(self.root, 'pom.xml', pom('app', '<dependencies>' + dependency('api') + (dependency('broken') if broken else '') + '</dependencies>'))
+            result = self.public()
+            self.assertTrue(any(t['kind'] == 'external' for t in self.calls(result, '/method:run()')), result)
+            provenance = node(result['graph'], '/method:run()')['extensions']['java.platforms'][0]
+            self.assertEqual(provenance['dependencies_complete'], not broken)
+
+    def security_fixture(self):
+        from test_helper import HELPER, CP
+        result = subprocess.run([str(RUNTIME / 'bin/java'), '-cp', str(HELPER / 'build/test-classes') + os.pathsep +
+                                 str(HELPER / 'build/classes') + os.pathsep + CP, 'dev.codegraph.java.SecurityFixtureWriter', str(self.home)],
+                                text=True, capture_output=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, '')
+        return (self.home / 'servers.xml').read_text()
+
+    def test_security_relocation_and_override_inputs_are_verified(self):
+        for override in (False, True):
+            with self.subTest(override=override):
+                servers = self.security_fixture()
+                master = self.home / 'master.xml'
+                jvm = ['-Dsettings.security=' + str(master)] if override else []
+                if override:
+                    write(self.home, '.m2/settings-security.xml', 'unused-invalid-standard-file')
+                write(self.root, 'pom.xml', pom('app'))
+                write(self.root, 'src/main/java/p/App.java', 'package p; class App {}')
+                self.settings('<offline>true</offline>' + servers)
+                self.assertEqual(self.public(jvm_options=jvm)['outcome'], 'ok')
+                # Force a new remote parent request on each pass rather than consume the prior cached POM.
+                shutil.rmtree(self.local, ignore_errors=True)
+                result = self.import_with_mutation(lambda: master.write_text(master.read_text() + '\n'), servers, jvm)
+                self.assertEqual(result['outcome'], 'error', result)
+                self.assertNotIn('fixture-password', json.dumps(result))
+                self.assertNotIn('fixture-master', json.dumps(result))
+                self.assertNotIn('graph', result)
+
+    def test_cached_file_profile_condition_is_frozen(self):
+        write(self.root, 'vendor/enable-profile', 'present')
+        write(self.root, 'src/main/java/p/App.java', 'package p; class App {}')
+        write(self.root, 'pom.xml', pom('app', '<profiles><profile><id>marker</id><activation><file><exists>${basedir}/vendor/enable-profile</exists></file></activation><properties><maven.compiler.release>17</maven.compiler.release></properties></profile></profiles>'))
+        result = self.public()
+        self.assertEqual(result['outcome'], 'ok', result)
+        self.assertEqual(result['graph']['nodes'][0]['extensions']['java.platforms'][0]['target'], '17')
+
+    def test_file_profile_io_failure_cannot_become_explicit_fallback(self):
+        blocked = self.home / 'blocked'
+        blocked.mkdir()
+        blocked.chmod(0)
+        try:
+            if os.access(blocked, os.R_OK):
+                self.skipTest('host cannot enforce fixture directory permissions')
+            write(self.root, 'src/main/java/p/App.java', 'package p; class App {}')
+            write(self.root, 'pom.xml', pom('app', '<profiles><profile><id>io</id><activation><file><exists>' + str(blocked / 'flag') + '</exists></file></activation></profile></profiles>'))
+            result = self.public(['src/main/java/p/App.java'])
+            self.assertEqual(result['outcome'], 'error', result)
+            self.assertEqual(result['error']['code'], 'analysis_failed')
+            self.assertIn('cannot freeze or verify', result['error']['message'])
+        finally:
+            blocked.chmod(0o700)

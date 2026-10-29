@@ -47,11 +47,11 @@ standalone 声明可为不同源码根指定不同 release：
 
 Maven 模块通过有效 POM 获得继承、属性、profiles 和编译器配置。每份配置使用独立的 JDT 语义环境与 binding 索引，来源证据列出各自的平台 ID。同一物理源码可属于多份配置，最终图仍按原有身份与关系并集规则合并；某配置中的未知关系不会被另一配置的确定关系抹去。
 
-Maven 的 main/test 各自形成独立 source set。测试可以看到本模块生产源码；跨模块可见性由 Resolver 的依赖图决定。reactor 模块不要求先编译或安装，生产源码不会看见测试源码和 test 依赖。release、source、target、toolchain 与 encoding 分别保留；只有 release 开启 JDT 的 release 限制。缺失依赖会标记模型不完整，已确认的成员仍可分析。
+Maven 的 main/test 各自形成独立 source set。测试可以看到本模块生产源码；跨模块可见性由 Resolver 的依赖图决定。reactor 模块不要求先编译或安装，生产源码不会看见测试源码和 test 依赖。release、source、target、toolchain 与 encoding 分别保留。API 平台只由 release 或 toolchain 选择；仅有 source/target 时使用默认平台，目标仍为 unknown，字节码 target 不作为 API 限制。只有 release 开启 JDT 的 release 限制。节点的 `java.platforms` 记录 `api_source`、独立的 `compiler` 字段和 `dependencies_complete`。缺失依赖会标记模型不完整，Resolver 已确认的健康依赖分支仍保留。reactor 先用 Maven 两阶段构建的第一阶段取得有效坐标，再导入 BOM，属性版本不受模块声明顺序影响。
 
-用户 `~/.m2/settings.xml`、`MAVEN_HOME/conf/settings.xml`、mirrors、活动 proxies、认证、离线模式和本地仓库参与导入。密码按标准 `~/.m2/settings-security.xml` 解密，诊断不输出凭据。网络连接和读取设有有界超时；请求期限及调用方取消仍适用。有效 POM 不等于插件执行模型，动态插件生成的源码根不在本阶段的保证范围内。
+用户 `~/.m2/settings.xml`、`MAVEN_HOME/conf/settings.xml`、mirrors、活动 proxies、认证、离线模式和本地仓库参与导入。密码按标准 `~/.m2/settings-security.xml` 解密；`settings.security` 覆盖及本地 relocation 链在读取前逐项监视，远程安全文件位置明确拒绝，诊断不输出凭据。网络连接和读取设有有界超时；请求期限及调用方取消仍适用。有效 POM 不等于插件执行模型，动态插件生成的源码根不在本阶段的保证范围内。
 
-分析前建立临时输入副本，冻结源码及构建配置，导入和 JDT 均在副本上工作。导入后、解析前后核验原输入与副本；原文件或副本被修改时失败，不把不同版本的 AST 偏移和原文拼接起来。副本不是沙箱。`.git` 不参与复制；`.gradle`、`.idea`、`.tools`、`vendor` 和 `node_modules` 只复制源码及构建声明，避免复制缓存二进制。项目声明的源码成员及明确选中的文件仍然优先。每文件上限 32 MiB、输入总量 512 MiB、文件数 100,000。正常及可处理失败都会关闭 Resolver 并删除副本。显式坏模型回退先复核输入，丢弃失败配置，只用明确选集重建上下文。
+分析前建立临时输入副本，冻结源码及构建配置，导入和 JDT 均在副本上工作。导入后、解析前后核验原输入与副本；原文件或副本被修改时失败，不把不同版本的 AST 偏移和原文拼接起来。副本不是沙箱。.git 的目录存在性保留，内部文件默认不复制；`.gradle`、`.idea`、`.tools`、`vendor` 和 `node_modules` 只复制源码及构建声明，避免复制缓存二进制。项目声明的源码成员及明确选中的文件仍然优先。空目录与文件 profile 的存在/缺失条件也会冻结、复核；实际引用的缓存内 marker 会补入副本。工具输出置于独立目录，不改变模型读取的输入目录。每文件上限 32 MiB、输入总量 512 MiB、文件数 100,000。正常及可处理失败都会关闭 Resolver 并删除副本。显式坏模型回退先复核输入，丢弃失败配置，只用明确选集重建上下文。
 
 ## 编译与验证
 
@@ -92,4 +92,4 @@ Java 8 夹具未配置且未在 `.tools` 中找到时，对应测试会明确跳
 2026-10-22 的 PR CI 39777180923 中 macOS 成功，Windows 因 Python junction 诊断断言失败；
 完整 Windows 门禁仍须修复后的自动 CI 验证，首个固定发布尚未完成。
 
-Maven 依赖的精确版本许可证、版权及来源在 `licenses/maven/manifest.json` 中列明，并随语言包交付。打包只复制锁文件中的 JAR，不带缓存目录里的其他版本或辅助插件依赖。
+Maven 依赖的精确版本许可证、版权及来源在 `licenses/maven/manifest.json` 中列明，并随语言包交付。打包前后逐项验证 `evidence` 与 `fullLicenseTexts` 两组引用和 SHA-256；解包测试再次验证完整清单。打包只复制锁文件中的 JAR，不带缓存目录里的其他版本或辅助插件依赖。

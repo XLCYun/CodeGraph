@@ -9,7 +9,7 @@ import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import { packageDirectory } from '../language-packs/build-language-support-packs.mjs';
-import { copyToolTree, smokeAnalyzer, csharpFixturePlatforms, javaFixturePlatforms, goFixturePlatforms } from '../language-packs/native-language-support-packs.mjs';
+import { stageJavaLicenses, verifyJavaLicenseBundle, copyToolTree, smokeAnalyzer, csharpFixturePlatforms, javaFixturePlatforms, goFixturePlatforms } from '../language-packs/native-language-support-packs.mjs';
 import { prepareDotnetFixtureReferences } from '../language-packs/provision-native-toolchains.mjs';
 import { systemTar } from '../language-packs/system-tar.mjs';
 
@@ -269,4 +269,27 @@ test('Cargo license packaging fetches uncached locked metadata without distribut
     if (server) await new Promise(resolve => server.close(resolve));
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+
+test('Java license package includes and verifies every evidence and full-text reference', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codegraph-java-licenses-'));
+  try {
+    const source = fileURLToPath(new URL('../../analyzers/java/licenses/', import.meta.url));
+    const payload = path.join(root, 'payload');
+    const bundle = path.join(payload, 'licenses/Java-components');
+    await stageJavaLicenses(source, bundle);
+    assert.equal(await verifyJavaLicenseBundle(bundle), 114);
+    const target = process.platform === 'win32' ? 'x86_64-pc-windows-msvc' : 'aarch64-apple-darwin';
+    const output = await packageDirectory({ id: 'java', version: '0.1.2', target }, payload, path.join(root, 'package'));
+    const extracted = path.join(root, 'extracted');
+    await fs.mkdir(extracted);
+    execFileSync(systemTar(), ['-xzf', path.join(output, 'pack.tar.gz'), '-C', extracted]);
+    const installed = path.join(extracted, 'licenses/Java-components');
+    assert.equal(await verifyJavaLicenseBundle(installed), 114);
+    await fs.rm(path.join(installed, 'maven/common/Apache-2.0.txt'));
+    await assert.rejects(verifyJavaLicenseBundle(installed), { code: 'ENOENT' });
+    await fs.writeFile(path.join(bundle, 'maven/common/EPL-2.0.html'), 'tampered');
+    await assert.rejects(stageJavaLicenses(bundle, path.join(root, 'invalid')), /checksum mismatch/);
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
 });

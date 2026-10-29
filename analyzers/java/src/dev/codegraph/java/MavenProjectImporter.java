@@ -42,6 +42,9 @@ final class MavenProjectImporter {
     private final List<Profile> profiles = new ArrayList<>();
     private final Map<String, Module> modules = new LinkedHashMap<>();
     private final Map<String, Path> reactorPoms = new LinkedHashMap<>();
+    private final Map<Path, ModelBuildingRequest> preparedRequests = new LinkedHashMap<>();
+    private final Map<Path, ModelBuildingResult> preparedModels = new LinkedHashMap<>();
+    private final Set<Path> reactorInputs = new LinkedHashSet<>();
     private final Set<Path> visited = new HashSet<>();
     private final List<RemoteRepository> repositories = new ArrayList<>();
     private record Module(String id, Model model, Path pom, List<String> inputs) {}
@@ -52,11 +55,13 @@ final class MavenProjectImporter {
             MavenProjectImporter importer = new MavenProjectImporter(snapshot, platforms, checkpoint);
             try {
                 importer.index(snapshot.root().resolve("pom.xml"), new HashSet<>());
+                importer.prepareCoordinates();
                 importer.read(snapshot.root().resolve("pom.xml"));
                 snapshot.verify();
                 return importer.result();
             } finally { importer.system.shutdown(); }
-        } catch (Failure e) { throw e; }
+        } catch (SnapshotFailure e) { throw e.failure; }
+        catch (Failure e) { throw e; }
         catch (IOException e) { throw new Failure("object_extraction_failed", "cannot read Maven model input"); }
         catch (SettingsBuildingException | ModelBuildingException e) {
             infrastructure(e);
@@ -65,6 +70,7 @@ final class MavenProjectImporter {
         }
     }
 
+    @SuppressWarnings("deprecation") // Maven 3.9.x embeds Resolver through its fixed ServiceLocator API.
     private MavenProjectImporter(SourceSnapshot snapshot, List<SdkDiscovery.Candidate> platforms,
                                  ProjectModel.Checkpoint checkpoint) throws Failure, SettingsBuildingException {
         this.snapshot = snapshot;
@@ -79,7 +85,8 @@ final class MavenProjectImporter {
         Path home = Path.of(System.getProperty("user.home"));
         Path user = home.resolve(".m2/settings.xml");
         Path security = home.resolve(".m2/settings-security.xml");
-        snapshot.watch(user); snapshot.watch(security);
+        snapshot.watch(user);
+        watchSecurity(System.getProperty("settings.security", security.toString()));
         DefaultSettingsBuildingRequest request = new DefaultSettingsBuildingRequest();
         request.setUserSettingsFile(user.toFile());
         String mavenHome = System.getenv("MAVEN_HOME");
@@ -159,6 +166,39 @@ final class MavenProjectImporter {
         });
     }
 
+    /** Follow the same local security locations as SecDispatcher, watching each before parsing it. */
+    private void watchSecurity(String location) throws Failure {
+        if (location.startsWith("~")) location = System.getProperty("user.home") + location.substring(1);
+        Set<Path> chain = new HashSet<>();
+        while (location != null) {
+            checkpoint.check();
+            Path path;
+            try {
+                if (location.contains("://")) {
+                    var uri = java.net.URI.create(location);
+                    if (!"file".equalsIgnoreCase(uri.getScheme())) throw new IllegalArgumentException();
+                    path = Path.of(uri);
+                } else path = Path.of(location);
+                path = path.toAbsolutePath().normalize();
+            } catch (IllegalArgumentException e) {
+                throw new Failure("unsupported_configuration", "unsupported Maven security location");
+            }
+            if (!chain.add(path) || chain.size() > 32)
+                throw new Failure("unsupported_configuration", "cyclic or excessive Maven security relocation");
+            snapshot.watch(path);
+            if (!Files.exists(path)) return; // Plaintext settings do not require a master file.
+            try (InputStream stream = Files.newInputStream(path)) {
+                location = new org.sonatype.plexus.components.sec.dispatcher.model.io.xpp3.SecurityConfigurationXpp3Reader()
+                    .read(stream).getRelocation();
+            } catch (IOException e) {
+                throw new Failure("object_extraction_failed", "cannot read Maven security configuration");
+            } catch (org.codehaus.plexus.util.xml.pull.XmlPullParserException e) {
+                throw new Failure("unsupported_configuration", "invalid Maven security configuration");
+            }
+        }
+        snapshot.verify();
+    }
+
     private Profile settingsProfile(org.apache.maven.settings.Profile value) {
         Profile profile = new Profile();
         profile.setId(value.getId()); profile.setProperties(value.getProperties());
@@ -205,6 +245,7 @@ final class MavenProjectImporter {
         if (indexed.size() > 1000) throw new Failure("resource_limit", "too many Maven modules");
         snapshot.validatePath(root.relativize(pom).toString().replace('\\', '/'), false);
         ProjectModel.checkedFile(snapshot.original(), root.relativize(pom).toString().replace('\\', '/'));
+        reactorInputs.add(pom);
         Model raw = raw(pom);
         String group = raw.getGroupId() == null && raw.getParent() != null ? raw.getParent().getGroupId() : raw.getGroupId();
         String version = raw.getVersion() == null && raw.getParent() != null ? raw.getParent().getVersion() : raw.getVersion();
@@ -224,6 +265,78 @@ final class MavenProjectImporter {
         }
     }
 
+    private static final class SnapshotFailure extends RuntimeException {
+        final Failure failure;
+        SnapshotFailure(Failure failure) { super(failure); this.failure = failure; }
+    }
+
+    /** Wrap only file activation; Maven still owns interpolation and the activation decision. */
+    private ModelBuilder modelBuilder() {
+        return new DefaultModelBuilderFactory() {
+            @Override protected org.apache.maven.model.profile.activation.ProfileActivator[] newProfileActivators() {
+                var activators = super.newProfileActivators();
+                var interpolator = newProfileActivationFilePathInterpolator();
+                for (int i = 0; i < activators.length; i++) {
+                    var delegate = activators[i];
+                    if (!(delegate instanceof org.apache.maven.model.profile.activation.FileProfileActivator)) continue;
+                    activators[i] = new org.apache.maven.model.profile.activation.ProfileActivator() {
+                        public boolean presentInConfig(Profile profile, org.apache.maven.model.profile.ProfileActivationContext context,
+                                                       ModelProblemCollector problems) {
+                            return delegate.presentInConfig(profile, context, problems);
+                        }
+                        public boolean isActive(Profile profile, org.apache.maven.model.profile.ProfileActivationContext context,
+                                                ModelProblemCollector problems) {
+                            ActivationFile file = profile.getActivation() == null ? null : profile.getActivation().getFile();
+                            if (file != null) for (String expression : new String[] { file.getExists(), file.getMissing() }) {
+                                if (expression == null) continue;
+                                try {
+                                    String resolved = interpolator.interpolate(expression, context);
+                                    if (resolved != null && !resolved.contains("${")) snapshot.watchCondition(Path.of(resolved));
+                                } catch (Failure e) { throw new SnapshotFailure(e); }
+                                catch (org.codehaus.plexus.interpolation.InterpolationException e) { /* Maven reports malformed expressions. */ }
+                            }
+                            return delegate.isActive(profile, context, problems);
+                        }
+                    };
+                }
+                return activators;
+            }
+        }.newInstance();
+    }
+
+    /** Maven phase one performs profiles, inheritance and interpolation before BOM imports (phase two). */
+    private void prepareCoordinates() throws Failure, IOException, ModelBuildingException {
+        while (!preparedModels.keySet().containsAll(reactorInputs)) {
+            boolean progressed = false;
+            ModelBuildingException deferred = null;
+            for (Path pom : List.copyOf(reactorInputs)) {
+                if (preparedModels.containsKey(pom)) continue;
+                checkpoint.check();
+                validateLocalParent(pom, new HashSet<>());
+                DefaultModelBuildingRequest request = new DefaultModelBuildingRequest();
+                request.setPomFile(pom.toFile());
+                request.setModelResolver(new Resolver(repositories));
+                request.setSystemProperties(properties);
+                request.setProfiles(profiles);
+                request.setActiveProfileIds(settings.getActiveProfiles());
+                request.setValidationLevel(ModelBuildingRequest.VALIDATION_LEVEL_MAVEN_3_1);
+                request.setProcessPlugins(false);
+                request.setTwoPhaseBuilding(true);
+                ModelBuildingResult built;
+                try { built = modelBuilder().build(request); }
+                catch (ModelBuildingException e) { infrastructure(e); deferred = e; continue; }
+                Model model = built.getEffectiveModel();
+                reactorPoms.put(key(model.getGroupId(), model.getArtifactId(), model.getVersion()), pom);
+                preparedRequests.put(pom, request);
+                preparedModels.put(pom, built);
+                progressed = true;
+                Set<Path> indexed = new HashSet<>();
+                for (String child : model.getModules()) index(pom.getParent().resolve(child).resolve("pom.xml"), indexed);
+            }
+            if (!progressed && deferred != null) throw deferred;
+        }
+    }
+
     private void read(Path pom) throws Failure, IOException, ModelBuildingException {
         checkpoint.check();
         pom = pom.normalize();
@@ -234,15 +347,9 @@ final class MavenProjectImporter {
         if (!visited.add(pom)) throw new Failure("unsupported_configuration", "cyclic Maven modules");
         if (visited.size() > 1000) throw new Failure("resource_limit", "too many Maven modules");
         validateLocalParent(pom, new HashSet<>());
-        DefaultModelBuildingRequest request = new DefaultModelBuildingRequest();
-        request.setPomFile(pom.toFile());
-        request.setModelResolver(new Resolver(repositories));
-        request.setSystemProperties(properties);
-        request.setProfiles(profiles);
-        request.setActiveProfileIds(settings.getActiveProfiles());
-        request.setValidationLevel(ModelBuildingRequest.VALIDATION_LEVEL_MAVEN_3_1);
-        request.setProcessPlugins(false);
-        ModelBuildingResult built = new DefaultModelBuilderFactory().newInstance().build(request);
+        if (!preparedModels.containsKey(pom)) prepareCoordinates();
+        ModelBuildingRequest request = preparedRequests.get(pom);
+        ModelBuildingResult built = modelBuilder().build(request, preparedModels.get(pom));
         Model model = built.getEffectiveModel();
         List<String> inputs = new ArrayList<>();
         for (String id : built.getModelIds()) {
@@ -257,7 +364,7 @@ final class MavenProjectImporter {
         Collections.reverse(inputs);
         String moduleId = "java-config:" + (pom.getParent().equals(root) ? "." : root.relativize(pom.getParent()).toString().replace('\\', '/'));
         // Resolver consumes the already effective reactor POM; no installation or compiled artifacts needed.
-        Path effective = root.resolve(".codegraph-models/" + modules.size() + ".pom");
+        Path effective = snapshot.outputRoot().resolve(modules.size() + ".pom");
         Files.createDirectories(effective.getParent());
         Model flat = model.clone(); flat.setParent(null); flat.setProfiles(List.of());
         try (Writer writer = Files.newBufferedWriter(effective)) { new MavenXpp3Writer().write(writer, flat); }
@@ -310,8 +417,13 @@ final class MavenProjectImporter {
             for (Dependency dependency : model.getDependencies()) collect.addDependency(convert(dependency));
             if (model.getDependencyManagement() != null)
                 for (Dependency dependency : model.getDependencyManagement().getDependencies()) collect.addManagedDependency(convert(dependency));
-            try {
-                CollectResult collected = system.collectDependencies(session, collect);
+            CollectResult collected;
+            try { collected = system.collectDependencies(session, collect); }
+            catch (DependencyCollectionException e) {
+                infrastructure(e); checkpoint.check(); complete = false;
+                collected = e.getResult();
+            }
+            if (collected != null && collected.getRoot() != null) {
                 var filter = DependencyFilterUtils.classpathFilter(test ? "test" : "compile");
                 var visitor = new PreorderNodeListGenerator();
                 collected.getRoot().accept(new org.eclipse.aether.util.graph.visitor.FilteringDependencyVisitor(visitor, filter));
@@ -330,7 +442,7 @@ final class MavenProjectImporter {
                         } catch (ArtifactResolutionException e) { infrastructure(e); checkpoint.check(); complete = false; }
                     }
                 }
-            } catch (DependencyCollectionException e) { infrastructure(e); checkpoint.check(); complete = false; }
+            }
             sets.add(new ImportedProject.SourceSet(module.id + (test ? ":test" : ":main"), module.id, test,
                 List.of(ownRoot), visible, binaries, compiler(model, test), complete, module.inputs));
         }
@@ -378,6 +490,9 @@ final class MavenProjectImporter {
     }
     private static String key(String group, String artifact, String version) { return group + ":" + artifact + ":" + version; }
     private static void infrastructure(Throwable error) throws Failure {
+        // Maven's profile selector records callback failures as model problems, not Throwable causes.
+        if (error instanceof ModelBuildingException model) for (ModelProblem problem : model.getProblems())
+            if (problem.getException() != null) infrastructure(problem.getException());
         for (Throwable cause = error; cause != null; cause = cause.getCause()) {
             if (cause instanceof Failure failure) throw failure;
             if (cause instanceof java.nio.file.FileSystemException || cause instanceof SecurityException)
@@ -397,6 +512,7 @@ final class MavenProjectImporter {
         return new org.eclipse.aether.repository.RepositoryPolicy(p.isEnabled(), p.getUpdatePolicy(), p.getChecksumPolicy());
     }
 
+    @SuppressWarnings("deprecation") // Maven 3 ModelResolver's public contract uses ModelSource/FileModelSource.
     private final class Resolver implements ModelResolver {
         private final List<RemoteRepository> repos;
         Resolver(List<RemoteRepository> repos) { this.repos = new ArrayList<>(repos); }

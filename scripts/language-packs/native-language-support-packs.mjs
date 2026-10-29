@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { stageAnalyzer } from './build-analyzer.mjs';
 import { nativeTarget, repository, releaseIdentity } from './distribution.mjs';
@@ -31,6 +32,29 @@ export async function copyToolTree(source, destination) {
     } else throw new Error('Tool tree contains a special file');
   }
   await copy(root, destination);
+}
+
+/** Verify both extracted attribution evidence and full license texts before and after packaging. */
+export async function verifyJavaLicenseBundle(directory) {
+  const root = path.resolve(directory, 'maven');
+  const components = JSON.parse(await fs.readFile(path.join(root, 'manifest.json'), 'utf8'));
+  let references = 0;
+  for (const component of components) for (const field of ['evidence', 'fullLicenseTexts']) {
+    for (const resource of component[field] ?? []) {
+      const file = path.resolve(root, resource.file);
+      if (!file.startsWith(`${root}${path.sep}`)) throw new Error('Java license reference escapes bundle');
+      const digest = createHash('sha256').update(await fs.readFile(file)).digest('hex');
+      if (digest !== resource.sha256) throw new Error(`Java license checksum mismatch: ${resource.file}`);
+      references++;
+    }
+  }
+  return references;
+}
+
+export async function stageJavaLicenses(source, destination) {
+  await verifyJavaLicenseBundle(source);
+  await copyToolTree(source, destination);
+  await verifyJavaLicenseBundle(destination);
 }
 
 /** 工具候选只来自明确构建输入或约定安装位置，不扫描被分析项目。 */
@@ -195,7 +219,7 @@ export async function buildNativePack({ id, target, output, definition, packageD
       await copyToolTree(path.join(repository, 'analyzers/java/build/classes'), path.join(payload, 'runtime/analyzer/classes'));
       for (const item of JSON.parse(await fs.readFile(path.join(repository, 'analyzers/java/dependencies.lock.json'), 'utf8')))
         await copyToolTree(path.join(repository, '.tools/java-native/lib', item.file), path.join(payload, 'runtime/analyzer/lib', item.file));
-      await copyToolTree(path.join(repository, 'analyzers/java/licenses'), path.join(payload, 'licenses/Java-components'));
+      await stageJavaLicenses(path.join(repository, 'analyzers/java/licenses'), path.join(payload, 'licenses/Java-components'));
       await copyToolTree(path.join(repository, 'analyzers/java/dependencies.lock.json'), path.join(payload, 'licenses/Java-dependencies.json'));
       await copyToolTree(path.join(runtime, 'NOTICE'), path.join(payload, 'licenses/Java-runtime-NOTICE'));
     } else {

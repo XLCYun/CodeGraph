@@ -12,16 +12,21 @@ final class SourceSnapshot implements AutoCloseable {
     private static final Set<String> EXCLUDED = Set.of(".git", ".gradle", ".idea", ".tools", "vendor", "node_modules");
     private final Path original;
     private final Path root;
+    private final Path outputRoot;
     private final ProjectModel.Checkpoint checkpoint;
+    private final Set<Path> directories = new HashSet<>();
     private final Map<Path, Path> aliases = new LinkedHashMap<>();
     private final Map<Path, byte[]> hashes = new LinkedHashMap<>();
+    private final Map<Path, Integer> conditions = new LinkedHashMap<>();
     private final Map<Path, byte[]> external = new LinkedHashMap<>();
     private long bytes;
 
     private SourceSnapshot(Path original, ProjectModel.Checkpoint checkpoint) throws IOException {
         this.original = original;
         this.checkpoint = checkpoint;
-        this.root = Files.createTempDirectory("codegraph-java-input-").toRealPath();
+        Path container = Files.createTempDirectory("codegraph-java-input-").toRealPath();
+        this.root = Files.createDirectory(container.resolve("input"));
+        this.outputRoot = Files.createDirectory(container.resolve("outputs"));
     }
 
     static SourceSnapshot capture(Path original, List<String> selected, ProjectModel.Checkpoint checkpoint) throws Failure {
@@ -43,11 +48,42 @@ final class SourceSnapshot implements AutoCloseable {
 
     Path root() { return root; }
     Path original() { return original; }
+    Path outputRoot() { return outputRoot; }
 
     /** Track settings including absence, so creation/removal during import is also detected. */
     void watch(Path path) throws Failure {
-        try { external.putIfAbsent(path, Files.exists(path) ? digest(Files.readAllBytes(path)) : null); }
+        try {
+            if (!external.containsKey(path)) external.put(path, Files.exists(path) ? digest(Files.readAllBytes(path)) : null);
+        }
         catch (IOException e) { throw io(); }
+    }
+
+    /** Preserve Maven's file-activation inputs, including absent paths and cache-local markers. */
+    void watchCondition(Path evaluated) throws Failure {
+        evaluated = evaluated.toAbsolutePath().normalize();
+        Path originalPath = evaluated.startsWith(root) ? original.resolve(root.relativize(evaluated)) : evaluated;
+        try {
+            if (conditions.containsKey(evaluated)) return;
+            int kind = conditionKind(originalPath);
+            conditions.put(evaluated, kind);
+            if (!evaluated.startsWith(root) || kind == 0) return;
+            String relative = root.relativize(evaluated).toString().replace('\\', '/');
+            validatePath(relative, false);
+            Path directory = kind == 1 ? evaluated : evaluated.getParent();
+            for (Path current = directory; current.startsWith(root); current = current.getParent())
+                directories.add(root.relativize(current));
+            Files.createDirectories(directory);
+            if (kind == 2) freeze(originalPath);
+        } catch (IOException e) { throw io(); }
+    }
+
+    private int conditionKind(Path path) throws IOException, Failure {
+        try {
+            var attributes = Files.readAttributes(path, BasicFileAttributes.class);
+            if (attributes.isDirectory()) return 1;
+            if (attributes.isRegularFile()) return 2;
+            throw new Failure("object_extraction_failed", "unsupported Maven activation input type");
+        } catch (NoSuchFileException e) { return 0; }
     }
 
     void validatePath(String relative, boolean descendants) throws Failure {
@@ -58,6 +94,12 @@ final class SourceSnapshot implements AutoCloseable {
 
     private void scan(Path directory, boolean capture, boolean cache) throws IOException, Failure {
         checkpoint.check();
+        Path relativeDirectory = original.relativize(directory);
+        if (capture) {
+            directories.add(relativeDirectory);
+            Files.createDirectories(root.resolve(relativeDirectory));
+        } else if (!directories.contains(relativeDirectory)) throw changed();
+        if (directory.getFileName().toString().equals(".git")) return; // Preserve the existence condition, never Git internals.
         try (var entries = Files.newDirectoryStream(directory)) {
             for (Path path : entries) {
                 checkpoint.check();
@@ -69,7 +111,7 @@ final class SourceSnapshot implements AutoCloseable {
                 }
                 if (Files.isDirectory(path)) {
                     String name = path.getFileName().toString();
-                    if (!name.equals(".git")) scan(path, capture, cache || EXCLUDED.contains(name));
+                    scan(path, capture, cache || EXCLUDED.contains(name));
                 } else if (Files.isRegularFile(path) && (!cache || buildInput(path))) {
                     Path relative = original.relativize(path);
                     if (capture) freeze(path);
@@ -103,6 +145,10 @@ final class SourceSnapshot implements AutoCloseable {
     void verify() throws Failure {
         try {
             scan(original, false, false);
+            for (Path directory : directories) for (Path base : List.of(original, root)) {
+                Path path = base.resolve(directory);
+                if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS) || !path.toRealPath().startsWith(base)) throw changed();
+            }
             for (var alias : aliases.entrySet()) {
                 if (!Files.isSymbolicLink(original.resolve(alias.getKey())) ||
                     !Files.readSymbolicLink(original.resolve(alias.getKey())).equals(alias.getValue())) throw changed();
@@ -116,8 +162,16 @@ final class SourceSnapshot implements AutoCloseable {
                 }
             }
             try (var paths = Files.walk(root)) {
-                for (Path path : paths.filter(p -> p.toString().endsWith(".java")).toList())
-                    if (!hashes.containsKey(root.relativize(path))) throw changed();
+                for (Path path : paths.toList()) {
+                    Path relative = root.relativize(path);
+                    if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS) && !directories.contains(relative)) throw changed();
+                    if (path.toString().endsWith(".java") && !hashes.containsKey(relative)) throw changed();
+                }
+            }
+            for (var condition : conditions.entrySet()) {
+                Path evaluated = condition.getKey();
+                Path actual = evaluated.startsWith(root) ? original.resolve(root.relativize(evaluated)) : evaluated;
+                if (conditionKind(actual) != condition.getValue() || conditionKind(evaluated) != condition.getValue()) throw changed();
             }
             for (var entry : external.entrySet()) {
                 byte[] actual = Files.exists(entry.getKey()) ? digest(Files.readAllBytes(entry.getKey())) : null;
@@ -135,7 +189,7 @@ final class SourceSnapshot implements AutoCloseable {
 
     @Override public void close() throws Failure {
         try {
-            Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            Files.walkFileTree(root.getParent(), new SimpleFileVisitor<>() {
                 @Override public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                     Files.delete(file); return FileVisitResult.CONTINUE;
                 }

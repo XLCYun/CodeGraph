@@ -25,7 +25,23 @@ public final class SourceSnapshotTest {
             try (SourceSnapshot snapshot = SourceSnapshot.capture(root, List.of("A.java"), () -> {})) {
                 Files.writeString(snapshot.root().resolve("Added.java"), "class Added {}");
                 try { snapshot.verify(); throw new AssertionError("added source accepted"); }
-                catch (Main.Failure expected) { }
+                catch (Main.Failure expected) {
+                    if (!expected.code.equals("object_extraction_failed")) throw expected;
+                }
+            }
+            for (boolean original : List.of(false, true)) for (boolean existed : List.of(false, true)) {
+                Path directory = root.resolve("enable-dir");
+                if (existed) Files.createDirectory(directory);
+                try (SourceSnapshot snapshot = SourceSnapshot.capture(root, List.of("A.java"), () -> {})) {
+                    if (Files.exists(snapshot.root().resolve("enable-dir")) != existed)
+                        throw new AssertionError("directory condition not preserved");
+                    Path changed = (original ? root : snapshot.root()).resolve("enable-dir");
+                    if (existed) Files.delete(changed); else Files.createDirectory(changed);
+                    try { snapshot.verify(); throw new AssertionError("directory mutation accepted"); }
+                    catch (Main.Failure expected) {
+                        if (!expected.code.equals("object_extraction_failed")) throw expected;
+                    }
+                } finally { Files.deleteIfExists(directory); }
             }
         } finally { Files.deleteIfExists(root.resolve("A.java")); Files.delete(root); }
         System.out.println("snapshot mutation and cleanup PASS");

@@ -170,7 +170,7 @@ final class ProjectModel implements AutoCloseable {
             }
             for (Configuration config : configs) {
                 if (files.stream().anyMatch(file -> model.activeConfigurations(file).contains(config)))
-                    config.target = chooseTarget(originalRoot, platforms, config.release);
+                    config.target = chooseTarget(originalRoot, platforms, apiTarget(config));
             }
             snapshot.verify();
             model.snapshot = snapshot;
@@ -184,8 +184,6 @@ final class ProjectModel implements AutoCloseable {
         List<Configuration> result = new ArrayList<>();
         for (var set : project.sourceSets()) {
             String target = set.compiler().release();
-            if (target == null) target = set.compiler().target();
-            if (target == null) target = set.compiler().toolchain();
             if (target != null && target.startsWith("1.")) target = target.substring(2);
             if (target != null) validateRelease(target);
             List<SourceRoot> own = new ArrayList<>();
@@ -202,6 +200,15 @@ final class ProjectModel implements AutoCloseable {
             result.add(config);
         }
         return result;
+    }
+
+    /** Bytecode target and source syntax do not identify the API platform. */
+    private static String apiTarget(Configuration config) throws Failure {
+        String value = config.release;
+        if (value == null && config.imported != null) value = config.imported.compiler().toolchain();
+        if (value != null && value.startsWith("1.")) value = value.substring(2);
+        if (value != null) validateRelease(value);
+        return value;
     }
 
     void verifyInputs() throws Failure { if (snapshot != null) snapshot.verify(); }
@@ -296,6 +303,18 @@ final class ProjectModel implements AutoCloseable {
             platform.addProperty("target", config.release == null ? "unknown" : config.release);
             platform.addProperty("status", config.target == null ? "missing" : "available");
             if (config.target != null) platform.addProperty("version", config.target.version());
+            if (config.imported != null) {
+                var compiler = config.imported.compiler();
+                platform.addProperty("api_source", compiler.release() != null ? "release" : compiler.toolchain() != null ? "toolchain" : "default");
+                JsonObject evidence = new JsonObject();
+                if (compiler.release() != null) evidence.addProperty("release", compiler.release());
+                if (compiler.source() != null) evidence.addProperty("source", compiler.source());
+                if (compiler.target() != null) evidence.addProperty("target", compiler.target());
+                if (compiler.toolchain() != null) evidence.addProperty("toolchain", compiler.toolchain());
+                if (compiler.encoding() != null) evidence.addProperty("encoding", compiler.encoding());
+                platform.add("compiler", evidence);
+                platform.addProperty("dependencies_complete", config.imported.dependenciesComplete());
+            }
             if (!platforms.contains(platform)) platforms.add(platform);
         }
         List<JsonElement> ordered = new ArrayList<>();
@@ -516,6 +535,10 @@ final class ProjectModel implements AutoCloseable {
             if (config.imported != null && config.imported.compiler().source() != null) {
                 String source = config.imported.compiler().source();
                 options.put(JavaCore.COMPILER_SOURCE, source.startsWith("1.") ? source : compilerVersion(source));
+            }
+            if (config.imported != null && config.imported.compiler().target() != null && config.release == null) {
+                String target = config.imported.compiler().target();
+                options.put(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, target.startsWith("1.") ? target : compilerVersion(target));
             }
             options.put(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.DISABLED);
             parser.setCompilerOptions(options);
