@@ -1,6 +1,6 @@
 # Java 语言分析器
 
-该分析器使用 `dependencies.lock.json` 锁定的 Eclipse JDT 解析源码。分析器自身的运行 JDK、JDT 工具版本与被分析项目的目标 Java release 相互独立。分析不执行 Maven、Gradle、项目脚本、注解处理器或目标 JDK，也不下载项目依赖。
+该分析器使用 `dependencies.lock.json` 锁定的 Eclipse JDT 解析源码。分析器自身的运行 JDK、JDT 工具版本与被分析项目的目标 Java release 相互独立。Maven 项目通过固定 Maven 3.9.11 ModelBuilder 与 Resolver 1.9.24 导入有效模型和依赖，允许下载及缓存父 POM、BOM 和依赖。导入不启动 Maven 命令，不执行业务生命周期、插件目标或注解处理器。Gradle 导入另行接入。
 
 公开入口为 `bin/codegraph-java analyze`，由 Java 主线程直接实现 `codegraph.analyzer/1`，
 固定版本 `0.1.2`。stdin 接收一个 UTF-8 JSON 对象后 EOF，尾换行可选；stdout 只有一个
@@ -24,7 +24,7 @@
 - Java 8 使用目标 JDK `jre/lib` 中的 `rt.jar` 及存在的 `resources.jar`、`jsse.jar`、`jce.jar`、`charsets.jar`。必须有 `rt.jar`；不扫描 `ext`，不自动加载其他 JAR。其他厂商的非经典目录布局尚不支持。
 - Java 9 及以后使用目标 JDK 的 `lib/jrt-fs.jar` 与 `lib/modules`，不加入运行分析器的 JVM 标准库。
 
-因此，Java 25 运行时不能代替缺失的 Java 17 目标。较旧目标不存在的 API 保持未知关系；高版本语法、禁用的预览特性或畸形语法导致完整提取失败。预览始终禁用。缺少精确目标或不被当前 JDT 支持的 release 都明确失败，公共结果使用 `analysis_failed`，不会附带部分图或证据。进程内组件测试保留原有细分错误断言。
+Java 25 运行时不能代替已声明的 Java 17 目标。缺少匹配平台时保留可提取的结构、原文和稳定身份，无法确认的关系保持 unresolved。无目标声明时先用用户默认 JDK，再用随包平台；目标仍记录为 unknown。预览始终禁用。不支持的声明属于坏模型：明确选集保基础图，目录发现则失败。
 
 `SdkDiscovery` 直接读取既有 `CODEGRAPH_JAVA_TARGET_JDK`、`JAVA_HOME`、`JDK_HOME` 提示，
 常见安装目录、用户 SDK 目录、PATH 中真实 java 路径及随包 JDK。只读 release 与标准库布局，
@@ -45,15 +45,20 @@ standalone 声明可为不同源码根指定不同 release：
 }
 ```
 
-有限 Maven 模型中的模块也可以分别声明或继承字面 `maven.compiler.release`。每份配置使用独立的 JDT 语义环境与 binding 索引，来源证据列出各自的平台 ID。同一物理源码可属于多份配置，最终图仍按原有身份与关系并集规则合并；某配置中的未知关系不会被另一配置的确定关系抹去。
+Maven 模块通过有效 POM 获得继承、属性、profiles 和编译器配置。每份配置使用独立的 JDT 语义环境与 binding 索引，来源证据列出各自的平台 ID。同一物理源码可属于多份配置，最终图仍按原有身份与关系并集规则合并；某配置中的未知关系不会被另一配置的确定关系抹去。
 
-此改动仅放开目标语言版本。JPMS `module-info.java`、动态 Maven 配置、项目插件与缺少静态声明的 Gradle 项目等既有限制仍会明确报错。
+Maven 的 main/test 各自形成独立 source set。测试可以看到本模块生产源码；跨模块可见性由 Resolver 的依赖图决定。reactor 模块不要求先编译或安装，生产源码不会看见测试源码和 test 依赖。release、source、target、toolchain 与 encoding 分别保留；只有 release 开启 JDT 的 release 限制。缺失依赖会标记模型不完整，已确认的成员仍可分析。
+
+用户 `~/.m2/settings.xml`、`MAVEN_HOME/conf/settings.xml`、mirrors、活动 proxies、认证、离线模式和本地仓库参与导入。密码按标准 `~/.m2/settings-security.xml` 解密，诊断不输出凭据。网络连接和读取设有有界超时；请求期限及调用方取消仍适用。有效 POM 不等于插件执行模型，动态插件生成的源码根不在本阶段的保证范围内。
+
+分析前建立临时输入副本，冻结源码及构建配置，导入和 JDT 均在副本上工作。导入后、解析前后核验原输入与副本；原文件或副本被修改时失败，不把不同版本的 AST 偏移和原文拼接起来。副本不是沙箱。`.git` 不参与复制；`.gradle`、`.idea`、`.tools`、`vendor` 和 `node_modules` 只复制源码及构建声明，避免复制缓存二进制。项目声明的源码成员及明确选中的文件仍然优先。每文件上限 32 MiB、输入总量 512 MiB、文件数 100,000。正常及可处理失败都会关闭 Resolver 并删除副本。显式坏模型回退先复核输入，丢弃失败配置，只用明确选集重建上下文。
 
 ## 编译与验证
 
-以下命令仅编译分析器自身和不随包交付的组件测试驱动。运行 JDK 和锁定 JAR 必须已在本地准备完成：
+以下命令仅编译分析器自身和不随包交付的组件测试驱动。运行 JDK 必须已在本地准备完成。依赖下载器按锁内 URL 和 SHA-256 重建完整闭包，可指定独立目录：
 
 ```sh
+python3 analyzers/java/tools/fetch-deps.py "$CODEGRAPH_JAVA_LIB"
 python3 analyzers/java/build.py "$CODEGRAPH_JAVA_RUNTIME" "$CODEGRAPH_JAVA_LIB" --tests
 python3 -m unittest discover -s analyzers/java/tests -v
 ```
@@ -86,3 +91,5 @@ Java 8 夹具未配置且未在 `.tools` 中找到时，对应测试会明确跳
 七语言已使用直接入口和统一[分发接口](../../docs/distribution.md)打包，布局见[包说明](../../docs/pack-layout.md)。
 2026-10-22 的 PR CI 39777180923 中 macOS 成功，Windows 因 Python junction 诊断断言失败；
 完整 Windows 门禁仍须修复后的自动 CI 验证，首个固定发布尚未完成。
+
+Maven 依赖的精确版本许可证、版权及来源在 `licenses/maven/manifest.json` 中列明，并随语言包交付。打包只复制锁文件中的 JAR，不带缓存目录里的其他版本或辅助插件依赖。

@@ -135,11 +135,11 @@ class TargetVersionTests(unittest.TestCase):
 
     def test_maven_modules_can_declare_distinct_releases(self):
         """聚合 POM 的两个子模块通过字面 release 选择不同目标，无需 Maven。"""
-        write(self.root, "pom.xml", """<project><groupId>p</groupId><artifactId>root</artifactId>
+        write(self.root, "pom.xml", """<project><modelVersion>4.0.0</modelVersion><groupId>p</groupId><artifactId>root</artifactId>
           <version>1</version><packaging>pom</packaging><modules><module>a</module><module>b</module></modules></project>""")
         files = []
         for module, release in (("a", "17"), ("b", "25")):
-            write(self.root, module + "/pom.xml", "<project><groupId>p</groupId><artifactId>" + module +
+            write(self.root, module + "/pom.xml", "<project><modelVersion>4.0.0</modelVersion><groupId>p</groupId><artifactId>" + module +
                   "</artifactId><version>1</version><properties><maven.compiler.release>" + release +
                   "</maven.compiler.release></properties></project>")
             path = module + "/src/main/java/p/Main.java"
@@ -148,8 +148,8 @@ class TargetVersionTests(unittest.TestCase):
         before = snapshot_files(self.root)
         result = run(request(self.root, files, platforms=[platform(TARGET), platform(TARGET25)]))
         self.assertEqual(result["outcome"], "ok", result)
-        self.assertEqual({item["id"]: item["platform_ids"] for item in result["evidence"]["configurations"]},
-                         {"java-config:a": ["jdk17"], "java-config:b": ["jdk25"]})
+        self.assertEqual({item["id"]: item["platform_ids"] for item in result["evidence"]["configurations"] if item["platform_ids"]},
+                         {"java-config:a:main": ["jdk17"], "java-config:b:main": ["jdk25"]})
         self.assertEqual(snapshot_files(self.root), before)
 
     def test_missing_target_recovers_but_forged_and_ambiguous_targets_fail(self):

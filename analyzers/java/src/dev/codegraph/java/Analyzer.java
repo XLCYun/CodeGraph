@@ -141,14 +141,18 @@ final class Analyzer {
 
     /** 执行配置隔离解析、来源归并与关系终判。 */
     JsonObject run() throws Failure {
-        model.forEachActiveConfiguration(this::parseConfiguration);
-        checkpoint();
-        for (GraphNode node : nodes.values()) node.code = projection(node);
-        JsonObject result = new JsonObject();
-        result.add("graph", graph());
-        result.add("evidence", evidence());
-        GraphChecks.validate(result, model);
-        return result;
+        try {
+            model.verifyInputs();
+            model.forEachActiveConfiguration(this::parseConfiguration);
+            checkpoint();
+            for (GraphNode node : nodes.values()) node.code = projection(node);
+            JsonObject result = new JsonObject();
+            result.add("graph", graph());
+            result.add("evidence", evidence());
+            GraphChecks.validate(result, model);
+            model.verifyInputs();
+            return result;
+        } finally { model.close(); }
     }
 
     /** 检查内部分析时限；调用方通过终止进程实现取消。 */

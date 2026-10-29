@@ -193,7 +193,9 @@ export async function buildNativePack({ id, target, output, definition, packageD
       execFileSync(process.env.CODEGRAPH_PYTHON ?? process.env.PYTHON ?? (windows ? 'python' : 'python3'), [path.join(repository, 'analyzers/java/build.py'), runtime, path.join(repository, '.tools/java-native/lib')], { stdio: 'inherit', env: { ...process.env, CODEGRAPH_JAVA_RUNTIME: runtime } });
       await copyToolTree(runtime, path.join(payload, 'runtime/jdk'));
       await copyToolTree(path.join(repository, 'analyzers/java/build/classes'), path.join(payload, 'runtime/analyzer/classes'));
-      await copyToolTree(path.join(repository, '.tools/java-native/lib'), path.join(payload, 'runtime/analyzer/lib'));
+      for (const item of JSON.parse(await fs.readFile(path.join(repository, 'analyzers/java/dependencies.lock.json'), 'utf8')))
+        await copyToolTree(path.join(repository, '.tools/java-native/lib', item.file), path.join(payload, 'runtime/analyzer/lib', item.file));
+      await copyToolTree(path.join(repository, 'analyzers/java/licenses'), path.join(payload, 'licenses/Java-components'));
       await copyToolTree(path.join(repository, 'analyzers/java/dependencies.lock.json'), path.join(payload, 'licenses/Java-dependencies.json'));
       await copyToolTree(path.join(runtime, 'NOTICE'), path.join(payload, 'licenses/Java-runtime-NOTICE'));
     } else {

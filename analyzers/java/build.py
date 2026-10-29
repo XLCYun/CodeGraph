@@ -3,6 +3,7 @@
 
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
 
@@ -12,6 +13,7 @@ libs = pathlib.Path(sys.argv[2]).resolve()
 classpath = subprocess.check_output(
     [sys.executable, str(root / "tools/classpath.py"), str(libs)], text=True).strip()
 output = root / "build/classes"
+shutil.rmtree(output, ignore_errors=True)
 output.mkdir(parents=True, exist_ok=True)
 suffix = ".exe" if sys.platform == "win32" else ""
 sources = sorted((root / "src/dev/codegraph/java").glob("*.java"))

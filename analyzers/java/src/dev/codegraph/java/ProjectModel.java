@@ -4,7 +4,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -20,21 +19,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import javax.xml.XMLConstants;
-import javax.xml.parsers.DocumentBuilderFactory;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.FileASTRequestor;
 import org.eclipse.core.runtime.IProgressMonitor;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
 import static dev.codegraph.java.Main.Failure;
 
 /** 源码归属、可选目标声明和只读平台匹配。 */
-final class ProjectModel {
+final class ProjectModel implements AutoCloseable {
+    private SourceSnapshot snapshot;
     private final Path repository;
     private final List<Configuration> configurations;
     private final Map<String, List<Configuration>> selected;
@@ -55,6 +49,9 @@ final class ProjectModel {
         final List<String> sourcePaths;
         final List<SourceRoot> roots;
         Target target;
+        ImportedProject.SourceSet imported;
+        boolean selectionOnly;
+        List<SourceRoot> visibleRoots = List.of();
 
         /** 保存已验证的单一配置。 */
         Configuration(String id, String release, List<String> sourcePaths, List<SourceRoot> roots) {
@@ -110,56 +107,106 @@ final class ProjectModel {
         for (String file : files) { checkpoint.check(); checkedFile(root, file); }
         if (!discovery && files.isEmpty())
             return new ProjectModel(root, List.of(), Map.of(), files, includeTests, checkpoint);
-        List<Configuration> configs = new ArrayList<>();
-        Path metadata = root.resolve("narrant-java.json");
-        Path pom = root.resolve("pom.xml");
+        List<SdkDiscovery.Candidate> platforms = targetProvider.discover();
+        for (SdkDiscovery.Candidate platform : platforms) {
+            Path sdk = platform.root().toAbsolutePath().normalize();
+            if (sdk.startsWith(root) || root.startsWith(sdk))
+                throw new Failure("invalid_input", "target JDK root overlaps repository");
+        }
+        SourceSnapshot snapshot = SourceSnapshot.capture(root, files, checkpoint);
+        Path originalRoot = root;
+        root = snapshot.root();
         try {
-            if (Files.exists(metadata) && Files.exists(pom))
-                throw new Failure("unsupported_configuration", "ambiguous Java metadata and POM");
-            if (Files.exists(metadata)) configs.addAll(readMetadata(root, metadata, checkpoint));
-            else if (Files.exists(pom)) readPomTree(root, root, configs, new HashSet<>(), new HashMap<>(), new HashMap<>(), checkpoint);
-            else configs.addAll(infer(root, discovery ? null : files, checkpoint));
-        } catch (Failure failure) {
-            if (discovery || failure instanceof BoundaryFailure ||
-                !Set.of("unsupported_configuration", "invalid_input").contains(failure.code)) throw failure;
-            configs.clear();
-            configs.addAll(infer(root, files, checkpoint));
-        }
-        if (discovery) Observation.record(input.id());
-        Map<String, List<Configuration>> selected = new HashMap<>();
-        ProjectModel model = new ProjectModel(root, configs, selected, files, includeTests, checkpoint);
-        if (discovery) {
-            for (Configuration config : configs) for (SourceRoot sourceRoot : config.roots)
-                for (String file : model.inventory(sourceRoot)) {
-                    checkpoint.check();
-                    if (unique.add(file)) files.add(file);
-                    if (files.size() > MAX_FILES) throw new Failure("resource_limit", "Java discovery exceeds file limit");
+            List<Configuration> configs = new ArrayList<>();
+            Path metadata = root.resolve("narrant-java.json");
+            Path pom = root.resolve("pom.xml");
+            try {
+                if (Files.exists(metadata) && Files.exists(pom))
+                    throw new Failure("unsupported_configuration", "ambiguous Java metadata and POM");
+                if (Files.exists(metadata)) {
+                    for (Configuration config : readMetadata(originalRoot, originalRoot.resolve("narrant-java.json"), checkpoint))
+                        for (SourceRoot source : config.roots) snapshot.validatePath(source.path, true);
+                    configs.addAll(readMetadata(root, metadata, checkpoint));
                 }
-            files.sort(Comparator.naturalOrder());
-        }
-        for (String file : files) {
-            checkpoint.check();
-            List<Configuration> matches = new ArrayList<>();
-            for (Configuration config : configs) for (SourceRoot sourceRoot : config.roots) {
-                if (under(file, sourceRoot.path) && (!config.id.startsWith("java-config:inferred:") ||
-                    inferRoot(root, file).equals(sourceRoot.path))) {
-                    if (!matches.contains(config)) matches.add(config);
+                else if (Files.exists(pom)) configs.addAll(imported(MavenProjectImporter.load(snapshot, platforms, checkpoint), root));
+                else configs.addAll(infer(root, discovery ? null : files, checkpoint));
+            } catch (Failure failure) {
+                if (discovery || failure instanceof BoundaryFailure ||
+                    !Set.of("unsupported_configuration", "invalid_input").contains(failure.code)) throw failure;
+                snapshot.verify(); // Never conceal changed input or copy state behind explicit-file fallback.
+                configs.clear();
+                configs.addAll(infer(root, files, checkpoint));
+                for (Configuration config : configs) config.selectionOnly = true;
+            }
+            for (Configuration config : configs) if (!config.id.startsWith("java-config:inferred:"))
+                for (SourceRoot source : config.roots) snapshot.validatePath(source.path, true);
+            if (discovery) Observation.record(input.id());
+            Map<String, List<Configuration>> selected = new HashMap<>();
+            ProjectModel model = new ProjectModel(root, configs, selected, files, includeTests, checkpoint);
+            if (discovery) {
+                for (Configuration config : configs) for (SourceRoot sourceRoot : config.roots)
+                    for (String file : model.inventory(sourceRoot)) {
+                        checkpoint.check();
+                        if (unique.add(file)) files.add(file);
+                        if (files.size() > MAX_FILES) throw new Failure("resource_limit", "Java discovery exceeds file limit");
+                    }
+                files.sort(Comparator.naturalOrder());
+            }
+            for (String file : files) {
+                checkpoint.check();
+                List<Configuration> matches = new ArrayList<>();
+                for (Configuration config : configs) for (SourceRoot sourceRoot : config.roots) {
+                    if (under(file, sourceRoot.path) && (!config.id.startsWith("java-config:inferred:") ||
+                        inferRoot(root, file).equals(sourceRoot.path))) {
+                        if (!matches.contains(config)) matches.add(config);
+                    }
                 }
+                if (matches.isEmpty()) {
+                    Configuration independent = infer(root, List.of(file), checkpoint).getFirst();
+                    configs.add(independent);
+                    matches.add(independent);
+                }
+                selected.put(file, List.copyOf(matches));
             }
-            if (matches.isEmpty()) {
-                Configuration independent = infer(root, List.of(file), checkpoint).getFirst();
-                configs.add(independent);
-                matches.add(independent);
+            for (Configuration config : configs) {
+                if (files.stream().anyMatch(file -> model.activeConfigurations(file).contains(config)))
+                    config.target = chooseTarget(originalRoot, platforms, config.release);
             }
-            selected.put(file, List.copyOf(matches));
-        }
-        List<SdkDiscovery.Candidate> platforms = files.isEmpty() ? List.of() : targetProvider.discover();
-        for (Configuration config : configs) {
-            if (files.stream().anyMatch(file -> model.activeConfigurations(file).contains(config)))
-                config.target = chooseTarget(root, platforms, config.release);
-        }
-        return model;
+            snapshot.verify();
+            model.snapshot = snapshot;
+            return model;
+        } catch (Failure | RuntimeException e) { snapshot.close(); throw e; }
     }
+
+    private static List<Configuration> imported(ImportedProject project, Path root) throws Failure {
+        Map<String, ImportedProject.SourceSet> sets = new HashMap<>();
+        for (var set : project.sourceSets()) sets.put(set.id(), set);
+        List<Configuration> result = new ArrayList<>();
+        for (var set : project.sourceSets()) {
+            String target = set.compiler().release();
+            if (target == null) target = set.compiler().target();
+            if (target == null) target = set.compiler().toolchain();
+            if (target != null && target.startsWith("1.")) target = target.substring(2);
+            if (target != null) validateRelease(target);
+            List<SourceRoot> own = new ArrayList<>();
+            for (String path : set.roots()) { checkedRoot(root, path); own.add(new SourceRoot(path, set.test())); }
+            Configuration config = new Configuration(set.id(), target, set.modelInputs(), own);
+            config.imported = set;
+            List<SourceRoot> visible = new ArrayList<>();
+            for (String id : set.visibleSourceSets()) {
+                var other = sets.get(id);
+                if (other == null) throw new Failure("unsupported_configuration", "unknown visible source set");
+                for (String path : other.roots()) { checkedRoot(root, path); visible.add(new SourceRoot(path, false)); }
+            }
+            config.visibleRoots = List.copyOf(visible);
+            result.add(config);
+        }
+        return result;
+    }
+
+    void verifyInputs() throws Failure { if (snapshot != null) snapshot.verify(); }
+    @Override public void close() throws Failure { if (snapshot != null) snapshot.close(); }
+
 
     private static boolean under(String file, String root) {
         return root.isEmpty() || file.startsWith(root + "/");
@@ -260,7 +307,7 @@ final class ProjectModel {
     }
 
     /** Boundary failures must never become a successful model fallback. */
-    private static final class BoundaryFailure extends Failure {
+    static final class BoundaryFailure extends Failure {
         BoundaryFailure(String code, String message) { super(code, message); }
         BoundaryFailure(String code, String message, List<String> paths) { super(code, message, paths); }
     }
@@ -415,147 +462,6 @@ final class ProjectModel {
         return roots;
     }
 
-    /** 只读递归解释仓内 Maven 模块的受限字段。 */
-    private static void readPomTree(Path repository, Path module, List<Configuration> output,
-                                    Set<Path> visited, Map<Path, Element> documents,
-                                    Map<Path, PomResult> resolvedPoms, Checkpoint checkpoint) throws Failure {
-        checkpoint.check();
-        Path pom = module.resolve("pom.xml");
-        try {
-            pom = pom.toRealPath();
-            if (!pom.startsWith(repository) || !visited.add(pom))
-                throw new BoundaryFailure("unsupported_configuration", "POM cycle or external path");
-            Element project = readPom(pom, documents, checkpoint);
-            if (!"project".equals(project.getTagName())) throw new Failure("unsupported_configuration", "invalid POM root");
-            if (child(project, "profiles") != null || child(project, "repositories") != null ||
-                child(project, "pluginRepositories") != null)
-                throw new Failure("unsupported_configuration", "dynamic Maven configuration unsupported");
-            Element build = child(project, "build");
-            if (build != null && (child(build, "plugins") != null || child(build, "pluginManagement") != null ||
-                                  child(build, "extensions") != null))
-                throw new Failure("unsupported_configuration", "Maven plugins unsupported");
-            PomResult resolved = effectivePom(repository, pom, new HashSet<>(), documents, resolvedPoms, checkpoint);
-            String release = resolved.release;
-            Element modules = child(project, "modules");
-            List<String> names = modules == null ? List.of() : texts(modules, "module");
-            if (!names.isEmpty() && release == null) {
-                // 聚合 POM 可把目标 release 留给每个子模块。
-            } else if (release != null) validateRelease(release);
-            String modulePath = repository.relativize(module).toString().replace('\\', '/');
-            String main = resolved.mainSource;
-            String test = resolved.testSource;
-            List<SourceRoot> roots = new ArrayList<>();
-            addRoot(repository, modulePath, main == null ? "src/main/java" : main, false, roots);
-            addRoot(repository, modulePath, test == null ? "src/test/java" : test, true, roots);
-            if ((names.isEmpty() && release != null) || roots.stream().anyMatch(source -> Files.exists(repository.resolve(source.path)))) {
-                output.add(new Configuration("java-config:" + (modulePath.isEmpty() ? "." : modulePath), release,
-                    resolved.sourcePaths, roots));
-            }
-            for (String name : names) {
-                validateRelative(name);
-                readPomTree(repository, module.resolve(name), output, visited, documents, resolvedPoms, checkpoint);
-            }
-        } catch (Failure e) { throw e; }
-        catch (IOException e) { throw new Failure("object_extraction_failed", "cannot read POM"); }
-        catch (Exception e) { throw new Failure("unsupported_configuration", "cannot statically read POM"); }
-    }
-
-    /** 有限 POM 父链的有效 release、源码根、坐标及实际读取来源。 */
-    private record PomResult(String release, String group, String artifact, String version,
-                             List<String> sourcePaths, String mainSource, String testSource) {}
-
-    /** 沿仓内 parent 真正求值，而不借用模块遍历时的聚合 POM。 */
-    private static PomResult effectivePom(Path repository, Path file, Set<Path> chain,
-                                          Map<Path, Element> documents, Map<Path, PomResult> resolvedPoms,
-                                          Checkpoint checkpoint) throws Failure {
-        checkpoint.check();
-        try {
-            Path pom = file.toRealPath();
-            if (!pom.startsWith(repository) || !Files.isRegularFile(pom) || !chain.add(pom))
-                throw new BoundaryFailure("unsupported_configuration", "external or cyclic Maven parent");
-            if (resolvedPoms.containsKey(pom)) { chain.remove(pom); return resolvedPoms.get(pom); }
-            if (chain.size() > 256) throw new Failure("resource_limit", "Maven parent chain too deep");
-            Element project = readPom(pom, documents, checkpoint);
-            if (!"project".equals(project.getTagName()) || child(project, "profiles") != null ||
-                child(project, "repositories") != null || child(project, "pluginRepositories") != null)
-                throw new Failure("unsupported_configuration", "dynamic Maven parent unsupported");
-            Element build = child(project, "build");
-            if (build != null && (child(build, "plugins") != null || child(build, "pluginManagement") != null ||
-                                  child(build, "extensions") != null))
-                throw new Failure("unsupported_configuration", "Maven parent plugins unsupported");
-            PomResult parentResult = null;
-            Element parent = child(project, "parent");
-            if (parent != null) {
-                String relative = text(parent, "relativePath");
-                if (relative == null) relative = "../pom.xml";
-                if (relative.isEmpty()) throw new Failure("unsupported_configuration", "external Maven parent unsupported");
-                Path parentPom = pom.getParent().resolve(relative).normalize();
-                if (Files.isDirectory(parentPom)) parentPom = parentPom.resolve("pom.xml");
-                parentResult = effectivePom(repository, parentPom, chain, documents, resolvedPoms, checkpoint);
-                if (!parentResult.group.equals(text(parent, "groupId")) ||
-                    !parentResult.artifact.equals(text(parent, "artifactId")) ||
-                    !parentResult.version.equals(text(parent, "version")))
-                    throw new Failure("unsupported_configuration", "Maven parent coordinates mismatch");
-            }
-            String group = text(project, "groupId");
-            String artifact = text(project, "artifactId");
-            String version = text(project, "version");
-            if (group == null && parentResult != null) group = parentResult.group;
-            if (version == null && parentResult != null) version = parentResult.version;
-            if (group == null || artifact == null || version == null ||
-                group.contains("${") || artifact.contains("${") || version.contains("${"))
-                throw new Failure("unsupported_configuration", "unresolved Maven coordinates");
-            Element props = child(project, "properties");
-            String release = props == null ? null : text(props, "maven.compiler.release");
-            if (release == null && build != null) release = text(build, "release");
-            if (release == null && parentResult != null) release = parentResult.release;
-            if (release != null) validateRelease(release);
-            String mainSource = build == null ? null : text(build, "sourceDirectory");
-            String testSource = build == null ? null : text(build, "testSourceDirectory");
-            if (mainSource == null && parentResult != null) mainSource = parentResult.mainSource;
-            if (testSource == null && parentResult != null) testSource = parentResult.testSource;
-            if (mainSource != null) validateRelative(mainSource);
-            if (testSource != null) validateRelative(testSource);
-            List<String> paths = new ArrayList<>();
-            if (parentResult != null) paths.addAll(parentResult.sourcePaths);
-            paths.add(repository.relativize(pom).toString().replace('\\', '/'));
-            chain.remove(pom);
-            PomResult result = new PomResult(release, group, artifact, version, List.copyOf(paths), mainSource, testSource);
-            resolvedPoms.put(pom, result);
-            return result;
-        } catch (Failure e) { throw e; }
-        catch (IOException e) { throw new Failure("object_extraction_failed", "cannot read Maven parent"); }
-        catch (Exception e) { throw new Failure("unsupported_configuration", "cannot statically read Maven parent"); }
-    }
-
-    /** 只解析一次 POM，模块遍历与父链共享同一份静态文档。 */
-    private static Element readPom(Path path, Map<Path, Element> documents, Checkpoint checkpoint) throws Exception {
-        checkpoint.check();
-        if (documents.containsKey(path)) return documents.get(path);
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
-        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
-        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
-        factory.setXIncludeAware(false);
-        factory.setExpandEntityReferences(false);
-        Document doc;
-        try (InputStream stream = Files.newInputStream(path)) { doc = factory.newDocumentBuilder().parse(stream); }
-        checkpoint.check();
-        Element element = doc.getDocumentElement();
-        documents.put(path, element);
-        return element;
-    }
-
-    /** 保留声明的源码根；尚未创建源码目录的有效 POM 仍有真实配置证据。 */
-    private static void addRoot(Path repo, String module, String local, boolean test,
-                                List<SourceRoot> roots) throws Failure {
-        validateRelative(local);
-        String relative = module.isEmpty() ? local : module + "/" + local;
-        checkedRoot(repo, relative);
-        roots.add(new SourceRoot(relative, test));
-    }
-
     /** 按固定 JDT 编译器实际能力校验规范 release，不接受预览或别名。 */
     private static void validateRelease(String release) throws Failure {
         if (!release.matches("[1-9][0-9]*") || !JavaCore.isJavaSourceVersionSupportedByCompiler(compilerVersion(release)))
@@ -565,27 +471,6 @@ final class ProjectModel {
     /** 将用户使用的整数 release 转换为 JDT 历史版本命名。 */
     static String compilerVersion(String release) {
         return release.length() == 1 && release.charAt(0) < '9' ? "1." + release : release;
-    }
-
-    /** 查找直接 XML 子元素，避免误读嵌套插件字段。 */
-    private static Element child(Element parent, String name) {
-        for (Node node = parent.getFirstChild(); node != null; node = node.getNextSibling())
-            if (node instanceof Element element && name.equals(element.getTagName())) return element;
-        return null;
-    }
-
-    /** 读取直接 XML 子元素的字面文本。 */
-    private static String text(Element parent, String name) {
-        Element child = child(parent, name);
-        return child == null ? null : child.getTextContent().trim();
-    }
-
-    /** 读取重复的直接 XML 子元素。 */
-    private static List<String> texts(Element parent, String name) {
-        List<String> result = new ArrayList<>();
-        for (Node node = parent.getFirstChild(); node != null; node = node.getNextSibling())
-            if (node instanceof Element element && name.equals(element.getTagName())) result.add(element.getTextContent().trim());
-        return result;
     }
 
     /** 将实际需要解析的配置依次交给分析器，保持配置级期限与错误顺序。 */
@@ -626,15 +511,20 @@ final class ProjectModel {
             ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
             Map<String, String> options = new HashMap<>();
             JavaCore.setComplianceOptions(config.release == null ? JavaCore.latestSupportedJavaVersion() : compilerVersion(config.release), options);
-            options.put(JavaCore.COMPILER_RELEASE, JavaCore.ENABLED);
+            options.put(JavaCore.COMPILER_RELEASE, config.imported == null || config.imported.compiler().release() != null
+                ? JavaCore.ENABLED : JavaCore.DISABLED);
+            if (config.imported != null && config.imported.compiler().source() != null) {
+                String source = config.imported.compiler().source();
+                options.put(JavaCore.COMPILER_SOURCE, source.startsWith("1.") ? source : compilerVersion(source));
+            }
             options.put(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.DISABLED);
             parser.setCompilerOptions(options);
             parser.setResolveBindings(config.target != null);
             parser.setBindingsRecovery(true);
             parser.setStatementsRecovery(true);
             List<String> roots = new ArrayList<>();
-            for (SourceRoot root : config.roots)
-                if (!root.test || tests) roots.add(repository.resolve(root.path).toString());
+            for (SourceRoot root : parsingRoots(config))
+                if (!config.selectionOnly && (!root.test || tests) && Files.isDirectory(repository.resolve(root.path))) roots.add(repository.resolve(root.path).toString());
             if (config.target == null) {
                 // Parse syntax without any environment or binding recovery; compiler options remain explicit.
                 for (String file : context) {
@@ -649,10 +539,14 @@ final class ProjectModel {
                 }
                 return;
             }
-            parser.setEnvironment(config.target.systemLibraries().toArray(String[]::new),
-                roots.toArray(String[]::new), utf8Encodings(roots.size()), false);
+            List<String> classpath = new ArrayList<>(config.target.systemLibraries());
+            if (config.imported != null) classpath.addAll(config.imported.binaries());
+            parser.setEnvironment(classpath.toArray(String[]::new),
+                roots.toArray(String[]::new), rootEncodings(config, tests), false);
             String[] paths = context.stream().map(file -> repository.resolve(file).toString()).toArray(String[]::new);
-            parser.createASTs(paths, utf8Encodings(paths.length), new String[0], requestor, monitor);
+            String[] encodings = new String[context.size()];
+            for (int i = 0; i < encodings.length; i++) encodings[i] = encoding(context.get(i));
+            parser.createASTs(paths, encodings, new String[0], requestor, monitor);
         }
 
         /** 只有选中且在当前配置中未被测试过滤的文件才贡献图节点。 */
@@ -665,7 +559,7 @@ final class ProjectModel {
             // Standalone selections need not be stored in their package's conventional directory.
             if (config.id.startsWith("java-config:inferred:")) return;
             String expected = null;
-            for (SourceRoot root : config.roots) {
+            for (SourceRoot root : parsingRoots(config)) {
                 if (!under(file, root.path)) continue;
                 String local = file.substring(root.path.isEmpty() ? 0 : root.path.length() + 1);
                 int slash = local.lastIndexOf('/');
@@ -684,11 +578,24 @@ final class ProjectModel {
         }
     }
 
-    /** 为所有显式源码与源码根固定 UTF-8，不依赖运行机器默认编码。 */
-    private static String[] utf8Encodings(int count) {
-        String[] encodings = new String[count];
-        java.util.Arrays.fill(encodings, "UTF-8");
-        return encodings;
+    private String[] rootEncodings(Configuration config, boolean tests) throws Failure {
+        List<String> result = new ArrayList<>();
+        for (SourceRoot root : parsingRoots(config)) if (!config.selectionOnly && (!root.test || tests) && Files.isDirectory(repository.resolve(root.path))) result.add(encoding(root.path + "/Probe.java"));
+        return result.toArray(String[]::new);
+    }
+
+    private String encoding(String file) throws Failure {
+        String chosen = null;
+        for (Configuration config : configurations) {
+            if (config.imported == null || config.imported.compiler().encoding() == null ||
+                config.roots.stream().noneMatch(root -> under(file, root.path))) continue;
+            String value;
+            try { value = java.nio.charset.Charset.forName(config.imported.compiler().encoding()).name(); }
+            catch (IllegalArgumentException e) { throw new Failure("unsupported_configuration", "unsupported Java source encoding"); }
+            if (chosen != null && !chosen.equals(value)) throw new Failure("unsupported_configuration", "conflicting Java source encodings");
+            chosen = value;
+        }
+        return chosen == null ? "UTF-8" : chosen;
     }
 
     /** 把 JDT 的真实源码路径还原为仓库身份。 */
@@ -698,7 +605,7 @@ final class ProjectModel {
 
     /** 每次读取重新检查仓库边界，并拒绝被替换解码的非法源码。 */
     String readSource(String relative) throws IOException, Failure {
-        String source = Files.readString(checkedFile(repository, relative), StandardCharsets.UTF_8);
+        String source = Files.readString(checkedFile(repository, relative), java.nio.charset.Charset.forName(encoding(relative)));
         if (source.indexOf('\uFFFD') >= 0)
             throw new Failure("object_extraction_failed", "invalid UTF-8 source", List.of(relative));
         return source;
@@ -844,10 +751,18 @@ final class ProjectModel {
         return result;
     }
 
+    private List<SourceRoot> parsingRoots(Configuration config) {
+        List<SourceRoot> roots = new ArrayList<>(config.roots);
+        roots.addAll(config.visibleRoots);
+        return roots;
+    }
+
     /** 枚举配置允许的上下文源码，测试角色不改变生产配置。 */
     private List<String> context(Configuration config, boolean tests) throws Failure {
+        if (config.selectionOnly) return files.stream().filter(file -> selected.get(file).contains(config) &&
+            (!isTest(file, config) || tests)).sorted().toList();
         Set<String> discovered = new HashSet<>();
-        for (SourceRoot sourceRoot : config.roots) {
+        for (SourceRoot sourceRoot : parsingRoots(config)) {
             checkpoint.check();
             if (sourceRoot.test && !tests) continue;
             for (String file : inventory(sourceRoot)) {

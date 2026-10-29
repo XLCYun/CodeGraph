@@ -1,0 +1,1631 @@
+[
+  {
+    "coordinate": "org.ow2.asm:asm:9.8",
+    "jarSHA256": "876eab6a83daecad5ca67eb9fcabb063c97b5aeb8cf1fca7a989ecde17522051",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/ow2/asm/asm/9.8/asm-9.8.jar",
+    "declaredLicenses": [
+      {
+        "name": "BSD-3-Clause",
+        "url": "https://asm.ow2.io/license.html",
+        "distribution": ""
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.ow2.asm.asm-9.8/source-headers/000.txt",
+        "sha256": "bc7733295d206b9fc8f5caee3db21e563a3176f60af97153cce588cd1ad9f97d",
+        "source": "https://repo.maven.apache.org/maven2/org/ow2/asm/asm/9.8/asm-9.8-sources.jar!/org/objectweb/asm/AnnotationVisitor.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "org/objectweb/asm/AnnotationVisitor.java",
+          "org/objectweb/asm/AnnotationWriter.java",
+          "org/objectweb/asm/Attribute.java",
+          "org/objectweb/asm/ByteVector.java",
+          "org/objectweb/asm/ClassReader.java",
+          "org/objectweb/asm/ClassTooLargeException.java",
+          "org/objectweb/asm/ClassVisitor.java",
+          "org/objectweb/asm/ClassWriter.java",
+          "org/objectweb/asm/ConstantDynamic.java",
+          "org/objectweb/asm/Constants.java",
+          "org/objectweb/asm/Context.java",
+          "org/objectweb/asm/CurrentFrame.java",
+          "org/objectweb/asm/Edge.java",
+          "org/objectweb/asm/FieldVisitor.java",
+          "org/objectweb/asm/FieldWriter.java",
+          "org/objectweb/asm/Frame.java",
+          "org/objectweb/asm/Handle.java",
+          "org/objectweb/asm/Handler.java",
+          "org/objectweb/asm/Label.java",
+          "org/objectweb/asm/MethodTooLargeException.java",
+          "org/objectweb/asm/MethodVisitor.java",
+          "org/objectweb/asm/MethodWriter.java",
+          "org/objectweb/asm/ModuleVisitor.java",
+          "org/objectweb/asm/ModuleWriter.java",
+          "org/objectweb/asm/RecordComponentVisitor.java",
+          "org/objectweb/asm/RecordComponentWriter.java",
+          "org/objectweb/asm/Symbol.java",
+          "org/objectweb/asm/SymbolTable.java",
+          "org/objectweb/asm/Type.java",
+          "org/objectweb/asm/TypePath.java",
+          "org/objectweb/asm/TypeReference.java",
+          "org/objectweb/asm/signature/SignatureReader.java",
+          "org/objectweb/asm/signature/SignatureWriter.java"
+        ]
+      },
+      {
+        "file": "artifacts/org.ow2.asm.asm-9.8/source-headers/001.txt",
+        "sha256": "9bee7fdcfbcb01c7d705966b5af011c1caae6bdcca2d71506a4f6b709dec216e",
+        "source": "https://repo.maven.apache.org/maven2/org/ow2/asm/asm/9.8/asm-9.8-sources.jar!/org/objectweb/asm/Opcodes.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "org/objectweb/asm/Opcodes.java"
+        ]
+      },
+      {
+        "file": "artifacts/org.ow2.asm.asm-9.8/source-headers/002.txt",
+        "sha256": "49c39a7f275e65809f3ff330e1ce69d3e7f3c5cace5a15e33c8847b347700e20",
+        "source": "https://repo.maven.apache.org/maven2/org/ow2/asm/asm/9.8/asm-9.8-sources.jar!/org/objectweb/asm/signature/SignatureVisitor.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "org/objectweb/asm/signature/SignatureVisitor.java"
+        ]
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [],
+    "notes": "Full BSD-3-Clause text and copyright preserved verbatim from all distinct exact-version source headers."
+  },
+  {
+    "coordinate": "commons-codec:commons-codec:1.18.0",
+    "jarSHA256": "ba005f304cef92a3dede24a38ad5ac9b8afccf0d8f75839d6c1338634cf7f6e4",
+    "jarURL": "https://repo.maven.apache.org/maven2/commons-codec/commons-codec/1.18.0/commons-codec-1.18.0.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/commons-codec.commons-codec-1.18.0/META-INF/LICENSE.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/commons-codec/commons-codec/1.18.0/commons-codec-1.18.0.jar!/META-INF/LICENSE.txt",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/commons-codec.commons-codec-1.18.0/META-INF/NOTICE.txt",
+        "sha256": "b64933ee1d36d14659156223a2604edadb60bffdd465d5368ff422d7689db5fb",
+        "source": "https://repo.maven.apache.org/maven2/commons-codec/commons-codec/1.18.0/commons-codec-1.18.0.jar!/META-INF/NOTICE.txt",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "com.google.errorprone:error_prone_annotations:2.41.0",
+    "jarSHA256": "a56e782b5b50811ac204073a355a21d915a2107fce13ec711331ad036f660fcc",
+    "jarURL": "https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_annotations/2.41.0/error_prone_annotations-2.41.0.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache 2.0",
+        "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": ""
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/com.google.errorprone.error_prone_annotations-2.41.0/SOURCE-COPYRIGHT-HEADER.txt",
+        "sha256": "80bb5643c4bd201c7306a48cd8a7e9069cae786d25aab3b734ae2b093baea342",
+        "source": "https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_annotations/2.41.0/error_prone_annotations-2.41.0-sources.jar!/module-info.java",
+        "kind": "exact-version-source-copyright-header"
+      },
+      {
+        "file": "artifacts/com.google.errorprone.error_prone_annotations-2.41.0/source-headers/000.txt",
+        "sha256": "80bb5643c4bd201c7306a48cd8a7e9069cae786d25aab3b734ae2b093baea342",
+        "source": "https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_annotations/2.41.0/error_prone_annotations-2.41.0-sources.jar!/module-info.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "module-info.java",
+          "com/google/errorprone/annotations/Immutable.java",
+          "com/google/errorprone/annotations/IncompatibleModifiers.java",
+          "com/google/errorprone/annotations/concurrent/LazyInit.java",
+          "com/google/errorprone/annotations/ForOverride.java",
+          "com/google/errorprone/annotations/CanIgnoreReturnValue.java",
+          "com/google/errorprone/annotations/RequiredModifiers.java",
+          "com/google/errorprone/annotations/CompileTimeConstant.java",
+          "com/google/errorprone/annotations/SuppressPackageLocation.java",
+          "com/google/errorprone/annotations/Var.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.errorprone.error_prone_annotations-2.41.0/source-headers/001.txt",
+        "sha256": "be363ad0f0a1f69a0e6bf014d2147b89977a914ea2083962a6e218e3edcd09ca",
+        "source": "https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_annotations/2.41.0/error_prone_annotations-2.41.0-sources.jar!/com/google/errorprone/annotations/Keep.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/errorprone/annotations/Keep.java",
+          "com/google/errorprone/annotations/InlineMeValidationDisabled.java",
+          "com/google/errorprone/annotations/InlineMe.java",
+          "com/google/errorprone/annotations/Modifier.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.errorprone.error_prone_annotations-2.41.0/source-headers/002.txt",
+        "sha256": "3d6cfaead17fe243949f66ae8c8311c3dd2e1e79af3e305d5a71eb0e2f2aec69",
+        "source": "https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_annotations/2.41.0/error_prone_annotations-2.41.0-sources.jar!/com/google/errorprone/annotations/CheckReturnValue.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/errorprone/annotations/CheckReturnValue.java",
+          "com/google/errorprone/annotations/OverridingMethodsMustInvokeSuper.java",
+          "com/google/errorprone/annotations/concurrent/GuardedBy.java",
+          "com/google/errorprone/annotations/DoNotCall.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.errorprone.error_prone_annotations-2.41.0/source-headers/003.txt",
+        "sha256": "3bd8c2bec0bad3254596d46b7ed1bb1d772d3076e868b464e13630d8e951c068",
+        "source": "https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_annotations/2.41.0/error_prone_annotations-2.41.0-sources.jar!/com/google/errorprone/annotations/NoAllocation.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/errorprone/annotations/NoAllocation.java",
+          "com/google/errorprone/annotations/concurrent/LockMethod.java",
+          "com/google/errorprone/annotations/concurrent/UnlockMethod.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.errorprone.error_prone_annotations-2.41.0/source-headers/004.txt",
+        "sha256": "db6296ab6266013c16f53e9ade9789598b1c66e16179a5236f85df287b13c4c0",
+        "source": "https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_annotations/2.41.0/error_prone_annotations-2.41.0-sources.jar!/com/google/errorprone/annotations/CompatibleWith.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/errorprone/annotations/CompatibleWith.java",
+          "com/google/errorprone/annotations/DoNotMock.java",
+          "com/google/errorprone/annotations/MustBeClosed.java",
+          "com/google/errorprone/annotations/FormatString.java",
+          "com/google/errorprone/annotations/RestrictedApi.java",
+          "com/google/errorprone/annotations/FormatMethod.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.errorprone.error_prone_annotations-2.41.0/source-headers/005.txt",
+        "sha256": "e78c246af482b43258f6968ee7a998fa699f4b4a03e42c9902ee1ad8a4f3682e",
+        "source": "https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_annotations/2.41.0/error_prone_annotations-2.41.0-sources.jar!/com/google/errorprone/annotations/ThreadSafe.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/errorprone/annotations/ThreadSafe.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.errorprone.error_prone_annotations-2.41.0/source-headers/006.txt",
+        "sha256": "b9c026aaba308f1635696dba23b986237a9ab95d94e6333d9847454cad4ed7d5",
+        "source": "https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_annotations/2.41.0/error_prone_annotations-2.41.0-sources.jar!/com/google/errorprone/annotations/ImmutableTypeParameter.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/errorprone/annotations/ImmutableTypeParameter.java",
+          "com/google/errorprone/annotations/ThreadSafeTypeParameter.java"
+        ]
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "com.google.code.gson:gson:2.13.2",
+    "jarSHA256": "dd0ce1b55a3ed2080cb70f9c655850cda86c206862310009dcb5e5c95265a5e0",
+    "jarURL": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": ""
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/SOURCE-COPYRIGHT-HEADER.txt",
+        "sha256": "c9c285dbef62beb3c04fedb3990184124e8df78ae919ea21e7243c53d920011f",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/ExclusionStrategy.java",
+        "kind": "exact-version-source-copyright-header"
+      },
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/source-headers/000.txt",
+        "sha256": "c9c285dbef62beb3c04fedb3990184124e8df78ae919ea21e7243c53d920011f",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/ExclusionStrategy.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/gson/ExclusionStrategy.java",
+          "com/google/gson/FieldNamingPolicy.java",
+          "com/google/gson/FieldNamingStrategy.java",
+          "com/google/gson/Gson.java",
+          "com/google/gson/GsonBuilder.java",
+          "com/google/gson/InstanceCreator.java",
+          "com/google/gson/JsonArray.java",
+          "com/google/gson/JsonDeserializationContext.java",
+          "com/google/gson/JsonDeserializer.java",
+          "com/google/gson/JsonElement.java",
+          "com/google/gson/JsonIOException.java",
+          "com/google/gson/JsonNull.java",
+          "com/google/gson/JsonObject.java",
+          "com/google/gson/JsonParseException.java",
+          "com/google/gson/JsonPrimitive.java",
+          "com/google/gson/JsonSerializationContext.java",
+          "com/google/gson/JsonSerializer.java",
+          "com/google/gson/annotations/Expose.java",
+          "com/google/gson/annotations/SerializedName.java",
+          "com/google/gson/annotations/Since.java",
+          "com/google/gson/annotations/Until.java",
+          "com/google/gson/annotations/package-info.java",
+          "com/google/gson/internal/Excluder.java",
+          "com/google/gson/internal/GsonTypes.java",
+          "com/google/gson/internal/ObjectConstructor.java",
+          "com/google/gson/internal/Primitives.java",
+          "com/google/gson/internal/bind/DefaultDateTypeAdapter.java",
+          "com/google/gson/package-info.java",
+          "com/google/gson/reflect/TypeToken.java",
+          "com/google/gson/reflect/package-info.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/source-headers/001.txt",
+        "sha256": "edbaf0b326d9f78618036d5e3fcd99fde7e66468d009013b7ee34c655262b1cc",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/FieldAttributes.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/gson/FieldAttributes.java",
+          "com/google/gson/JsonParser.java",
+          "com/google/gson/JsonStreamParser.java",
+          "com/google/gson/LongSerializationPolicy.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/source-headers/002.txt",
+        "sha256": "62f9a87a4d354eaf592d9dcd61c5863128c6506f640e2f3967d0a98f2724d434",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/FormattingStyle.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/gson/FormattingStyle.java",
+          "com/google/gson/ReflectionAccessFilter.java",
+          "com/google/gson/internal/ReflectionAccessFilterHelper.java",
+          "com/google/gson/internal/bind/SerializationDelegatingTypeAdapter.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/source-headers/003.txt",
+        "sha256": "dedd8d9107f2fa208a6fffdc2bd2803ede1104dc924e997938da3073d32e1057",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/JsonSyntaxException.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/gson/JsonSyntaxException.java",
+          "com/google/gson/internal/Streams.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/source-headers/004.txt",
+        "sha256": "037120081e614adbe1c42f542f6f31d8521b2dc58b5d18e6b8a0c7f2ba11dca0",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/ToNumberPolicy.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/gson/ToNumberPolicy.java",
+          "com/google/gson/ToNumberStrategy.java",
+          "com/google/gson/internal/reflect/ReflectionHelper.java",
+          "com/google/gson/stream/package-info.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/source-headers/005.txt",
+        "sha256": "37ecbe1fa3e01b951b39e397e2119cca5ab2004a1141b524530e188650c9ecb5",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/TypeAdapter.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/gson/TypeAdapter.java",
+          "com/google/gson/TypeAdapterFactory.java",
+          "com/google/gson/internal/JsonReaderInternalAccess.java",
+          "com/google/gson/internal/bind/ArrayTypeAdapter.java",
+          "com/google/gson/internal/bind/CollectionTypeAdapterFactory.java",
+          "com/google/gson/internal/bind/JsonTreeReader.java",
+          "com/google/gson/internal/bind/JsonTreeWriter.java",
+          "com/google/gson/internal/bind/MapTypeAdapterFactory.java",
+          "com/google/gson/internal/bind/ObjectTypeAdapter.java",
+          "com/google/gson/internal/bind/ReflectiveTypeAdapterFactory.java",
+          "com/google/gson/internal/bind/TypeAdapterRuntimeTypeWrapper.java",
+          "com/google/gson/internal/bind/TypeAdapters.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/source-headers/006.txt",
+        "sha256": "c53f8ad493c13a836f71aabd72594cb2e667a1c45a3065f7cb959fec24bc3687",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/annotations/JsonAdapter.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/gson/annotations/JsonAdapter.java",
+          "com/google/gson/internal/bind/JsonAdapterAnnotationTypeAdapterFactory.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/source-headers/007.txt",
+        "sha256": "d7ce9e8797a58ad957eea97c5ceb8ac988300a46015e877b010b1bda616deafb",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/internal/ConstructorConstructor.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/gson/internal/ConstructorConstructor.java",
+          "com/google/gson/internal/LazilyParsedNumber.java",
+          "com/google/gson/internal/UnsafeAllocator.java",
+          "com/google/gson/internal/bind/TreeTypeAdapter.java",
+          "com/google/gson/internal/package-info.java",
+          "com/google/gson/internal/sql/SqlDateTypeAdapter.java",
+          "com/google/gson/internal/sql/SqlTimeTypeAdapter.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/source-headers/008.txt",
+        "sha256": "4c6a4eb35d2fd425aba6035abb92879be7b25ecbfbf624bbf961573aca09c387",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/internal/JavaVersion.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/gson/internal/JavaVersion.java",
+          "com/google/gson/internal/PreJava9DateFormatProvider.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/source-headers/009.txt",
+        "sha256": "83941d01778827dd77a9ad728797392686d44de2df3aab35765fe4547c7d022b",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/internal/LinkedTreeMap.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/gson/internal/LinkedTreeMap.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/source-headers/010.txt",
+        "sha256": "cf4507780b7536570a87d1ac6c4f72d6200921a12e554dfa532e1b71a23df8dc",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/internal/NonNullElementWrapperList.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/gson/internal/NonNullElementWrapperList.java",
+          "module-info.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/source-headers/011.txt",
+        "sha256": "f94897badaeea28de09b06fe36a58e018cf57f6be0e288185474cdd6abe18e4c",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/internal/bind/EnumTypeAdapter.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/gson/internal/bind/EnumTypeAdapter.java",
+          "com/google/gson/internal/bind/JsonElementTypeAdapter.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/source-headers/012.txt",
+        "sha256": "1d8a763ac8b7bb759ecd7b9d781074e074cf7cca6f84bb3a873baefbd9298d6a",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/internal/bind/NumberTypeAdapter.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/gson/internal/bind/NumberTypeAdapter.java",
+          "com/google/gson/internal/sql/SqlTimestampTypeAdapter.java",
+          "com/google/gson/internal/sql/SqlTypesSupport.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/source-headers/013.txt",
+        "sha256": "7320c59d690317c46151f2ad5fe9c451008f5035c8501d5abb73c3dc0ab0c4a5",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/internal/bind/util/ISO8601Utils.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/gson/internal/bind/util/ISO8601Utils.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/source-headers/014.txt",
+        "sha256": "4f7600a78597b23d1d8f8e32f14a643268c38082e7bfb69b92accb8310761cee",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/stream/JsonReader.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/gson/stream/JsonReader.java",
+          "com/google/gson/stream/JsonScope.java",
+          "com/google/gson/stream/JsonToken.java",
+          "com/google/gson/stream/JsonWriter.java",
+          "com/google/gson/stream/MalformedJsonException.java"
+        ]
+      },
+      {
+        "file": "artifacts/com.google.code.gson.gson-2.13.2/source-headers/015.txt",
+        "sha256": "1c4d856d37d271dec191067fa93924fc006560f2a96b799ba70be1d53c568d12",
+        "source": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2-sources.jar!/com/google/gson/internal/GsonBuildConfig.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "com/google/gson/internal/GsonBuildConfig.java"
+        ]
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.httpcomponents:httpclient:4.5.14",
+    "jarSHA256": "c8bc7e1c51a6d4ce72f40d2ebbabf1c4b68bfe76e732104b04381b493478e9d6",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/httpcomponents/httpclient/4.5.14/httpclient-4.5.14.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache License, Version 2.0",
+        "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.httpcomponents.httpclient-4.5.14/META-INF/NOTICE",
+        "sha256": "f5783fbb52e5fcfb26b6916ce3bb9c717d22759b030cee6deaa03145f1f8d819",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/httpcomponents/httpclient/4.5.14/httpclient-4.5.14.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.httpcomponents.httpclient-4.5.14/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/httpcomponents/httpclient/4.5.14/httpclient-4.5.14.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.httpcomponents:httpcore:4.4.16",
+    "jarSHA256": "6c9b3dd142a09dc468e23ad39aad6f75a0f2b85125104469f026e52a474e464f",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/httpcomponents/httpcore/4.4.16/httpcore-4.4.16.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache License, Version 2.0",
+        "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.httpcomponents.httpcore-4.4.16/META-INF/NOTICE",
+        "sha256": "a8ff0d486f1bdd29331e0e244f96245354779ef818ec25ecd60545ad335b68da",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/httpcomponents/httpcore/4.4.16/httpcore-4.4.16.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.httpcomponents.httpcore-4.4.16/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/httpcomponents/httpcore/4.4.16/httpcore-4.4.16.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "javax.inject:javax.inject:1",
+    "jarSHA256": "91c77044a50c481636c32d916fd89c9118a72195390452c81065080f957de7ff",
+    "jarURL": "https://repo.maven.apache.org/maven2/javax/inject/javax.inject/1/javax.inject-1.jar",
+    "declaredLicenses": [],
+    "evidence": [
+      {
+        "file": "artifacts/javax.inject.javax.inject-1/SOURCE-COPYRIGHT-HEADER.txt",
+        "sha256": "4c2ca4f32accf793cb748ed69b4cfb4d95e61c442b11a61c3d7e8b71790b3194",
+        "source": "https://repo.maven.apache.org/maven2/javax/inject/javax.inject/1/javax.inject-1-sources.jar!/javax/inject/Inject.java",
+        "kind": "exact-version-source-copyright-header"
+      },
+      {
+        "file": "artifacts/javax.inject.javax.inject-1/source-headers/000.txt",
+        "sha256": "4c2ca4f32accf793cb748ed69b4cfb4d95e61c442b11a61c3d7e8b71790b3194",
+        "source": "https://repo.maven.apache.org/maven2/javax/inject/javax.inject/1/javax.inject-1-sources.jar!/javax/inject/Inject.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "javax/inject/Inject.java",
+          "javax/inject/Named.java",
+          "javax/inject/package-info.java",
+          "javax/inject/Provider.java",
+          "javax/inject/Qualifier.java",
+          "javax/inject/Scope.java",
+          "javax/inject/Singleton.java"
+        ]
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ],
+    "alsoShadedIn": "org.gradle:gradle-tooling-api:8.14.3"
+  },
+  {
+    "coordinate": "org.slf4j:jcl-over-slf4j:1.7.36",
+    "jarSHA256": "ab57ca8fd223772c17365d121f59e94ecbf0ae59d08c03a3cb5b81071c019195",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/slf4j/jcl-over-slf4j/1.7.36/jcl-over-slf4j-1.7.36.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache License, Version 2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.slf4j.jcl-over-slf4j-1.7.36/SOURCE-COPYRIGHT-HEADER.txt",
+        "sha256": "56f0bff3c67313d3debeecfbd53a4e9cfd0160252f7747bf3fb4761e9a98069d",
+        "source": "https://repo.maven.apache.org/maven2/org/slf4j/jcl-over-slf4j/1.7.36/jcl-over-slf4j-1.7.36-sources.jar!/org/apache/commons/logging/Log.java",
+        "kind": "exact-version-source-copyright-header"
+      },
+      {
+        "file": "artifacts/org.slf4j.jcl-over-slf4j-1.7.36/source-headers/000.txt",
+        "sha256": "56f0bff3c67313d3debeecfbd53a4e9cfd0160252f7747bf3fb4761e9a98069d",
+        "source": "https://repo.maven.apache.org/maven2/org/slf4j/jcl-over-slf4j/1.7.36/jcl-over-slf4j-1.7.36-sources.jar!/org/apache/commons/logging/Log.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "org/apache/commons/logging/Log.java",
+          "org/apache/commons/logging/LogConfigurationException.java",
+          "org/apache/commons/logging/LogFactory.java",
+          "org/apache/commons/logging/impl/NoOpLog.java",
+          "org/apache/commons/logging/impl/SLF4JLocationAwareLog.java",
+          "org/apache/commons/logging/impl/SLF4JLog.java",
+          "org/apache/commons/logging/impl/SLF4JLogFactory.java",
+          "org/apache/commons/logging/impl/SimpleLog.java"
+        ]
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.maven:maven-artifact:3.9.11",
+    "jarSHA256": "0bfd1c121f907642344311d81e4dfd93eba6c24dc712cc0aeae273eb22833022",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-artifact/3.9.11/maven-artifact-3.9.11.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.maven.maven-artifact-3.9.11/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-artifact/3.9.11/maven-artifact-3.9.11.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.maven.maven-artifact-3.9.11/META-INF/NOTICE",
+        "sha256": "e3425da737d147b030e91d1da93968b3aa6b835af9c59662909f6d80661d8116",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-artifact/3.9.11/maven-artifact-3.9.11.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.maven:maven-builder-support:3.9.11",
+    "jarSHA256": "5b1de1560ec19c4c69a655f986455888f3a0bcc3c160cac1f1edb87de3825f77",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-builder-support/3.9.11/maven-builder-support-3.9.11.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.maven.maven-builder-support-3.9.11/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-builder-support/3.9.11/maven-builder-support-3.9.11.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.maven.maven-builder-support-3.9.11/META-INF/NOTICE",
+        "sha256": "a441a4eb0e60f309499e746f720579606ba2d71debe82703a2d33ca712b6c346",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-builder-support/3.9.11/maven-builder-support-3.9.11.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.maven:maven-model:3.9.11",
+    "jarSHA256": "163aa596f976264384efeb50b4cb8a806086fd64a9b755ad1f69195fed3998ad",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-model/3.9.11/maven-model-3.9.11.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.maven.maven-model-3.9.11/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-model/3.9.11/maven-model-3.9.11.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.maven.maven-model-3.9.11/META-INF/NOTICE",
+        "sha256": "a6a835a180d34745a7d653a61dd40911d43542492b0c4e4c55fb7f201323d8fe",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-model/3.9.11/maven-model-3.9.11.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.maven:maven-model-builder:3.9.11",
+    "jarSHA256": "c4c72accdcd848332c1a37995610a6a369d49fdaabc43e85f0022a5b77de3ba7",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-model-builder/3.9.11/maven-model-builder-3.9.11.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.maven.maven-model-builder-3.9.11/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-model-builder/3.9.11/maven-model-builder-3.9.11.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.maven.maven-model-builder-3.9.11/META-INF/NOTICE",
+        "sha256": "6f5a6bfc42ec1bef9428fbbe2ab15e59ae0f67968e8816f820c6f07e7e78d67f",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-model-builder/3.9.11/maven-model-builder-3.9.11.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.maven:maven-repository-metadata:3.9.11",
+    "jarSHA256": "f8655f5f0060e0032944f2a23688d186e140d2184749bcfa1927f83cd6a8b1a2",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-repository-metadata/3.9.11/maven-repository-metadata-3.9.11.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.maven.maven-repository-metadata-3.9.11/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-repository-metadata/3.9.11/maven-repository-metadata-3.9.11.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.maven.maven-repository-metadata-3.9.11/META-INF/NOTICE",
+        "sha256": "9c03f6225e674e8eb00145a6d2799287caa261e285a37741a1bf3fe0e7f31ec9",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-repository-metadata/3.9.11/maven-repository-metadata-3.9.11.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.maven.resolver:maven-resolver-api:1.9.24",
+    "jarSHA256": "c0ce14849298720dcf3b09fe9e263b3c576d2d6cd43c61f8aa9d6117e04e5e47",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-api/1.9.24/maven-resolver-api-1.9.24.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.maven.resolver.maven-resolver-api-1.9.24/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-api/1.9.24/maven-resolver-api-1.9.24.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.maven.resolver.maven-resolver-api-1.9.24/META-INF/NOTICE",
+        "sha256": "6b9bf2c4fd2b1f84d8cb88d5cd040744de30ccbedebb86edf45c1888d4c6793a",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-api/1.9.24/maven-resolver-api-1.9.24.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.maven.resolver:maven-resolver-connector-basic:1.9.24",
+    "jarSHA256": "18b7d557c41379db8b157ba95263c676f52c293f5416b67bd1db083e99b30383",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-connector-basic/1.9.24/maven-resolver-connector-basic-1.9.24.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.maven.resolver.maven-resolver-connector-basic-1.9.24/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-connector-basic/1.9.24/maven-resolver-connector-basic-1.9.24.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.maven.resolver.maven-resolver-connector-basic-1.9.24/META-INF/NOTICE",
+        "sha256": "e08a256ee6eb7bb091b9fd797ca48deabd431ca6343a73b0d2cc6637ce293606",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-connector-basic/1.9.24/maven-resolver-connector-basic-1.9.24.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.maven.resolver:maven-resolver-impl:1.9.24",
+    "jarSHA256": "3cd88edda00c46242cdbe57aefb47703519d176d9e8a500333de15faf41b0e1d",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-impl/1.9.24/maven-resolver-impl-1.9.24.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.maven.resolver.maven-resolver-impl-1.9.24/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-impl/1.9.24/maven-resolver-impl-1.9.24.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.maven.resolver.maven-resolver-impl-1.9.24/META-INF/NOTICE",
+        "sha256": "a7726dc90e08e57445365894dc6a1bcc5272f6066c2aaa57c5bb58341d5afc87",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-impl/1.9.24/maven-resolver-impl-1.9.24.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.maven.resolver:maven-resolver-named-locks:1.9.24",
+    "jarSHA256": "a222b0a5ca4c145e8e0f45207a23bcce18bdbe1f1c980e4e9fb332591ee8c91a",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-named-locks/1.9.24/maven-resolver-named-locks-1.9.24.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.maven.resolver.maven-resolver-named-locks-1.9.24/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-named-locks/1.9.24/maven-resolver-named-locks-1.9.24.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.maven.resolver.maven-resolver-named-locks-1.9.24/META-INF/NOTICE",
+        "sha256": "49d613e5de0be3392c035fd5bd2e76824dccf9b078906dbaa355bbaa0daee6ef",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-named-locks/1.9.24/maven-resolver-named-locks-1.9.24.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.maven:maven-resolver-provider:3.9.11",
+    "jarSHA256": "b5d6e52ae1ecf1cb62ede2234234ba3093149524066488e84415187ce478c582",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-resolver-provider/3.9.11/maven-resolver-provider-3.9.11.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.maven.maven-resolver-provider-3.9.11/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-resolver-provider/3.9.11/maven-resolver-provider-3.9.11.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.maven.maven-resolver-provider-3.9.11/META-INF/NOTICE",
+        "sha256": "003a7495ba0cb2b4f3300b84148aa419efdd4725a1692d3eda4974a24d3c5b56",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-resolver-provider/3.9.11/maven-resolver-provider-3.9.11.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.maven.resolver:maven-resolver-spi:1.9.24",
+    "jarSHA256": "e3153906e93333c106ee18babb72ba7984ccb15e9116ea08f88c71b8d9387e01",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-spi/1.9.24/maven-resolver-spi-1.9.24.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.maven.resolver.maven-resolver-spi-1.9.24/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-spi/1.9.24/maven-resolver-spi-1.9.24.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.maven.resolver.maven-resolver-spi-1.9.24/META-INF/NOTICE",
+        "sha256": "33ad944db22726f5789245f2d01876130b9d4d6ca9d56ebb59825dc4bcebc3be",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-spi/1.9.24/maven-resolver-spi-1.9.24.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.maven.resolver:maven-resolver-transport-file:1.9.24",
+    "jarSHA256": "b09268d41e1dfcae15a829d45a512ca29d62b727421d3bd6383ac6252e5e960f",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-transport-file/1.9.24/maven-resolver-transport-file-1.9.24.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.maven.resolver.maven-resolver-transport-file-1.9.24/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-transport-file/1.9.24/maven-resolver-transport-file-1.9.24.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.maven.resolver.maven-resolver-transport-file-1.9.24/META-INF/NOTICE",
+        "sha256": "a7860e23e81e3d988f927b6826f78b7120acbc04871cfdd4b73214de4f432eba",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-transport-file/1.9.24/maven-resolver-transport-file-1.9.24.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.maven.resolver:maven-resolver-transport-http:1.9.24",
+    "jarSHA256": "a0de339a8dd3473d9abaa1cf974507f38783e26af31d36a90c1e59cc8714ded0",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-transport-http/1.9.24/maven-resolver-transport-http-1.9.24.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.maven.resolver.maven-resolver-transport-http-1.9.24/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-transport-http/1.9.24/maven-resolver-transport-http-1.9.24.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.maven.resolver.maven-resolver-transport-http-1.9.24/META-INF/NOTICE",
+        "sha256": "f73e5365b466f4067ec7dcf9f2b7aaa928510a55a1cfe2d86968705a39e80fd0",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-transport-http/1.9.24/maven-resolver-transport-http-1.9.24.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.maven.resolver:maven-resolver-util:1.9.24",
+    "jarSHA256": "aeb7e776a8c47b1c317a2581f299e2525b044cb8abde31164e970bbbefab12b1",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-util/1.9.24/maven-resolver-util-1.9.24.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.maven.resolver.maven-resolver-util-1.9.24/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-util/1.9.24/maven-resolver-util-1.9.24.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.maven.resolver.maven-resolver-util-1.9.24/META-INF/NOTICE",
+        "sha256": "9e7ebe763825b132faf0899f367fb0f81489b366086741278ef9748b50269fc8",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-util/1.9.24/maven-resolver-util-1.9.24.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.maven:maven-settings:3.9.11",
+    "jarSHA256": "026718d47d19e360d978857bc63d3dc065884fc2c801563d8a2a77b5ab74ccf8",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-settings/3.9.11/maven-settings-3.9.11.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.maven.maven-settings-3.9.11/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-settings/3.9.11/maven-settings-3.9.11.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.maven.maven-settings-3.9.11/META-INF/NOTICE",
+        "sha256": "a3ff406a9efa2e6b002c5d4ea61bc96ae64e3fa0b144a0b6437d337ec291db96",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-settings/3.9.11/maven-settings-3.9.11.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.apache.maven:maven-settings-builder:3.9.11",
+    "jarSHA256": "33c96e4ca5a15b7c93180f6b2f8deb15f511dfc15dda0d2b671c968b22108972",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-settings-builder/3.9.11/maven-settings-builder-3.9.11.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.apache.maven.maven-settings-builder-3.9.11/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-settings-builder/3.9.11/maven-settings-builder-3.9.11.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.apache.maven.maven-settings-builder-3.9.11/META-INF/NOTICE",
+        "sha256": "de2cb3e96dfc4ac454111a62e9d1eaf30205eda5075c7dde9004050992cd5777",
+        "source": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-settings-builder/3.9.11/maven-settings-builder-3.9.11.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.eclipse.sisu:org.eclipse.sisu.inject:0.9.0.M4",
+    "jarSHA256": "1cbd7a965a5e2a9ea823bab311962a4e5aa5c240705bdbad5a52b40ffdfa1004",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/eclipse/sisu/org.eclipse.sisu.inject/0.9.0.M4/org.eclipse.sisu.inject-0.9.0.M4.jar",
+    "declaredLicenses": [
+      {
+        "name": "Eclipse Public License, Version 2.0",
+        "url": "https://www.eclipse.org/legal/epl-v20.html",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.eclipse.sisu.org.eclipse.sisu.inject-0.9.0.M4/SOURCE-COPYRIGHT-HEADER.txt",
+        "sha256": "b3439b82b8894509760e7e444f88e68f7eeeec697d3534a4e20c9c77f8a814c6",
+        "source": "https://repo.maven.apache.org/maven2/org/eclipse/sisu/org.eclipse.sisu.inject/0.9.0.M4/org.eclipse.sisu.inject-0.9.0.M4-sources.jar!/org/eclipse/sisu/BeanEntry.java",
+        "kind": "exact-version-source-copyright-header"
+      },
+      {
+        "file": "artifacts/org.eclipse.sisu.org.eclipse.sisu.inject-0.9.0.M4/source-headers/000.txt",
+        "sha256": "b3439b82b8894509760e7e444f88e68f7eeeec697d3534a4e20c9c77f8a814c6",
+        "source": "https://repo.maven.apache.org/maven2/org/eclipse/sisu/org.eclipse.sisu.inject/0.9.0.M4/org.eclipse.sisu.inject-0.9.0.M4-sources.jar!/org/eclipse/sisu/BeanEntry.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "org/eclipse/sisu/BeanEntry.java",
+          "org/eclipse/sisu/Description.java",
+          "org/eclipse/sisu/Dynamic.java",
+          "org/eclipse/sisu/EagerSingleton.java",
+          "org/eclipse/sisu/Hidden.java",
+          "org/eclipse/sisu/Mediator.java",
+          "org/eclipse/sisu/Nullable.java",
+          "org/eclipse/sisu/Parameters.java",
+          "org/eclipse/sisu/PostConstruct.java",
+          "org/eclipse/sisu/PreDestroy.java",
+          "org/eclipse/sisu/Priority.java",
+          "org/eclipse/sisu/Typed.java",
+          "org/eclipse/sisu/bean/BeanBinder.java",
+          "org/eclipse/sisu/bean/BeanInjector.java",
+          "org/eclipse/sisu/bean/BeanLifecycle.java",
+          "org/eclipse/sisu/bean/BeanListener.java",
+          "org/eclipse/sisu/bean/BeanManager.java",
+          "org/eclipse/sisu/bean/BeanProperties.java",
+          "org/eclipse/sisu/bean/BeanProperty.java",
+          "org/eclipse/sisu/bean/BeanPropertyField.java",
+          "org/eclipse/sisu/bean/BeanPropertyIterator.java",
+          "org/eclipse/sisu/bean/BeanPropertySetter.java",
+          "org/eclipse/sisu/bean/BeanScheduler.java",
+          "org/eclipse/sisu/bean/DeclaredMembers.java",
+          "org/eclipse/sisu/bean/IgnoreSetters.java",
+          "org/eclipse/sisu/bean/LifecycleBuilder.java",
+          "org/eclipse/sisu/bean/LifecycleManager.java",
+          "org/eclipse/sisu/bean/LifecycleModule.java",
+          "org/eclipse/sisu/bean/PropertyBinder.java",
+          "org/eclipse/sisu/bean/PropertyBinding.java",
+          "org/eclipse/sisu/bean/package-info.java",
+          "org/eclipse/sisu/inject/AnnotatedSource.java",
+          "org/eclipse/sisu/inject/BeanCache.java",
+          "org/eclipse/sisu/inject/BeanLocator.java",
+          "org/eclipse/sisu/inject/BindingPublisher.java",
+          "org/eclipse/sisu/inject/BindingSubscriber.java",
+          "org/eclipse/sisu/inject/DefaultBeanLocator.java",
+          "org/eclipse/sisu/inject/DefaultRankingFunction.java",
+          "org/eclipse/sisu/inject/DeferredClass.java",
+          "org/eclipse/sisu/inject/DeferredProvider.java",
+          "org/eclipse/sisu/inject/DescriptionSource.java",
+          "org/eclipse/sisu/inject/Guice4.java",
+          "org/eclipse/sisu/inject/HiddenSource.java",
+          "org/eclipse/sisu/inject/Implementations.java",
+          "org/eclipse/sisu/inject/ImplicitBindings.java",
+          "org/eclipse/sisu/inject/InjectorBindings.java",
+          "org/eclipse/sisu/inject/LazyBeanEntry.java",
+          "org/eclipse/sisu/inject/Legacy.java",
+          "org/eclipse/sisu/inject/LocatedBeans.java",
+          "org/eclipse/sisu/inject/Logs.java",
+          "org/eclipse/sisu/inject/MildConcurrentKeys.java",
+          "org/eclipse/sisu/inject/MildConcurrentValues.java",
+          "org/eclipse/sisu/inject/MildElements.java",
+          "org/eclipse/sisu/inject/MildKeys.java",
+          "org/eclipse/sisu/inject/MildValues.java",
+          "org/eclipse/sisu/inject/MutableBeanLocator.java",
+          "org/eclipse/sisu/inject/PrioritySource.java",
+          "org/eclipse/sisu/inject/QualifyingStrategy.java",
+          "org/eclipse/sisu/inject/RankedBindings.java",
+          "org/eclipse/sisu/inject/RankedSequence.java",
+          "org/eclipse/sisu/inject/RankingFunction.java",
+          "org/eclipse/sisu/inject/Soft.java",
+          "org/eclipse/sisu/inject/Sources.java",
+          "org/eclipse/sisu/inject/TypeArguments.java",
+          "org/eclipse/sisu/inject/WatchedBeans.java",
+          "org/eclipse/sisu/inject/Weak.java",
+          "org/eclipse/sisu/inject/package-info.java",
+          "org/eclipse/sisu/launch/BundleModule.java",
+          "org/eclipse/sisu/launch/BundlePlan.java",
+          "org/eclipse/sisu/launch/InjectedTest.java",
+          "org/eclipse/sisu/launch/InjectedTestCase.java",
+          "org/eclipse/sisu/launch/Main.java",
+          "org/eclipse/sisu/launch/SisuBundlePlan.java",
+          "org/eclipse/sisu/launch/SisuExtender.java",
+          "org/eclipse/sisu/launch/SisuExtensions.java",
+          "org/eclipse/sisu/launch/SisuTracker.java",
+          "org/eclipse/sisu/launch/package-info.java",
+          "org/eclipse/sisu/osgi/BindingTracker.java",
+          "org/eclipse/sisu/osgi/ServiceBinding.java",
+          "org/eclipse/sisu/osgi/ServiceBindings.java",
+          "org/eclipse/sisu/package-info.java",
+          "org/eclipse/sisu/space/AbstractDeferredClass.java",
+          "org/eclipse/sisu/space/AbstractSisuIndex.java",
+          "org/eclipse/sisu/space/AnnotationVisitor.java",
+          "org/eclipse/sisu/space/BeanScanning.java",
+          "org/eclipse/sisu/space/BundleClassSpace.java",
+          "org/eclipse/sisu/space/ClassFinder.java",
+          "org/eclipse/sisu/space/ClassSpace.java",
+          "org/eclipse/sisu/space/ClassVisitor.java",
+          "org/eclipse/sisu/space/CloningClassSpace.java",
+          "org/eclipse/sisu/space/DefaultClassFinder.java",
+          "org/eclipse/sisu/space/FileEntryIterator.java",
+          "org/eclipse/sisu/space/GlobberStrategy.java",
+          "org/eclipse/sisu/space/IndexedClassFinder.java",
+          "org/eclipse/sisu/space/LoadedClass.java",
+          "org/eclipse/sisu/space/MediationListener.java",
+          "org/eclipse/sisu/space/NamedClass.java",
+          "org/eclipse/sisu/space/QualifiedTypeBinder.java",
+          "org/eclipse/sisu/space/QualifiedTypeListener.java",
+          "org/eclipse/sisu/space/QualifiedTypeVisitor.java",
+          "org/eclipse/sisu/space/QualifierCache.java",
+          "org/eclipse/sisu/space/ResourceEnumeration.java",
+          "org/eclipse/sisu/space/SisuIndex.java",
+          "org/eclipse/sisu/space/SisuIndexAPT6.java",
+          "org/eclipse/sisu/space/SpaceModule.java",
+          "org/eclipse/sisu/space/SpaceScanner.java",
+          "org/eclipse/sisu/space/SpaceVisitor.java",
+          "org/eclipse/sisu/space/Streams.java",
+          "org/eclipse/sisu/space/Tokens.java",
+          "org/eclipse/sisu/space/URLClassSpace.java",
+          "org/eclipse/sisu/space/WildcardKey.java",
+          "org/eclipse/sisu/space/ZipEntryIterator.java",
+          "org/eclipse/sisu/space/package-info.java",
+          "org/eclipse/sisu/wire/AbstractTypeConverter.java",
+          "org/eclipse/sisu/wire/BeanProviders.java",
+          "org/eclipse/sisu/wire/ChildWireModule.java",
+          "org/eclipse/sisu/wire/DependencyAnalyzer.java",
+          "org/eclipse/sisu/wire/DependencyVerifier.java",
+          "org/eclipse/sisu/wire/DynamicGlue.java",
+          "org/eclipse/sisu/wire/ElementAnalyzer.java",
+          "org/eclipse/sisu/wire/ElementMerger.java",
+          "org/eclipse/sisu/wire/EntryListAdapter.java",
+          "org/eclipse/sisu/wire/EntryMapAdapter.java",
+          "org/eclipse/sisu/wire/EntrySetAdapter.java",
+          "org/eclipse/sisu/wire/FileTypeConverter.java",
+          "org/eclipse/sisu/wire/GlueLoader.java",
+          "org/eclipse/sisu/wire/LocatorWiring.java",
+          "org/eclipse/sisu/wire/MergedModule.java",
+          "org/eclipse/sisu/wire/MergedProperties.java",
+          "org/eclipse/sisu/wire/NamedIterableAdapter.java",
+          "org/eclipse/sisu/wire/ParameterKeys.java",
+          "org/eclipse/sisu/wire/PathTypeConverter.java",
+          "org/eclipse/sisu/wire/PlaceholderBeanProvider.java",
+          "org/eclipse/sisu/wire/ProviderIterableAdapter.java",
+          "org/eclipse/sisu/wire/StringProperties.java",
+          "org/eclipse/sisu/wire/TypeConverterCache.java",
+          "org/eclipse/sisu/wire/URLTypeConverter.java",
+          "org/eclipse/sisu/wire/WireModule.java",
+          "org/eclipse/sisu/wire/Wiring.java",
+          "org/eclipse/sisu/wire/package-info.java",
+          "org/sonatype/inject/BeanEntry.java",
+          "org/sonatype/inject/BeanScanning.java",
+          "org/sonatype/inject/Description.java",
+          "org/sonatype/inject/EagerSingleton.java",
+          "org/sonatype/inject/Mediator.java",
+          "org/sonatype/inject/Nullable.java",
+          "org/sonatype/inject/Parameters.java",
+          "org/sonatype/inject/package-info.java"
+        ]
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/EPL-2.0.html",
+        "sha256": "211197b2536280e3360a055087abb7cf95dbd25a015631c7d7b6de9513e5347d",
+        "source": "https://www.eclipse.org/legal/epl-2.0/",
+        "kind": "canonical-full-license-text"
+      }
+    ],
+    "sourceOffer": "Exact corresponding sources retained at source-jars/org.eclipse.sisu.inject-0.9.0.M4-sources.jar; make source availability clear when redistributing EPL component."
+  },
+  {
+    "coordinate": "org.codehaus.plexus:plexus-cipher:2.0",
+    "jarSHA256": "9a7f1b5c5a9effd61eadfd8731452a2f76a8e79111fac391ef75ea801bea203a",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-cipher/2.0/plexus-cipher-2.0.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache License, Version 2.0",
+        "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.codehaus.plexus.plexus-cipher-2.0/SOURCE-COPYRIGHT-HEADER.txt",
+        "sha256": "e9d48186d8a7fde9b3435a1f1063021f66d74e9469059fe8662ff30cb98a9973",
+        "source": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-cipher/2.0/plexus-cipher-2.0-sources.jar!/org/sonatype/plexus/components/cipher/DefaultPlexusCipher.java",
+        "kind": "exact-version-source-copyright-header"
+      },
+      {
+        "file": "artifacts/org.codehaus.plexus.plexus-cipher-2.0/source-headers/000.txt",
+        "sha256": "e9d48186d8a7fde9b3435a1f1063021f66d74e9469059fe8662ff30cb98a9973",
+        "source": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-cipher/2.0/plexus-cipher-2.0-sources.jar!/org/sonatype/plexus/components/cipher/DefaultPlexusCipher.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "org/sonatype/plexus/components/cipher/DefaultPlexusCipher.java",
+          "org/sonatype/plexus/components/cipher/PlexusCipher.java",
+          "org/sonatype/plexus/components/cipher/PlexusCipherException.java"
+        ]
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.codehaus.plexus:plexus-interpolation:1.28",
+    "jarSHA256": "ab2a8715570438a2e4164d85ad3e8d489eabc38ea5093c2eb8ab7f58403535b5",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-interpolation/1.28/plexus-interpolation-1.28.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache-2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.codehaus.plexus.plexus-interpolation-1.28/SOURCE-COPYRIGHT-HEADER.txt",
+        "sha256": "57bd120c4cadb2f81a76527ec2bcabd98fc4f298a76cd11380e87d82420e941a",
+        "source": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-interpolation/1.28/plexus-interpolation-1.28-sources.jar!/org/codehaus/plexus/interpolation/InterpolatorFilterReader.java",
+        "kind": "exact-version-source-copyright-header"
+      },
+      {
+        "file": "artifacts/org.codehaus.plexus.plexus-interpolation-1.28/source-headers/000.txt",
+        "sha256": "57bd120c4cadb2f81a76527ec2bcabd98fc4f298a76cd11380e87d82420e941a",
+        "source": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-interpolation/1.28/plexus-interpolation-1.28-sources.jar!/org/codehaus/plexus/interpolation/InterpolatorFilterReader.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "org/codehaus/plexus/interpolation/InterpolatorFilterReader.java",
+          "org/codehaus/plexus/interpolation/multi/MultiDelimiterInterpolatorFilterReader.java"
+        ]
+      },
+      {
+        "file": "artifacts/org.codehaus.plexus.plexus-interpolation-1.28/source-headers/001.txt",
+        "sha256": "5dd80e0aa5908f1e5a3daa6c2c7f7cdc8907bd47edf4d06cba7b98de5f003dbf",
+        "source": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-interpolation/1.28/plexus-interpolation-1.28-sources.jar!/org/codehaus/plexus/interpolation/os/Os.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "org/codehaus/plexus/interpolation/os/Os.java"
+        ]
+      },
+      {
+        "file": "artifacts/org.codehaus.plexus.plexus-interpolation-1.28/source-headers/002.txt",
+        "sha256": "9b88dc12d447f60a471025920440fd546f63a2cdb6766379c347c90e3e1bd8b2",
+        "source": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-interpolation/1.28/plexus-interpolation-1.28-sources.jar!/org/codehaus/plexus/interpolation/util/StringUtils.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "org/codehaus/plexus/interpolation/util/StringUtils.java"
+        ]
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.codehaus.plexus:plexus-sec-dispatcher:2.0",
+    "jarSHA256": "873139960c4c780176dda580b003a2c4bf82188bdce5bb99234e224ef7acfceb",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-sec-dispatcher/2.0/plexus-sec-dispatcher-2.0.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache License, Version 2.0",
+        "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.codehaus.plexus.plexus-sec-dispatcher-2.0/SOURCE-COPYRIGHT-HEADER.txt",
+        "sha256": "01b4f4f11abdb9e5fa11720679f76fec616a0964cd85f1992e638f6d79cbe20d",
+        "source": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-sec-dispatcher/2.0/plexus-sec-dispatcher-2.0-sources.jar!/org/sonatype/plexus/components/sec/dispatcher/DefaultSecDispatcher.java",
+        "kind": "exact-version-source-copyright-header"
+      },
+      {
+        "file": "artifacts/org.codehaus.plexus.plexus-sec-dispatcher-2.0/source-headers/000.txt",
+        "sha256": "01b4f4f11abdb9e5fa11720679f76fec616a0964cd85f1992e638f6d79cbe20d",
+        "source": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-sec-dispatcher/2.0/plexus-sec-dispatcher-2.0-sources.jar!/org/sonatype/plexus/components/sec/dispatcher/DefaultSecDispatcher.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "org/sonatype/plexus/components/sec/dispatcher/DefaultSecDispatcher.java",
+          "org/sonatype/plexus/components/sec/dispatcher/PasswordDecryptor.java",
+          "org/sonatype/plexus/components/sec/dispatcher/SecDispatcher.java",
+          "org/sonatype/plexus/components/sec/dispatcher/SecDispatcherException.java",
+          "org/sonatype/plexus/components/sec/dispatcher/SecUtil.java"
+        ]
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.codehaus.plexus:plexus-utils:3.6.0",
+    "jarSHA256": "27ef130e32c236090e408fb5498d94cb9ea26d14070fb1c8985d607b62d098d1",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-utils/3.6.0/plexus-utils-3.6.0.jar",
+    "declaredLicenses": [
+      {
+        "name": "Apache License, Version 2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.codehaus.plexus.plexus-utils-3.6.0/META-INF/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-utils/3.6.0/plexus-utils-3.6.0.jar!/META-INF/LICENSE",
+        "kind": "bundled-license-or-notice"
+      },
+      {
+        "file": "artifacts/org.codehaus.plexus.plexus-utils-3.6.0/META-INF/NOTICE",
+        "sha256": "d478d95476787007320df9dafb15c932849281e2ace56e2aacdac475d29470d7",
+        "source": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-utils/3.6.0/plexus-utils-3.6.0.jar!/META-INF/NOTICE",
+        "kind": "bundled-license-or-notice"
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": [
+      {
+        "file": "common/Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "kind": "canonical-full-license-text"
+      }
+    ]
+  },
+  {
+    "coordinate": "org.slf4j:slf4j-api:1.7.36",
+    "jarSHA256": "d3ef575e3e4979678dc01bf1dcce51021493b4d11fb7f1be8ad982877c16a1c0",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar",
+    "declaredLicenses": [
+      {
+        "name": "MIT License",
+        "url": "http://www.opensource.org/licenses/mit-license.php",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.slf4j.slf4j-api-1.7.36/SOURCE-COPYRIGHT-HEADER.txt",
+        "sha256": "c732ac630c30cc6ce1cbbd9ac5d64b93dcc0f4266968aff2d14e43df3966f9a8",
+        "source": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36-sources.jar!/org/slf4j/ILoggerFactory.java",
+        "kind": "exact-version-source-copyright-header"
+      },
+      {
+        "file": "artifacts/org.slf4j.slf4j-api-1.7.36/source-headers/000.txt",
+        "sha256": "c732ac630c30cc6ce1cbbd9ac5d64b93dcc0f4266968aff2d14e43df3966f9a8",
+        "source": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36-sources.jar!/org/slf4j/ILoggerFactory.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "org/slf4j/ILoggerFactory.java",
+          "org/slf4j/IMarkerFactory.java",
+          "org/slf4j/Logger.java",
+          "org/slf4j/LoggerFactory.java",
+          "org/slf4j/MDC.java",
+          "org/slf4j/Marker.java",
+          "org/slf4j/MarkerFactory.java",
+          "org/slf4j/helpers/BasicMDCAdapter.java",
+          "org/slf4j/helpers/BasicMarker.java",
+          "org/slf4j/helpers/BasicMarkerFactory.java",
+          "org/slf4j/helpers/FormattingTuple.java",
+          "org/slf4j/helpers/MarkerIgnoringBase.java",
+          "org/slf4j/helpers/MessageFormatter.java",
+          "org/slf4j/helpers/NOPLogger.java",
+          "org/slf4j/helpers/NOPLoggerFactory.java",
+          "org/slf4j/helpers/NOPMDCAdapter.java",
+          "org/slf4j/helpers/NamedLoggerBase.java",
+          "org/slf4j/helpers/SubstituteLogger.java",
+          "org/slf4j/helpers/SubstituteLoggerFactory.java",
+          "org/slf4j/helpers/Util.java",
+          "org/slf4j/impl/StaticLoggerBinder.java",
+          "org/slf4j/impl/StaticMDCBinder.java",
+          "org/slf4j/impl/StaticMarkerBinder.java",
+          "org/slf4j/spi/LocationAwareLogger.java",
+          "org/slf4j/spi/LoggerFactoryBinder.java",
+          "org/slf4j/spi/MDCAdapter.java",
+          "org/slf4j/spi/MarkerFactoryBinder.java"
+        ]
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": []
+  },
+  {
+    "coordinate": "org.slf4j:slf4j-nop:1.7.36",
+    "jarSHA256": "c214958b07816cb4412b30c7bdbd4308ffdc6ba2a83767b8f3a9229cbd9274d6",
+    "jarURL": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-nop/1.7.36/slf4j-nop-1.7.36.jar",
+    "declaredLicenses": [
+      {
+        "name": "MIT License",
+        "url": "http://www.opensource.org/licenses/mit-license.php",
+        "distribution": "repo"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "artifacts/org.slf4j.slf4j-nop-1.7.36/SOURCE-COPYRIGHT-HEADER.txt",
+        "sha256": "c732ac630c30cc6ce1cbbd9ac5d64b93dcc0f4266968aff2d14e43df3966f9a8",
+        "source": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-nop/1.7.36/slf4j-nop-1.7.36-sources.jar!/org/slf4j/impl/StaticLoggerBinder.java",
+        "kind": "exact-version-source-copyright-header"
+      },
+      {
+        "file": "artifacts/org.slf4j.slf4j-nop-1.7.36/source-headers/000.txt",
+        "sha256": "c732ac630c30cc6ce1cbbd9ac5d64b93dcc0f4266968aff2d14e43df3966f9a8",
+        "source": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-nop/1.7.36/slf4j-nop-1.7.36-sources.jar!/org/slf4j/impl/StaticLoggerBinder.java",
+        "kind": "exact-version-source-copyright-header",
+        "appliesToSourceFiles": [
+          "org/slf4j/impl/StaticLoggerBinder.java",
+          "org/slf4j/impl/StaticMDCBinder.java",
+          "org/slf4j/impl/StaticMarkerBinder.java"
+        ]
+      }
+    ],
+    "gaps": [],
+    "fullLicenseTexts": []
+  }
+]

@@ -348,7 +348,7 @@ class Shapes {
         paths = ["a/src/main/java/p/A.java", "b/src/main/java/p/B.java"]
         completed = run(request(self.root, paths))
         self.assertEqual(completed["outcome"], "ok", completed)
-        self.assertEqual(len(completed["evidence"]["configurations"]), 2)
+        self.assertEqual(len(completed["evidence"]["configurations"]), 6)
 
     def test_binding_keys_are_scoped_to_each_maven_module(self):
         """同名类在独立模块中不能借另一模块的 binding key 指向选中节点。"""
@@ -384,7 +384,7 @@ class Shapes {
     def test_actual_maven_parent_overrides_aggregator(self):
         """子模块真正的仓内 parent 必须求值，不能继承无关聚合 POM 的 release。"""
         write(self.root, "pom.xml", "<project><modelVersion>4.0.0</modelVersion><groupId>p</groupId><artifactId>root</artifactId><version>1</version><packaging>pom</packaging><properties><maven.compiler.release>17</maven.compiler.release></properties><modules><module>child</module></modules></project>")
-        write(self.root, "parents/parent/pom.xml", "<project><modelVersion>4.0.0</modelVersion><groupId>p</groupId><artifactId>other</artifactId><version>1</version><properties><maven.compiler.release>21</maven.compiler.release></properties></project>")
+        write(self.root, "parents/parent/pom.xml", "<project><modelVersion>4.0.0</modelVersion><groupId>p</groupId><artifactId>other</artifactId><version>1</version><packaging>pom</packaging><properties><maven.compiler.release>21</maven.compiler.release></properties></project>")
         write(self.root, "child/pom.xml", "<project><modelVersion>4.0.0</modelVersion><parent><groupId>p</groupId><artifactId>other</artifactId><version>1</version><relativePath>../parents/parent/pom.xml</relativePath></parent><artifactId>child</artifactId></project>")
         path = "child/src/main/java/p/Child.java"
         write(self.root, path, "package p; class Child {}")
@@ -473,8 +473,8 @@ class Shapes {
 
     def test_inherited_maven_source_roots(self):
         """父 POM 的主测试目录在子模块继承，默认目录不再属于该模块。"""
-        write(self.root, "pom.xml", "<project><groupId>p</groupId><artifactId>parent</artifactId><version>1</version><modules><module>child</module></modules><properties><maven.compiler.release>17</maven.compiler.release></properties><build><sourceDirectory>sources</sourceDirectory><testSourceDirectory>checks</testSourceDirectory></build></project>")
-        write(self.root, "child/pom.xml", "<project><parent><groupId>p</groupId><artifactId>parent</artifactId><version>1</version></parent><artifactId>child</artifactId></project>")
+        write(self.root, "pom.xml", "<project><modelVersion>4.0.0</modelVersion><groupId>p</groupId><artifactId>parent</artifactId><version>1</version><packaging>pom</packaging><modules><module>child</module></modules><properties><maven.compiler.release>17</maven.compiler.release></properties><build><sourceDirectory>sources</sourceDirectory><testSourceDirectory>checks</testSourceDirectory></build></project>")
+        write(self.root, "child/pom.xml", "<project><modelVersion>4.0.0</modelVersion><parent><groupId>p</groupId><artifactId>parent</artifactId><version>1</version></parent><artifactId>child</artifactId></project>")
         main, test, default = "child/sources/B.java", "child/checks/Check.java", "child/src/main/java/A.java"
         for path, name in [(main, "B"), (test, "Check"), (default, "A")]:
             write(self.root, path, "class " + name + " {}")
