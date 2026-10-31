@@ -19,7 +19,14 @@ final class SourceSnapshot implements AutoCloseable {
     private final Map<Path, byte[]> hashes = new LinkedHashMap<>();
     private final Map<Path, Integer> conditions = new LinkedHashMap<>();
     private final Map<Path, byte[]> external = new LinkedHashMap<>();
+    private final Map<Path, Path> binaryCopies = new LinkedHashMap<>();
+    private final Map<Path, Set<Path>> binaryTrees = new LinkedHashMap<>();
+    private final Map<Path, List<String>> listings = new LinkedHashMap<>();
     private long bytes;
+    private boolean retained;
+    private boolean generatedFrozen;
+    private final Set<Path> generatedDirectories = new HashSet<>();
+    private final Map<Path, byte[]> generated = new LinkedHashMap<>();
 
     private SourceSnapshot(Path original, ProjectModel.Checkpoint checkpoint) throws IOException {
         this.original = original;
@@ -34,6 +41,8 @@ final class SourceSnapshot implements AutoCloseable {
         try {
             snapshot = new SourceSnapshot(original, checkpoint);
             snapshot.scan(original, true, false);
+            for (String input : List.of("settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts",
+                "gradle/wrapper/gradle-wrapper.properties", "gradle/gradle-daemon-jvm.properties")) snapshot.validatePath(input, false);
             snapshot.validatePath("pom.xml", false);
             snapshot.validatePath("narrant-java.json", false);
             for (String path : selected) {
@@ -50,12 +59,61 @@ final class SourceSnapshot implements AutoCloseable {
     Path original() { return original; }
     Path outputRoot() { return outputRoot; }
 
+    /** JDT consumes owned immutable binaries, never a live external dependency cache. */
+    String freezeBinary(String name) throws Failure {
+        try {
+            Path source=Path.of(name).toRealPath();
+            if(binaryCopies.containsKey(source)) return binaryCopies.get(source).toString();
+            Path destination=outputRoot.resolve("binaries").resolve(Integer.toString(binaryCopies.size())).resolve(source.getFileName()==null?"root":source.getFileName().toString());
+            if(Files.isDirectory(source)) {
+                Set<Path> members=new HashSet<>();
+                try(var paths=Files.walk(source)) {
+                    for(Path path:paths.toList()) {
+                        checkpoint.check();
+                        if(Files.isSymbolicLink(path)) throw new ProjectModel.BoundaryFailure("unsupported_configuration","binary directory alias unsupported");
+                        Path relative=source.relativize(path); members.add(relative);
+                        if(Files.isDirectory(path)) Files.createDirectories(destination.resolve(relative));
+                        else copyBinary(path,destination.resolve(relative));
+                    }
+                }
+                binaryTrees.put(source,Set.copyOf(members));
+                binaryTrees.put(destination,Set.copyOf(members));
+            } else copyBinary(source,destination);
+            binaryCopies.put(source,destination);
+            return destination.toString();
+        } catch(IOException e) { throw io(); }
+    }
+
+    private void copyBinary(Path source,Path destination) throws IOException,Failure {
+        checkpoint.check();
+        long size=Files.size(source);
+        if(!Files.isRegularFile(source) || size>128L*1024*1024 || (bytes+=size)>512L*1024*1024 || external.size()>100000)
+            throw new Failure("resource_limit","Gradle binary context exceeds input limit");
+        watch(source);
+        Files.createDirectories(destination.getParent());
+        Files.copy(source,destination);
+        external.put(destination,external.get(source));
+    }
+
     /** Track settings including absence, so creation/removal during import is also detected. */
     void watch(Path path) throws Failure {
         try {
             if (!external.containsKey(path)) external.put(path, Files.exists(path) ? digest(Files.readAllBytes(path)) : null);
         }
         catch (IOException e) { throw io(); }
+    }
+
+    void watchListing(Path directory) throws Failure {
+        try { if(!listings.containsKey(directory)) listings.put(directory,listing(directory)); }
+        catch(IOException e) { throw io(); }
+    }
+    private List<String> listing(Path directory) throws IOException,Failure {
+        if(!Files.exists(directory)) return List.of();
+        try(var entries=Files.list(directory)) {
+            List<String> names=entries.limit(100001).map(path -> path.getFileName().toString()).sorted().toList();
+            if(names.size()>100000) throw new Failure("resource_limit","Gradle user input listing exceeds limit");
+            return names;
+        }
     }
 
     /** Preserve Maven's file-activation inputs, including absent paths and cache-local markers. */
@@ -142,6 +200,34 @@ final class SourceSnapshot implements AutoCloseable {
         hashes.put(relative, digest(data));
     }
 
+    boolean originalMember(String relative) { return hashes.containsKey(Path.of(relative)); }
+
+    /** Admit only auxiliary build output and model-declared context, then freeze it before JDT. */
+    void freezeGradleOutputs(List<String> sourceRoots) throws Failure {
+        if (generatedFrozen) throw new IllegalStateException("Gradle output snapshot already frozen");
+        generatedFrozen=true;
+        try (var paths = Files.walk(root)) {
+            for (Path path : paths.toList()) {
+                checkpoint.check();
+                Path relative = root.relativize(path);
+                if (directories.contains(relative) || hashes.containsKey(relative)) continue;
+                if (Files.isSymbolicLink(path)) throw changed();
+                String name = relative.toString().replace('\\','/');
+                boolean auxiliary = Arrays.stream(name.split("/")).anyMatch(part -> part.equals("build") || part.equals(".gradle"));
+                boolean declared = sourceRoots.stream().anyMatch(source -> source.isEmpty() || name.equals(source) || name.startsWith(source + "/") || source.startsWith(name + "/"));
+                if (Files.isDirectory(path)) {
+                    if (!auxiliary && !declared) throw changed();
+                    generatedDirectories.add(relative);
+                } else if (Files.isRegularFile(path)) {
+                    if (!auxiliary && !declared && path.toString().endsWith(".java")) throw changed();
+                    if (Files.size(path)>32L*1024*1024 || (bytes+=Files.size(path))>512L*1024*1024 || generated.size()>=100000)
+                        throw new Failure("resource_limit", "Gradle generated context exceeds input limit");
+                    generated.put(relative,digest(Files.readAllBytes(path)));
+                }
+            }
+        } catch (IOException e) { throw io(); }
+    }
+
     void verify() throws Failure {
         try {
             scan(original, false, false);
@@ -164,14 +250,29 @@ final class SourceSnapshot implements AutoCloseable {
             try (var paths = Files.walk(root)) {
                 for (Path path : paths.toList()) {
                     Path relative = root.relativize(path);
-                    if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS) && !directories.contains(relative)) throw changed();
-                    if (path.toString().endsWith(".java") && !hashes.containsKey(relative)) throw changed();
+                    if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS) && !directories.contains(relative) && !generatedDirectories.contains(relative)) throw changed();
+                    if ((path.toString().endsWith(".java") || generatedFrozen && Files.isRegularFile(path)) && !hashes.containsKey(relative) && !generated.containsKey(relative)) throw changed();
                 }
+            }
+            for (Path directory : generatedDirectories) if (!Files.isDirectory(root.resolve(directory),LinkOption.NOFOLLOW_LINKS)) throw changed();
+            for (var entry : generated.entrySet()) {
+                Path path = root.resolve(entry.getKey());
+                if (!path.toRealPath().startsWith(root) || !Arrays.equals(entry.getValue(),digest(Files.readAllBytes(path)))) throw changed();
             }
             for (var condition : conditions.entrySet()) {
                 Path evaluated = condition.getKey();
                 Path actual = evaluated.startsWith(root) ? original.resolve(root.relativize(evaluated)) : evaluated;
                 if (conditionKind(actual) != condition.getValue() || conditionKind(evaluated) != condition.getValue()) throw changed();
+            }
+            for(var listing:listings.entrySet()) if(!listing.getValue().equals(listing(listing.getKey()))) throw changed();
+            for(var tree:binaryTrees.entrySet()) try(var paths=Files.walk(tree.getKey())) {
+                Set<Path> actual=new HashSet<>();
+                for(Path path:paths.toList()) {
+                    checkpoint.check();
+                    if(Files.isSymbolicLink(path)) throw changed();
+                    actual.add(tree.getKey().relativize(path));
+                }
+                if(!actual.equals(tree.getValue())) throw changed();
             }
             for (var entry : external.entrySet()) {
                 byte[] actual = Files.exists(entry.getKey()) ? digest(Files.readAllBytes(entry.getKey())) : null;
@@ -187,7 +288,10 @@ final class SourceSnapshot implements AutoCloseable {
     private static Failure changed() { return new Failure("object_extraction_failed", "Java source or model input changed during analysis"); }
     private static Failure io() { return new Failure("object_extraction_failed", "cannot freeze or verify Java inputs"); }
 
+    void retainForToolCleanup() { retained = true; }
+
     @Override public void close() throws Failure {
+        if (retained) return;
         try {
             Files.walkFileTree(root.getParent(), new SimpleFileVisitor<>() {
                 @Override public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {

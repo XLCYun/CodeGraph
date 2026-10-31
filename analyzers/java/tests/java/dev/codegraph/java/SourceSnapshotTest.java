@@ -43,7 +43,37 @@ public final class SourceSnapshotTest {
                     }
                 } finally { Files.deleteIfExists(directory); }
             }
+            try (SourceSnapshot snapshot = SourceSnapshot.capture(root, List.of("A.java"), () -> {})) {
+                Path generated=snapshot.root().resolve("build/generated/G.java");
+                Files.createDirectories(generated.getParent()); Files.writeString(generated,"class G {}");
+                snapshot.freezeGradleOutputs(List.of("build/generated")); snapshot.verify();
+                if(snapshot.originalMember("build/generated/G.java")) throw new AssertionError("generated member selected");
+                Files.writeString(generated,"class Changed {}");
+                expectChanged(snapshot);
+            }
+            Path binary=Files.createTempFile("snapshot-binary-",".jar");
+            try {
+                for(boolean copied:List.of(false,true)) {
+                    Files.write(binary,new byte[] {1,2,3});
+                    try(SourceSnapshot snapshot=SourceSnapshot.capture(root,List.of("A.java"),()->{})) {
+                        Path frozen=Path.of(snapshot.freezeBinary(binary.toString())); snapshot.verify();
+                        Files.write(copied?frozen:binary,new byte[] {4}); expectChanged(snapshot);
+                    }
+                }
+            } finally { Files.delete(binary); }
+            Path tree=Files.createTempDirectory("snapshot-binary-tree-");
+            try {
+                Files.write(tree.resolve("A.class"),new byte[] {1});
+                try(SourceSnapshot snapshot=SourceSnapshot.capture(root,List.of("A.java"),()->{})) {
+                    snapshot.freezeBinary(tree.toString()); snapshot.verify();
+                    Files.write(tree.resolve("Added.class"),new byte[] {2}); expectChanged(snapshot);
+                }
+            } finally { Files.deleteIfExists(tree.resolve("Added.class")); Files.delete(tree.resolve("A.class")); Files.delete(tree); }
         } finally { Files.deleteIfExists(root.resolve("A.java")); Files.delete(root); }
         System.out.println("snapshot mutation and cleanup PASS");
+    }
+    private static void expectChanged(SourceSnapshot snapshot) throws Exception {
+        try { snapshot.verify(); throw new AssertionError("context mutation accepted"); }
+        catch(Main.Failure expected) { if(!expected.code.equals("object_extraction_failed")) throw expected; }
     }
 }

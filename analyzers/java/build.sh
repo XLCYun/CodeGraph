@@ -5,13 +5,5 @@ if [ "$#" -ne 2 ]; then
   echo 'usage: build.sh JDK_HOME LOCKED_LIB_DIRECTORY' >&2
   exit 2
 fi
-JDK_HOME=$1
-LIB_DIRECTORY=$2
 SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-BUILD_DIRECTORY="$SCRIPT_DIRECTORY/build/classes"
-rm -rf "$BUILD_DIRECTORY"
-mkdir -p "$BUILD_DIRECTORY"
-CLASSPATH=$(python3 "$SCRIPT_DIRECTORY/tools/classpath.py" "$LIB_DIRECTORY")
-"$JDK_HOME/bin/javac" -encoding UTF-8 -proc:none -cp "$CLASSPATH" -d "$BUILD_DIRECTORY" \
-  "$SCRIPT_DIRECTORY"/src/dev/codegraph/java/*.java
-echo "$BUILD_DIRECTORY"
+exec python3 "$SCRIPT_DIRECTORY/build.py" "$1" "$2"

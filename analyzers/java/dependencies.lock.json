@@ -398,5 +398,13 @@
     "file": "slf4j-nop-1.7.36.jar",
     "sha256": "c214958b07816cb4412b30c7bdbd4308ffdc6ba2a83767b8f3a9229cbd9274d6",
     "url": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-nop/1.7.36/slf4j-nop-1.7.36.jar"
+  },
+  {
+    "group": "org.gradle",
+    "artifact": "gradle-tooling-api",
+    "version": "8.14.3",
+    "file": "gradle-tooling-api-8.14.3.jar",
+    "sha256": "bc17bb555cfcc6ce639f71ac6d4eb8d6e8de5eb6b0abb1fec7608d984586b1be",
+    "url": "https://repo.gradle.org/gradle/libs-releases/org/gradle/gradle-tooling-api/8.14.3/gradle-tooling-api-8.14.3.jar"
   }
 ]

@@ -1,0 +1,9 @@
+# Preserve checksum-covered upstream legal/source evidence byte for byte on every platform.
+analyzers/java/licenses/maven/artifacts/** -text -whitespace
+analyzers/java/licenses/maven/common/** -text -whitespace
+analyzers/java/licenses/gradle/artifacts/** -text -whitespace
+analyzers/java/licenses/gradle/common/** -text -whitespace
+analyzers/java/licenses/gradle/poms/** -text -whitespace
+analyzers/java/licenses/gradle/gradle-*.gradle.kts -text -whitespace
+analyzers/java/licenses/gradle/gradle-ExternalModulesExtension.kt -text -whitespace
+analyzers/java/licenses/gradle/gradle-shaded-classes.txt -text -whitespace

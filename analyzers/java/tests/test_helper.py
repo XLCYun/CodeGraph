@@ -287,7 +287,8 @@ class JavaHelperTests(unittest.TestCase):
 
     def test_unimported_gradle_and_jpms_keep_structure(self):
         """Unimported project logic and JPMS descriptors retain confirmed structure."""
-        write(self.root, "build.gradle", "throw new RuntimeException('MUST_NOT_EXECUTE')")
+        write(self.root, "build.gradle", "throw new RuntimeException('UNSUPPORTED_WRAPPER')")
+        write(self.root, "gradle/wrapper/gradle-wrapper.properties", "distributionUrl=https://invalid.example/gradle-10.0-bin.zip")
         path = "src/main/java/p/Main.java"
         write(self.root, path, "package p; class Main {}")
         completed = run(request(self.root, [path]))
@@ -297,7 +298,6 @@ class JavaHelperTests(unittest.TestCase):
         write(self.root, module, "module p { exports p; }")
         completed = run(request(self.root, [path]))
         self.assertEqual(completed["outcome"], "ok", completed)
-        self.assertFalse((self.root / "MUST_NOT_EXECUTE").exists())
 
     def test_maven_literal_model_after_eof(self):
         """Literal POM requires no Maven process and finishes after EOF."""
@@ -438,7 +438,8 @@ class Shapes {
         """完整输入后的未导入配置允许明确选集返回基础图。"""
         path = "src/main/java/p/Foo.java"
         write(self.root, path, "package p; class Foo {}")
-        write(self.root, "build.gradle", "throw new Error('never run')")
+        write(self.root, "build.gradle", "throw new Error('unsupported wrapper')")
+        write(self.root, "gradle/wrapper/gradle-wrapper.properties", "distributionUrl=https://invalid.example/gradle-10.0-bin.zip")
         for _ in range(5):
             result = run(request(self.root, [path]))
             self.assertEqual(result["outcome"], "ok", result)

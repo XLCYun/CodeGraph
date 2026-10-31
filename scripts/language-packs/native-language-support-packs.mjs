@@ -36,16 +36,18 @@ export async function copyToolTree(source, destination) {
 
 /** Verify both extracted attribution evidence and full license texts before and after packaging. */
 export async function verifyJavaLicenseBundle(directory) {
-  const root = path.resolve(directory, 'maven');
-  const components = JSON.parse(await fs.readFile(path.join(root, 'manifest.json'), 'utf8'));
   let references = 0;
-  for (const component of components) for (const field of ['evidence', 'fullLicenseTexts']) {
-    for (const resource of component[field] ?? []) {
-      const file = path.resolve(root, resource.file);
-      if (!file.startsWith(`${root}${path.sep}`)) throw new Error('Java license reference escapes bundle');
-      const digest = createHash('sha256').update(await fs.readFile(file)).digest('hex');
-      if (digest !== resource.sha256) throw new Error(`Java license checksum mismatch: ${resource.file}`);
-      references++;
+  for (const bundle of ['maven', 'gradle']) {
+    const root = path.resolve(directory, bundle);
+    const components = JSON.parse(await fs.readFile(path.join(root, 'manifest.json'), 'utf8'));
+    for (const component of components) for (const field of ['evidence', 'fullLicenseTexts', 'pomEvidence']) {
+      for (const resource of (Array.isArray(component[field]) ? component[field] : component[field] ? [component[field]] : [])) {
+        const file = path.resolve(root, resource.file);
+        if (!file.startsWith(`${root}${path.sep}`)) throw new Error('Java license reference escapes bundle');
+        const digest = createHash('sha256').update(await fs.readFile(file)).digest('hex');
+        if (digest !== resource.sha256) throw new Error(`Java license checksum mismatch: ${resource.file}`);
+        references++;
+      }
     }
   }
   return references;

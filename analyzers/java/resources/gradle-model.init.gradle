@@ -1,0 +1,156 @@
+initscript { dependencies { classpath files(System.getProperty('codegraph.gradle.bridge')) } }
+import org.gradle.tooling.provider.model.ToolingModelBuilder
+import org.gradle.tooling.provider.model.ToolingModelBuilderRegistry
+import org.gradle.api.tasks.bundling.Jar
+import javax.inject.Inject
+import dev.codegraph.gradle.SourceModel
+
+class CodeGraphModel implements SourceModel { List<Map<String,Object>> sourceSets }
+class CodeGraphBuilder implements ToolingModelBuilder {
+    // One init-script classloader per owned build; all project builders share captured defaults.
+    static final Map<Object,Object> defaultCompilers = new IdentityHashMap<>()
+    boolean canBuild(String name) { name == 'dev.codegraph.gradle.SourceModel' }
+    static String id(Project p, def s) { p.path + '/' + s.name }
+    // Only unfiltered source-set outputs establish source visibility. Archive copy transformations
+    // are intentionally not treated as the original declarations.
+    static void infrastructure(Throwable failure) {
+        def seen = Collections.newSetFromMap(new IdentityHashMap<Throwable,Boolean>())
+        while (failure != null && seen.add(failure)) {
+            if (failure instanceof IOException || failure instanceof java.io.UncheckedIOException || failure instanceof SecurityException)
+                throw new IllegalStateException('cannot read Gradle model inputs', failure)
+            failure = failure.cause
+        }
+    }
+    static boolean plainSpec(def spec, def output) {
+        if (!spec.patterns.empty || !spec.copyActions.every { it.class.name == 'org.gradle.jvm.tasks.Jar$ExcludeManifestAction' } || spec.destPath) return false
+        def sources = spec.sourcePaths
+        if (!sources.empty && !sources.every { it.is(output) }) return false
+        return spec.children.every { plainSpec(it, output) }
+    }
+    static boolean plainJar(def jar, def output) {
+        if (!(jar instanceof Jar) || !jar.rootSpec.patterns.empty || !jar.rootSpec.copyActions.empty ||
+            jar.rootSpec.destPath || !jar.rootSpec.sourcePaths.empty || jar.rootSpec.children.size() != 2) return false
+        def metadata = jar.rootSpec.children.find { it.destPath == 'META-INF' }
+        if (metadata == null || !metadata.patterns.empty || !metadata.copyActions.empty ||
+            !metadata.sourcePaths.empty || metadata.children.size() != 1) return false
+        def manifest = metadata.children.first()
+        if (manifest.destPath || !manifest.patterns.empty || !manifest.copyActions.empty || !manifest.children.empty ||
+            manifest.sourcePaths.size() != 1 || manifest.sourcePaths.first().class.name != 'org.gradle.api.internal.file.collections.FileTreeAdapter') return false
+        return jar.mainSpec.sourcePaths.any { it.is(output) } && plainSpec(jar.mainSpec, output)
+    }
+    // Narrow capability check for Gradle's provider state, never "false" on missing internals.
+    static boolean explicitCompiler(def property, Project project) {
+        Class type = property.class
+        while (type != null) {
+            try {
+                def method = type.getDeclaredMethod('isExplicit')
+                method.setAccessible(true)
+                return (boolean) method.invoke(property)
+            } catch (NoSuchMethodException ignored) {
+                // Gradle 7.6 has the same explicit-state operation under getExplicitValue.
+                def accessor = type.declaredMethods.find { it.name == 'getExplicitValue' && it.parameterCount == 1 }
+                if (accessor != null) {
+                    def stateField = type.getDeclaredField('state')
+                    stateField.setAccessible(true)
+                    if (!stateField.get(property).class.name.endsWith('$NonFinalizedValue'))
+                        throw new UnsupportedOperationException('finalized compiler property state unavailable')
+                    accessor.setAccessible(true)
+                    def absent = project.providers.provider { null }
+                    return !accessor.invoke(property, [absent] as Object[]).is(absent)
+                }
+                type = type.superclass
+            }
+        }
+        throw new UnsupportedOperationException('compiler property state unavailable')
+    }
+    Object buildAll(String name, Project p) {
+        def owners = [:].withDefault { new LinkedHashSet<String>() }
+        p.rootProject.allprojects.each { owner ->
+            def sets = owner.extensions.findByName('sourceSets')
+            if (sets != null) sets.each { s ->
+                s.output.files.each { f -> owners[f.absolutePath].add(id(owner,s)) }
+                if (s.name == 'main') {
+                    def jar = owner.tasks.findByName('jar')
+                    try {
+                        if (plainJar(jar, s.output))
+                            owners[jar.archiveFile.get().asFile.absolutePath].add(id(owner,s))
+                    } catch (Exception failure) { infrastructure(failure) /* Unknown archive semantics remain unresolved. */ }
+                }
+            }
+        }
+        def rows = []
+        p.rootProject.allprojects.each { member -> rows.addAll(sourceRows(member, owners)) }
+        return new CodeGraphModel(sourceSets:rows)
+    }
+    List<Map<String,Object>> sourceRows(Project p, def owners) {
+        def rows = []
+        def sets = p.extensions.findByName('sourceSets')
+        if (sets != null) sets.each { s ->
+            def task = p.tasks.named(s.compileJavaTaskName).get()
+            def javaExtension = p.extensions.findByName('java')
+            def roots = s.java.srcDirs
+            File boundary = new File(System.getProperty('codegraph.gradle.input'))
+            boolean within = roots.every { it.canonicalFile.toPath().startsWith(boundary.toPath()) }
+            def members = within ? s.java.files : []
+            if (within && task.source.files != members)
+                throw new GradleException('unsupported replaced JavaCompile source membership')
+            def row = [id:id(p,s), module:p.path, test:s.name.toLowerCase(java.util.Locale.ROOT).endsWith('test') ||
+                    p.tasks.withType(org.gradle.api.tasks.testing.Test).any { t -> !Collections.disjoint(t.testClassesDirs.files,s.output.classesDirs.files) },
+                roots:roots.collect { it.absolutePath }, members:members.collect { it.absolutePath }, visible:[], binaries:[], complete:true,
+                release:task.options.release.orNull?.toString(), toolchain:javaExtension?.toolchain?.languageVersion?.orNull?.toString(),
+                apiUnavailable:false, source:null, target:null, encoding:task.options.encoding, inputs:[p.buildFile.absolutePath]]
+            // Membership/release survive unavailable task providers. Never use a conflicting
+            // extension target or the default platform after an uninspectable explicit override.
+            try {
+                boolean explicit = explicitCompiler(task.javaCompiler, p)
+                if (explicit) {
+                    row.toolchain = null
+                    try { row.toolchain = task.javaCompiler.get().metadata.languageVersion.toString() }
+                    catch (Exception failure) { infrastructure(failure); row.apiUnavailable=true; row.complete=false }
+                } else {
+                    if (!defaultCompilers.containsKey(task) || !task.javaCompiler.provider.is(defaultCompilers[task]))
+                        throw new UnsupportedOperationException('custom compiler convention')
+                    try {
+                        String actual = task.javaCompiler.get().metadata.languageVersion.toString()
+                        String expected = row.toolchain ?: org.gradle.api.JavaVersion.current().majorVersion
+                        if (actual != expected) { row.toolchain=null; row.apiUnavailable=true; row.complete=false }
+                    } catch (Exception failure) {
+                        infrastructure(failure)
+                        row.complete=false
+                        if (row.toolchain == null) row.apiUnavailable=true
+                    }
+                }
+            } catch (Exception failure) { infrastructure(failure); row.toolchain=null; row.apiUnavailable=true; row.complete=false }
+            // Membership and explicit target survive unavailable compiler/toolchain/dependency queries.
+            try { row.source=task.sourceCompatibility; row.target=task.targetCompatibility }
+            catch (Exception failure) { infrastructure(failure); row.complete=false }
+            try {
+                s.compileClasspath.files.each { f ->
+                    def matches=owners[f.absolutePath]
+                    if (matches.size()==1) row.visible.add(matches.first())
+                    else if (matches.empty && f.exists()) row.binaries.add(f.absolutePath)
+                    else row.complete=false
+                }
+            } catch (Exception failure) { infrastructure(failure); row.complete=false }
+            rows.add(row)
+        }
+        return rows
+    }
+}
+class CodeGraphPlugin implements Plugin<Project> {
+    private final ToolingModelBuilderRegistry registry
+    @Inject CodeGraphPlugin(ToolingModelBuilderRegistry r) { registry=r }
+    void apply(Project p) {
+        def builder = new CodeGraphBuilder()
+        registry.register(builder)
+        // Registered after the Java plugin's defaults and before ordinary build-script overrides.
+        p.plugins.withId('java') {
+            p.extensions.getByType(org.gradle.api.tasks.SourceSetContainer).all { sourceSet ->
+                p.tasks.named(sourceSet.compileJavaTaskName, org.gradle.api.tasks.compile.JavaCompile).configure { task ->
+                    builder.defaultCompilers[task] = task.javaCompiler.provider
+                }
+            }
+        }
+    }
+}
+allprojects { apply plugin: CodeGraphPlugin }

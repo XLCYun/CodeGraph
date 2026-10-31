@@ -279,14 +279,14 @@ test('Java license package includes and verifies every evidence and full-text re
     const payload = path.join(root, 'payload');
     const bundle = path.join(payload, 'licenses/Java-components');
     await stageJavaLicenses(source, bundle);
-    assert.equal(await verifyJavaLicenseBundle(bundle), 114);
+    assert.equal(await verifyJavaLicenseBundle(bundle), 150);
     const target = process.platform === 'win32' ? 'x86_64-pc-windows-msvc' : 'aarch64-apple-darwin';
     const output = await packageDirectory({ id: 'java', version: '0.1.2', target }, payload, path.join(root, 'package'));
     const extracted = path.join(root, 'extracted');
     await fs.mkdir(extracted);
     execFileSync(systemTar(), ['-xzf', path.join(output, 'pack.tar.gz'), '-C', extracted]);
     const installed = path.join(extracted, 'licenses/Java-components');
-    assert.equal(await verifyJavaLicenseBundle(installed), 114);
+    assert.equal(await verifyJavaLicenseBundle(installed), 150);
     await fs.rm(path.join(installed, 'maven/common/Apache-2.0.txt'));
     await assert.rejects(verifyJavaLicenseBundle(installed), { code: 'ENOENT' });
     await fs.writeFile(path.join(bundle, 'maven/common/EPL-2.0.html'), 'tampered');

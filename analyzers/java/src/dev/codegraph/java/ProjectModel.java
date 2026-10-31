@@ -50,6 +50,7 @@ final class ProjectModel implements AutoCloseable {
         final List<SourceRoot> roots;
         Target target;
         ImportedProject.SourceSet imported;
+        Set<String> memberFiles;
         boolean selectionOnly;
         List<SourceRoot> visibleRoots = List.of();
 
@@ -121,7 +122,7 @@ final class ProjectModel implements AutoCloseable {
             Path metadata = root.resolve("narrant-java.json");
             Path pom = root.resolve("pom.xml");
             try {
-                if (Files.exists(metadata) && Files.exists(pom))
+                if ((Files.exists(metadata) ? 1 : 0) + (Files.exists(pom) ? 1 : 0) + (GradleProjectImporter.declared(root) ? 1 : 0) > 1)
                     throw new Failure("unsupported_configuration", "ambiguous Java metadata and POM");
                 if (Files.exists(metadata)) {
                     for (Configuration config : readMetadata(originalRoot, originalRoot.resolve("narrant-java.json"), checkpoint))
@@ -129,6 +130,7 @@ final class ProjectModel implements AutoCloseable {
                     configs.addAll(readMetadata(root, metadata, checkpoint));
                 }
                 else if (Files.exists(pom)) configs.addAll(imported(MavenProjectImporter.load(snapshot, platforms, checkpoint), root));
+                else if (GradleProjectImporter.declared(root)) configs.addAll(imported(GradleProjectImporter.load(snapshot, platforms, checkpoint), root));
                 else configs.addAll(infer(root, discovery ? null : files, checkpoint));
             } catch (Failure failure) {
                 if (discovery || failure instanceof BoundaryFailure ||
@@ -147,7 +149,7 @@ final class ProjectModel implements AutoCloseable {
                 for (Configuration config : configs) for (SourceRoot sourceRoot : config.roots)
                     for (String file : model.inventory(sourceRoot)) {
                         checkpoint.check();
-                        if (unique.add(file)) files.add(file);
+                        if (confirmedMember(config,file) && snapshot.originalMember(file) && unique.add(file)) files.add(file);
                         if (files.size() > MAX_FILES) throw new Failure("resource_limit", "Java discovery exceeds file limit");
                     }
                 files.sort(Comparator.naturalOrder());
@@ -156,13 +158,15 @@ final class ProjectModel implements AutoCloseable {
                 checkpoint.check();
                 List<Configuration> matches = new ArrayList<>();
                 for (Configuration config : configs) for (SourceRoot sourceRoot : config.roots) {
-                    if (under(file, sourceRoot.path) && (!config.id.startsWith("java-config:inferred:") ||
+                    if (confirmedMember(config,file) && under(file, sourceRoot.path) && (!config.id.startsWith("java-config:inferred:") ||
                         inferRoot(root, file).equals(sourceRoot.path))) {
                         if (!matches.contains(config)) matches.add(config);
                     }
                 }
                 if (matches.isEmpty()) {
                     Configuration independent = infer(root, List.of(file), checkpoint).getFirst();
+                    if (configs.stream().anyMatch(config -> config.imported != null && config.imported.memberFiles() != null))
+                        independent.selectionOnly = true;
                     configs.add(independent);
                     matches.add(independent);
                 }
@@ -170,7 +174,8 @@ final class ProjectModel implements AutoCloseable {
             }
             for (Configuration config : configs) {
                 if (files.stream().anyMatch(file -> model.activeConfigurations(file).contains(config)))
-                    config.target = chooseTarget(originalRoot, platforms, apiTarget(config));
+                    config.target = config.imported != null && config.imported.compiler().apiUnavailable() ? null :
+                        chooseTarget(originalRoot, platforms, apiTarget(config));
             }
             snapshot.verify();
             model.snapshot = snapshot;
@@ -190,6 +195,7 @@ final class ProjectModel implements AutoCloseable {
             for (String path : set.roots()) { checkedRoot(root, path); own.add(new SourceRoot(path, set.test())); }
             Configuration config = new Configuration(set.id(), target, set.modelInputs(), own);
             config.imported = set;
+            config.memberFiles = set.memberFiles() == null ? null : Set.copyOf(set.memberFiles());
             List<SourceRoot> visible = new ArrayList<>();
             for (String id : set.visibleSourceSets()) {
                 var other = sets.get(id);
@@ -547,7 +553,7 @@ final class ProjectModel implements AutoCloseable {
             parser.setStatementsRecovery(true);
             List<String> roots = new ArrayList<>();
             for (SourceRoot root : parsingRoots(config))
-                if (!config.selectionOnly && (!root.test || tests) && Files.isDirectory(repository.resolve(root.path))) roots.add(repository.resolve(root.path).toString());
+                if (!config.selectionOnly && !confirmedMembers(config) && (!root.test || tests) && Files.isDirectory(repository.resolve(root.path))) roots.add(repository.resolve(root.path).toString());
             if (config.target == null) {
                 // Parse syntax without any environment or binding recovery; compiler options remain explicit.
                 for (String file : context) {
@@ -602,8 +608,9 @@ final class ProjectModel implements AutoCloseable {
     }
 
     private String[] rootEncodings(Configuration config, boolean tests) throws Failure {
+        if (confirmedMembers(config)) return new String[0];
         List<String> result = new ArrayList<>();
-        for (SourceRoot root : parsingRoots(config)) if (!config.selectionOnly && (!root.test || tests) && Files.isDirectory(repository.resolve(root.path))) result.add(encoding(root.path + "/Probe.java"));
+        for (SourceRoot root : parsingRoots(config)) if (!config.selectionOnly && !confirmedMembers(config) && (!root.test || tests) && Files.isDirectory(repository.resolve(root.path))) result.add(encoding(root.path + "/Probe.java"));
         return result.toArray(String[]::new);
     }
 
@@ -611,7 +618,7 @@ final class ProjectModel implements AutoCloseable {
         String chosen = null;
         for (Configuration config : configurations) {
             if (config.imported == null || config.imported.compiler().encoding() == null ||
-                config.roots.stream().noneMatch(root -> under(file, root.path))) continue;
+                (!confirmedMember(config,file) || config.roots.stream().noneMatch(root -> under(file, root.path)))) continue;
             String value;
             try { value = java.nio.charset.Charset.forName(config.imported.compiler().encoding()).name(); }
             catch (IllegalArgumentException e) { throw new Failure("unsupported_configuration", "unsupported Java source encoding"); }
@@ -780,11 +787,28 @@ final class ProjectModel implements AutoCloseable {
         return roots;
     }
 
+    private static boolean confirmedMembers(Configuration config) {
+        return config.memberFiles != null;
+    }
+    private static boolean confirmedMember(Configuration config,String file) {
+        return !confirmedMembers(config) || config.memberFiles.contains(file);
+    }
+
     /** 枚举配置允许的上下文源码，测试角色不改变生产配置。 */
     private List<String> context(Configuration config, boolean tests) throws Failure {
         if (config.selectionOnly) return files.stream().filter(file -> selected.get(file).contains(config) &&
             (!isTest(file, config) || tests)).sorted().toList();
         Set<String> discovered = new HashSet<>();
+        if (confirmedMembers(config)) {
+            discovered.addAll(config.imported.memberFiles());
+            for (String visible : config.imported.visibleSourceSets()) {
+                Configuration other = configurations.stream().filter(candidate -> candidate.id.equals(visible)).findFirst().orElseThrow();
+                if (!confirmedMembers(other)) throw new Failure("unsupported_configuration", "mixed source membership model");
+                discovered.addAll(other.imported.memberFiles());
+            }
+            if (discovered.size() > MAX_FILES) throw new Failure("resource_limit", "Java context exceeds file limit");
+            return discovered.stream().sorted().toList();
+        }
         for (SourceRoot sourceRoot : parsingRoots(config)) {
             checkpoint.check();
             if (sourceRoot.test && !tests) continue;
