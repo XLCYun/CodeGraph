@@ -13,6 +13,10 @@
 整棵进程树终止由调用方负责。请求和结果限制为 128 MiB，选集最多 100,000 项；
 显式空集先检查源码边界，随后直接返回空图，不发现配置或目标 JDK。
 
+正常分析以调用方已经完成授权为前提，不增加仓库信任开关或授权字段。Maven 解析依赖，Gradle 配置、插件和 buildSrc 可执行代码、访问网络并写入缓存；不主动请求业务 build/test/release/deploy 或额外生成任务，不自动安装项目 JDK。临时副本不是沙箱，也不能证明与原 checkout 的任意动态行为完全等价。
+
+成功分析的降级原因只写 stderr，stdout 仍是唯一 JSON。固定诊断代码为 `default_platform`、`platform_unavailable`、`target_platform_missing`、`compiler_unavailable`、`context_incomplete`、`model_discarded`，每种最多一次，不包含私有路径、URL、凭据或原始构建日志。完整且明确声明目标的导入不输出诊断。
+
 ## release 与目标 JDK
 
 `java-static-v1` 接受规范整数 release，例如 `8`、`17`、`25`。支持范围直接由固定 JDT 的公开 API `JavaCore.isJavaSourceVersionSupportedByCompiler` 判定；`8` 在调用 JDT 时映射为其历史名称 `1.8`。不维护产品版本白名单，也不把未知版本降级到最高已知版本。`1.8`、带空格、前导零、属性表达式和预览版本后缀均不是合法的配置 release。
@@ -66,7 +70,7 @@ Gradle 项目使用锁定的 Tooling API 8.14.3 和独立编译为 Java 8 字节
 | 8.8–8.9 / 8.10–8.13 / 8.14+ | 8–22 / 8–23 / 8–24 |
 | 9.0 / 9.1–9.3 / 9.4–9.7 / 9.8+ | 17–24 / 17–25 / 17–26 / 17–27 |
 
-该范围依据 [Gradle 运行兼容表](https://docs.gradle.org/current/userguide/compatibility.html)。代表版本 7.6.4、8.14.3、9.1.0、9.8.2 使用真实分发测试；这不表示逐个测试了所有中间版本。自定义模型或内部属性能力不匹配时保守降级。最终公开包、Windows 整树回收及完整 CI 仍需对应平台验收。
+该范围依据 [Gradle 运行兼容表](https://docs.gradle.org/current/userguide/compatibility.html)。代表版本 7.6.4、8.14.3、9.1.0、9.8.2 使用真实分发测试；这不表示逐个测试了所有中间版本。自定义模型或内部属性能力不匹配时保守降级。公开包验收在 macOS ARM64 与 Windows x64 的完整 CI 中执行，不能用组件测试替代。
 
 每个 source set 保留 release、source、target、toolchain 和 encoding。显式 JavaCompile.javaCompiler 覆盖项目 toolchain 时使用其有效 metadata；覆盖失败或无法确认的 compiler convention 会保留成员和 release 证据，但停用该配置的 API 上下文，只输出结构与原文。未声明目标且仍使用普通 Java 插件默认 convention 时，继续按用户默认平台规则处理。反射适配仅用于识别 Gradle property 的显式状态，能力缺失不能当作“未声明”。
 
@@ -116,9 +120,8 @@ Java 8 夹具未配置且未在 `.tools` 中找到时，对应测试会明确跳
 `build/test-classes`；正式包只复制 `build/classes`。驱动没有生产兼容入口。
 公共协议、EOF、调用方终止、背压与管道错误使用真实 JVM 的公开 Main 验证。
 七语言已使用直接入口和统一[分发接口](../../docs/distribution.md)打包，布局见[包说明](../../docs/pack-layout.md)。
-2026-10-22 的 PR CI 39777180923 中 macOS 成功，Windows 因 Python junction 诊断断言失败；
-完整 Windows 门禁仍须修复后的自动 CI 验证，首个固定发布尚未完成。
+
 
 Maven 与 Gradle Tooling API（含其 shaded 组件）的精确版本许可证、版权及来源分别在 `licenses/maven/manifest.json` 和 `licenses/gradle/manifest.json` 中列明，并随语言包交付。打包前后逐项验证 `evidence`、`fullLicenseTexts` 与适用的 `pomEvidence` 引用和 SHA-256；解包测试再次验证完整清单。打包只复制锁文件中的 JAR，不带缓存目录里的其他版本或辅助插件依赖。
 
-Gradle 集成测试从 `.tools/java-native/gradle-<version>-bin.zip` 读取本地真实分发，可用 `CODEGRAPH_GRADLE_9_ZIP`（9.1.0）、`CODEGRAPH_GRADLE_8_ZIP`（8.14.3）、`CODEGRAPH_GRADLE_7_ZIP`（7.6.4）及 `CODEGRAPH_GRADLE_CURRENT_ZIP`（9.8.2）覆盖路径。缺少对应分发时相关测试明确跳过；验收须提供全部四个归档。
+Gradle 集成测试从 `.tools/java-native/gradle-<version>-bin.zip` 读取本地真实分发，可用 `CODEGRAPH_GRADLE_9_ZIP`（9.1.0）、`CODEGRAPH_GRADLE_8_ZIP`（8.14.3）、`CODEGRAPH_GRADLE_7_ZIP`（7.6.4）及 `CODEGRAPH_GRADLE_CURRENT_ZIP`（9.8.2）覆盖路径。单独运行缺少对应分发时相关测试明确跳过；正式验收先验证四个归档及摘要，缺少任何一个即失败。工具链准备脚本按 `resources/gradle-test-distributions.json` 下载固定夹具。

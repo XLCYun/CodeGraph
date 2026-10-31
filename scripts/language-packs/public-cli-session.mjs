@@ -25,7 +25,7 @@ export function publicEnvironment(environment = process.env) {
 }
 
 /** 原生进程快照只用于核对本次调用方拥有的子树。 */
-async function processSnapshot() {
+export async function processSnapshot() {
   if (process.platform === 'win32') {
     const command = 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,CommandLine,@{Name="Started";Expression={if ($_.CreationDate) {$_.CreationDate.ToUniversalTime().Ticks.ToString()}}} | ConvertTo-Json -Compress';
     const { stdout } = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { timeout: 10_000, maxBuffer: 8 * 1024 * 1024 });
@@ -151,7 +151,7 @@ export function decodePublicResult(bytes, { code, signal }, pack, request, ident
 }
 
 /** 实际标准管道写完单个 JSON 后关闭输入，等待唯一结果与退出；取消由调用方整树终止。 */
-export async function exchangeCli(executable, pack, request, identity, expectedFailure, { cancel = false, environment = process.env, args = ['analyze'], rawInput, timeoutMs, trace, cwd = os.tmpdir(), createOwner = spawnOwnedCli } = {}) {
+export async function exchangeCli(executable, pack, request, identity, expectedFailure, { cancel = false, environment = process.env, args = ['analyze'], rawInput, timeoutMs, trace, cwd = os.tmpdir(), createOwner = spawnOwnedCli, expectedDiagnostics, beforeReap, cancelImport } = {}) {
   const probeDirectory = cancel ? await fs.mkdtemp(path.join(os.tmpdir(), 'codegraph-discovery-probe-')) : undefined;
   const probe = probeDirectory && path.join(probeDirectory, 'reached.json');
   const env = publicEnvironment(environment);
@@ -177,8 +177,10 @@ export async function exchangeCli(executable, pack, request, identity, expectedF
   try {
     // 刻意不加尾换行，所有真实包都必须在 EOF 正常解码完整 JSON。
     child.stdin.end(rawInput ?? JSON.stringify(request));
-    if (cancel) await Promise.race([cancelLoadedProject(child, pack, request, observed, () => stopped || owner.closed() || length > 0, probe, { terminate: () => owner.reap() }), interrupted]);
+    if (cancelImport) await Promise.race([cancelImport({ observed, closed: () => stopped || owner.closed() || length > 0, terminate: () => owner.reap() }), interrupted]);
+    else if (cancel) await Promise.race([cancelLoadedProject(child, pack, request, observed, () => stopped || owner.closed() || length > 0, probe, { terminate: () => owner.reap() }), interrupted]);
     exitStatus = await Promise.race([owner.completed, interrupted]);
+    if (beforeReap) await beforeReap({ exitStatus, stderr });
   } catch (error) { failure ??= error; }
   clearTimeout(timer);
   // 根退出和 pipe EOF 都不能释放后代；成功、失败、超时逐条经过同一树/排空/join屏障。
@@ -193,7 +195,18 @@ export async function exchangeCli(executable, pack, request, identity, expectedF
       assert.equal(output.length, 0, 'Cancelled analysis emitted a final result');
       await assertTreeExited(observed);
       console.log(`Public caller tree termination verified: ${JSON.stringify({ pack, ...exitStatus, observed_processes: observed.size })}`);
-    } else decoded = decodePublicResult(output, exitStatus, pack, request, identity, expectedFailure);
+    } else {
+      decoded = decodePublicResult(output, exitStatus, pack, request, identity, expectedFailure);
+      if (expectedDiagnostics) {
+        const lines = stderr.trim() ? stderr.trim().split(/\r?\n/) : [];
+        const codes = lines.map(line => {
+          assert.match(line, /^codegraph-java: [a-z_]+: [A-Za-z ;,.]+$/);
+          return line.split(': ')[1];
+        });
+        assert.equal(new Set(codes).size, codes.length, 'Repeated diagnostics');
+        assert.deepEqual(codes.sort(), [...expectedDiagnostics].sort());
+      }
+    }
   } catch (error) { failure ??= error; }
   try {
     if (trace) {

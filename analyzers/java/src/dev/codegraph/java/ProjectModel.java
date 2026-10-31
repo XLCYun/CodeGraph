@@ -29,6 +29,7 @@ import static dev.codegraph.java.Main.Failure;
 /** 源码归属、可选目标声明和只读平台匹配。 */
 final class ProjectModel implements AutoCloseable {
     private SourceSnapshot snapshot;
+    private boolean discardedModel;
     private final Path repository;
     private final List<Configuration> configurations;
     private final Map<String, List<Configuration>> selected;
@@ -119,6 +120,7 @@ final class ProjectModel implements AutoCloseable {
         root = snapshot.root();
         try {
             List<Configuration> configs = new ArrayList<>();
+            boolean discardedModel = false;
             Path metadata = root.resolve("narrant-java.json");
             Path pom = root.resolve("pom.xml");
             try {
@@ -136,6 +138,7 @@ final class ProjectModel implements AutoCloseable {
                 if (discovery || failure instanceof BoundaryFailure ||
                     !Set.of("unsupported_configuration", "invalid_input").contains(failure.code)) throw failure;
                 snapshot.verify(); // Never conceal changed input or copy state behind explicit-file fallback.
+                discardedModel = true;
                 configs.clear();
                 configs.addAll(infer(root, files, checkpoint));
                 for (Configuration config : configs) config.selectionOnly = true;
@@ -145,6 +148,7 @@ final class ProjectModel implements AutoCloseable {
             if (discovery) Observation.record(input.id());
             Map<String, List<Configuration>> selected = new HashMap<>();
             ProjectModel model = new ProjectModel(root, configs, selected, files, includeTests, checkpoint);
+            model.discardedModel = discardedModel;
             if (discovery) {
                 for (Configuration config : configs) for (SourceRoot sourceRoot : config.roots)
                     for (String file : model.inventory(sourceRoot)) {
@@ -181,6 +185,26 @@ final class ProjectModel implements AutoCloseable {
             model.snapshot = snapshot;
             return model;
         } catch (Failure | RuntimeException e) { snapshot.close(); throw e; }
+    }
+
+    /** Fixed bounded messages never interpolate model logs, host paths or credentials. */
+    List<String> diagnostics() throws Failure {
+        Set<String> reasons = new java.util.TreeSet<>();
+        if (discardedModel) reasons.add("model_discarded: Failed project context was discarded; analyzing the explicit selection.");
+        for (Configuration config : configurations) {
+            if (files.stream().noneMatch(file -> activeConfigurations(file).contains(config))) continue;
+            if (config.imported != null && config.imported.compiler().apiUnavailable())
+                reasons.add("compiler_unavailable: Explicit compiler context could not be proved; bindings are disabled.");
+            else if (config.target == null)
+                reasons.add(apiTarget(config) == null
+                    ? "platform_unavailable: No analysis platform is available; bindings are disabled."
+                    : "target_platform_missing: The declared API target has no matching local SDK; bindings are disabled.");
+            else if (apiTarget(config) == null)
+                reasons.add("default_platform: Project API target is unknown; reliable bindings use the default analysis platform.");
+            if (config.imported != null && !config.imported.dependenciesComplete())
+                reasons.add("context_incomplete: Dependencies or source context are incomplete; unproved references remain unresolved.");
+        }
+        return reasons.stream().map(reason -> "codegraph-java: " + reason).toList();
     }
 
     private static List<Configuration> imported(ImportedProject project, Path root) throws Failure {

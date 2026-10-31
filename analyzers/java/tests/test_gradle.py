@@ -6,7 +6,7 @@ import pathlib
 import subprocess
 import tempfile
 import unittest
-from test_helper import PUBLIC_COMMAND, TARGET, write, node, snapshot_files
+from test_helper import PUBLIC_COMMAND, TARGET, write, node, snapshot_files, assert_diagnostics, diagnostic_codes
 
 FIXTURES = pathlib.Path(__file__).resolve().parents[3] / '.tools/java-native'
 DIST = pathlib.Path(os.environ.get('CODEGRAPH_GRADLE_9_ZIP', str(FIXTURES/'gradle-9.1.0-bin.zip')))
@@ -33,13 +33,13 @@ class GradleTests(unittest.TestCase):
     def sentinel(self):
         return "new File(System.getenv('CODEGRAPH_FIXTURE_PID')).text=java.lang.management.ManagementFactory.runtimeMXBean.name.split('@')[0]; println 'CONFIGURATION_STDOUT_SENTINEL'; defaultTasks('build'); tasks.configureEach { doFirst { throw new RuntimeException('BUSINESS_TASK_EXECUTED') } }\n"
 
-    def public(self, files=None, tests=False, env=None):
+    def public(self, files=None, tests=False, env=None, diagnostics=None):
         message={'protocol':'codegraph.analyzer/1','type':'analyze','id':'gradle','repository_root':str(self.root),'options':{'include_tests':tests,'rust_dependency_scope':'repository-only'}}
         if files is not None: message['files']=files
         environment=dict(os.environ,CODEGRAPH_JAVA_TARGET_JDK=str(TARGET),GRADLE_USER_HOME=str(self.home),CODEGRAPH_FIXTURE_PID=str(self.base/'daemon.pid'))
         environment.update(env or {})
         result=subprocess.run([PUBLIC_COMMAND[0], '--enable-native-access=ALL-UNNAMED', *PUBLIC_COMMAND[1:], 'analyze'],input=json.dumps(message),text=True,capture_output=True,env=environment,timeout=120)
-        self.assertEqual(result.stderr,'',result.stderr)
+        assert_diagnostics(self, result.stderr, diagnostic_codes(json.loads(result.stdout).get('graph', {})) if diagnostics is None else diagnostics)
         self.assertEqual(len(result.stdout.splitlines()),1,result.stdout)
         if (self.base/'daemon.pid').exists():
             pid=int((self.base/'daemon.pid').read_text())
@@ -91,7 +91,7 @@ class GradleTests(unittest.TestCase):
 
     def test_missing_toolchain_keeps_members(self):
         write(self.root,'build.gradle', "plugins { id 'java' }; java { toolchain { languageVersion=JavaLanguageVersion.of(21) } }; "+self.sentinel())
-        result=self.public()
+        result=self.public(diagnostics=('target_platform_missing','context_incomplete'))
         self.assertEqual(result['outcome'],'ok',result)
         platform=result['graph']['nodes'][0]['extensions']['java.platforms'][0]
         self.assertEqual(platform['compiler']['toolchain'],'21')
@@ -100,7 +100,7 @@ class GradleTests(unittest.TestCase):
     def test_bad_model_exact_and_empty(self):
         write(self.root,'build.gradle', self.sentinel()+"throw new RuntimeException('bad model')")
         self.assertEqual(self.public()['outcome'],'error')
-        self.assertEqual(self.public(['src/main/java/p/A.java'])['outcome'],'ok')
+        self.assertEqual(self.public(['src/main/java/p/A.java'], diagnostics=('model_discarded','default_platform'))['outcome'],'ok')
         (self.base/'daemon.pid').unlink(missing_ok=True)
         self.assertEqual(self.public([])['outcome'],'ok')
         self.assertFalse((self.base/'daemon.pid').exists())
@@ -166,7 +166,7 @@ tasks.configureEach { doFirst { error("BUSINESS_TASK_EXECUTED") } }
         write(self.root,'app/build.gradle', "dependencies { implementation project(':lib') }")
         write(self.root,'lib/src/main/java/p/Lib.java','package p; public class Lib { public static int value(){return 1;} }')
         write(self.root,'app/src/main/java/p/App.java','package p; class App { int run(){return Lib.value();} }')
-        result=self.public(['app/src/main/java/p/App.java'])
+        result=self.public(['app/src/main/java/p/App.java'], diagnostics=('context_incomplete',))
         self.assertEqual(result['outcome'],'ok',result)
         call=node(result['graph'],'/method:run()')
         self.assertFalse(call['extensions']['java.platforms'][0]['dependencies_complete'])
@@ -297,7 +297,7 @@ tasks.configureEach { doFirst { error("BUSINESS_TASK_EXECUTED") } }
         self.assertTrue(platform['version'].startswith('17.'))
         self.assertTrue(any(r['semantic']=='code.calls' and r['target']['kind']=='unresolved' for r in node(result['graph'],'/method:run()')['references']))
         write(self.root,'build.gradle', "plugins { id 'java' }; java.toolchain.languageVersion=JavaLanguageVersion.of(17); tasks.named('compileJava') { javaCompiler=providers.provider { throw new GradleException('unavailable task compiler') } }; "+self.sentinel())
-        failed=self.public()
+        failed=self.public(diagnostics=('compiler_unavailable','context_incomplete'))
         self.assertEqual(failed['outcome'],'ok',failed)
         platform=node(failed['graph'],'/method:run()')['extensions']['java.platforms'][0]
         self.assertEqual(platform['status'],'missing',failed)
@@ -321,7 +321,7 @@ tasks.configureEach { doFirst { error("BUSINESS_TASK_EXECUTED") } }
 
     def test_custom_compiler_convention_is_not_default_platform(self):
         write(self.root,'build.gradle', "plugins { id 'java' }; tasks.named('compileJava') { javaCompiler.convention(javaToolchains.compilerFor { languageVersion=JavaLanguageVersion.of(17) }) }; "+self.sentinel())
-        result=self.public()
+        result=self.public(diagnostics=('compiler_unavailable','context_incomplete'))
         self.assertEqual(result['outcome'],'ok',result)
         self.assertEqual(result['graph']['nodes'][0]['extensions']['java.platforms'][0]['status'],'missing',result)
 
@@ -340,7 +340,7 @@ tasks.configureEach { doFirst { error("BUSINESS_TASK_EXECUTED") } }
         calls=[r['target'] for r in node(result['graph'],'/method:run()')['references'] if r['semantic']=='code.calls']
         self.assertEqual(sum(t['kind']=='node' for t in calls),2,result)
         self.assertEqual(sum(t['kind']=='unresolved' for t in calls),1,result)
-        explicit=self.public(['src/main/java/p/Excluded.java'])
+        explicit=self.public(['src/main/java/p/Excluded.java'], diagnostics=('default_platform',))
         self.assertEqual(explicit['outcome'],'ok',explicit)
         calls=[r['target'] for r in node(explicit['graph'],'/method:value()')['references'] if r['semantic']=='code.calls']
         self.assertTrue(calls and all(t['kind']=='unresolved' for t in calls),explicit)

@@ -52,9 +52,9 @@ class Demo {
 
 高版本 JDK 对很多旧程序兼容，但新平台 API 与旧平台并不相同。`List.of` 从 Java 9 才有；新平台也会删除旧 API。因此直接用高版本库可以让原目标不支持的调用得到绑定，也可能让旧目标原本支持的引用消失。`javac --release` 可以为支持的旧版本限制语言、输出和 API，但这不是自动提供给 JDT ASTParser 的功能。[List.of 的版本](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html#of(E))、[删除的 API](https://docs.oracle.com/en/java/javase/25/migrate/removed-apis.html)、[javac release 契约](https://docs.oracle.com/en/java/javase/25/docs/specs/man/javac.html#standard-options)。
 
-固定 Core 3.47.0 的本轮微探针镜像当前 `ASTParser.createASTs` 路径，接入 JDK 25 系统库，并设置 source/target/compliance 8、release enabled。它仍接受 `List.of` 和较新的 API，并将 `ByteBuffer.flip` 的新返回类型用于选择项目内部的 `select(ByteBuffer)`；`javac --release 8` 对同一合法重载例子则选择 `select(Buffer)`。因此 release 开关、无诊断和非 recovered binding 均不足以证明历史平台匹配。若将来适配高 JDK 的历史 API 签名，须另行验证，本轮不把该能力当作已具备。[固定 ASTParser 的路径装配](https://github.com/eclipse-jdt/eclipse.jdt.core/blob/R4_41/org.eclipse.jdt.core/dom/org/eclipse/jdt/core/dom/ASTParser.java#L236)、[探针证据](/Users/lizhanfa/.codex/cangyun-loop/github.com/XLCYun/CodeGraph/evidence/java-platform-fallback-479678dd/summary.json)。
+固定 Core 3.47.0 的本轮微探针镜像当前 `ASTParser.createASTs` 路径，接入 JDK 25 系统库，并设置 source/target/compliance 8、release enabled。它仍接受 `List.of` 和较新的 API，并将 `ByteBuffer.flip` 的新返回类型用于选择项目内部的 `select(ByteBuffer)`；`javac --release 8` 对同一合法重载例子则选择 `select(Buffer)`。因此 release 开关、无诊断和非 recovered binding 均不足以证明历史平台匹配。若将来适配高 JDK 的历史 API 签名，须另行验证，本轮不把该能力当作已具备。[固定 ASTParser 的路径装配](https://github.com/eclipse-jdt/eclipse.jdt.core/blob/R4_41/org.eclipse.jdt.core/dom/org/eclipse/jdt/core/dom/ASTParser.java#L236)、[可复现平台回归](../../analyzers/java/tests/test_target_versions.py)。
 
-Java 节点的既有 `extensions` 允许有命名空间的语义值，可以记录分析平台版本和默认来源而不新增公共 JSON 字段；目前尚未有这种语义键。记录不包含主机绝对路径、时间戳或私有发现清单；同一平台仅从 JAVA_HOME 换为 PATH 命中不应制造语义变化。现有扩展参与图差异比较，所以平台变化本身可能造成图差异；做源码差异时应固定分析上下文。现有多配置图合并也不自动提供逐边的配置来源，文件级平台记录不能冒充逐边归属证明。
+Java 节点的既有 `extensions` 允许有命名空间的语义值，可以记录分析平台版本和默认来源而不新增公共 JSON 字段；实现采用 `java.platforms`，记录 target、status、version 及模型编译证据。记录不包含主机绝对路径、时间戳或私有发现清单；同一平台仅从 JAVA_HOME 换为 PATH 命中不应制造语义变化。现有扩展参与图差异比较，所以平台变化本身可能造成图差异；做源码差异时应固定分析上下文。现有多配置图合并也不自动提供逐边的配置来源，文件级平台记录不能冒充逐边归属证明。
 
 | 模式 | 保留能力 | 对使用者的影响 |
 | --- | --- | --- |
@@ -64,39 +64,39 @@ Java 节点的既有 `extensions` 允许有命名空间的语义值，可以记�
 
 默认 JDK 只能补标准平台上下文，不能替代第三方依赖、代码生成结果或模块可见性。三个模式都不承诺得到运行时所有动态调用。
 
-## 拟采用的项目模型实现
+## 项目模型实现
 
 继续直接使用 JDT Core / `ASTParser` 构图，不把完整 JDT LS 或 Eclipse workspace 作为前置条件。模型输入适配为内部模块、源集上下文，再配置 `setEnvironment` / `setCompilerOptions`。每个上下文分别包含源码与测试根、依赖和二进制路径、可见性、编码、编译设置及目标平台证据，避免把全仓合成一条 classpath。
 
-Maven 使用成熟的 ModelBuilder 取得 effective POM，配合 Artifact Resolver 与 Maven Resolver Provider 解析依赖。父 POM、BOM、profiles、settings、mirrors、proxies、本地仓库和 reactor 可见性需要实际集成；effective POM 不等于插件执行后的全部源码根和生成产物。不自行实现通用 POM 解释器，也不声称 ModelBuilder 执行了插件目标。[模型构建阶段](https://maven.apache.org/ref/3.9.11/maven-model-builder/)、[Resolver 职责](https://maven.apache.org/resolver/what-is-resolver.html)、[Maven Provider](https://maven.apache.org/ref/3.9.11/maven-resolver-provider/)。
+Maven 使用成熟的 ModelBuilder 取得 effective POM，配合 Artifact Resolver 与 Maven Resolver Provider 解析依赖。父 POM、BOM、profiles、settings、mirrors、proxies、本地仓库和 reactor 可见性已接入；effective POM 不等于插件执行后的全部源码根和生成产物。不自行实现通用 POM 解释器，也不声称 ModelBuilder 执行了插件目标。[模型构建阶段](https://maven.apache.org/ref/3.9.11/maven-model-builder/)、[Resolver 职责](https://maven.apache.org/resolver/what-is-resolver.html)、[Maven Provider](https://maven.apache.org/ref/3.9.11/maven-resolver-provider/)。
 
-Gradle 使用官方 Tooling API 请求模型。标准 Eclipse/IDEA 模型可提供许多基础信息，但项目级 Java 设置不足以证明每个源集实际的 classpath、`JavaCompile.options.release` 或 toolchain。必要时增加构建端 Tooling Model 适配，取得这些有效设置；客户端 BuildAction 不能直接当作活的 Gradle Project 使用。静态读取仅用于明确支持的子集或基础降级。[Tooling API](https://docs.gradle.org/current/userguide/tooling_api.html)、[项目级 Java 设置](https://github.com/gradle/gradle/blob/v9.8.2/platforms/ide/tooling-api/src/main/java/org/gradle/tooling/model/eclipse/EclipseJavaSourceSettings.java)、[源集范围属性](https://github.com/gradle/gradle/blob/v9.8.2/platforms/ide/ide/src/main/java/org/gradle/plugins/ide/eclipse/model/internal/SourceFoldersCreator.java#L116)。
+Gradle 使用官方 Tooling API 请求模型。标准 Eclipse/IDEA 模型可提供许多基础信息，但项目级 Java 设置不足以证明每个源集实际的 classpath、`JavaCompile.options.release` 或 toolchain。实现使用构建端自定义 SourceModel，按实际 JavaCompile classpath、源码成员和编译设置取得这些证据；客户端 BuildAction 不能直接当作活的 Gradle Project 使用。静态读取仅用于明确支持的子集或基础降级。[Tooling API](https://docs.gradle.org/current/userguide/tooling_api.html)、[项目级 Java 设置](https://github.com/gradle/gradle/blob/v9.8.2/platforms/ide/tooling-api/src/main/java/org/gradle/tooling/model/eclipse/EclipseJavaSourceSettings.java)、[源集范围属性](https://github.com/gradle/gradle/blob/v9.8.2/platforms/ide/ide/src/main/java/org/gradle/plugins/ide/eclipse/model/internal/SourceFoldersCreator.java#L116)。
 
-M2E、Buildship 提供完整 Eclipse 项目集成，暂不因参考 IDE 就引入全部插件和 workspace 机制。具体组件版本、依赖闭包、许可证和支持的 Gradle/JVM 组合须经实际验证后锁定。
+M2E、Buildship 提供完整 Eclipse 项目集成，暂不因参考 IDE 就引入全部插件和 workspace 机制。Maven 3.9.11、Resolver 1.9.24、Tooling API 8.14.3 及完整依赖闭包、摘要和许可证已锁定；代表 Gradle/JVM 组合和能力限制见语言 README。
 
 ## 模型导入与调用方职责
 
-本节结合分支讨论、本轮技术调查和用户对 Q5 的直接意见修订。调用方负责信任提示、授权确认与其运行环境的权限；CodeGraph 是基础开源部件，正常分析调用以调用方已经处理授权为前提，不增加第二层逐仓库信任记录或额外授权信号。完整交付范围仍待最后汇总确认；目前没有执行模型导入。
+本节结合分支讨论、本轮技术调查和用户对 Q5 的直接意见修订。调用方负责信任提示、授权确认与其运行环境的权限；CodeGraph 是基础开源部件，正常分析调用以调用方已经处理授权为前提，不增加第二层逐仓库信任记录或额外授权信号。模型导入属于正常分析的一部分。
 
 CodeGraph 文档明确说明正常模型导入会执行哪些逻辑、访问哪些资源。调用方在调用前决定是否允许，负责向最终用户呈现必要提示；分析器不重复确认，也不要求新环境变量或公共 JSON 授权字段。项目配置表达项目模型，不充当授权来源。
 
-正常导入范围拟包括启动所需 Java/Gradle 进程、取得 Gradle 分发、评估 settings/build 配置和插件、读取约定的调用环境与本机设置、解析或下载插件及依赖、写入工具缓存/锁/日志，以及编译 `buildSrc` 等构建辅助逻辑。默认只请求模型和必要依赖，不主动请求业务 build/test/release/deploy；额外生成任务另定边界。不能把“未传业务任务”说成“不执行构建代码”：Gradle 请求模型也会评估配置并可能编译辅助逻辑。`forTasks` 的空数组会触发默认任务，应省略该请求，而不是用空数组表示不跑任务。[任务参数契约](https://github.com/gradle/gradle/blob/v9.8.2/platforms/ide/tooling-api/src/main/java/org/gradle/tooling/BuildActionExecuter.java#L82)、[buildSrc](https://docs.gradle.org/current/userguide/sharing_build_logic_between_subprojects.html#sec:using_buildsrc)。
+正常导入范围包括启动所需 Java/Gradle 进程、取得 Gradle 分发、评估 settings/build 配置和插件、读取约定的调用环境与本机设置、解析或下载插件及依赖、写入工具缓存/锁/日志，以及编译 `buildSrc` 等构建辅助逻辑。默认只请求模型和必要依赖，不主动请求业务 build/test/release/deploy；不主动请求额外代码生成任务。不能把“未传业务任务”说成“不执行构建代码”：Gradle 请求模型也会评估配置并可能编译辅助逻辑。`forTasks` 的空数组会触发默认任务，应省略该请求，而不是用空数组表示不跑任务。[任务参数契约](https://github.com/gradle/gradle/blob/v9.8.2/platforms/ide/tooling-api/src/main/java/org/gradle/tooling/BuildActionExecuter.java#L82)、[buildSrc](https://docs.gradle.org/current/userguide/sharing_build_logic_between_subprojects.html#sec:using_buildsrc)。
 
-本轮不增加自动安装项目目标 JDK 的能力。Gradle 标准 toolchain 自动下载应关闭；选择本机兼容的工具 JVM。此设置不能约束任意可信脚本自行执行的下载。工具 JVM 选择也不构成项目目标证明。[禁用 toolchain 自动供给](https://docs.gradle.org/current/userguide/toolchains.html#sub:disable_auto_provision)。
+本轮不增加自动安装项目目标 JDK 的能力。Gradle 标准 toolchain 自动下载已关闭；选择本机兼容的工具 JVM。此设置不能约束任意可信脚本自行执行的下载。工具 JVM 选择也不构成项目目标证明。[禁用 toolchain 自动供给](https://docs.gradle.org/current/userguide/toolchains.html#sub:disable_auto_provision)。
 
-现有薄入口会清理环境，只转发少量变量。实现必须明确传入 Gradle home、代理和构建所需环境，保留分析器自身的 JVM 注入保护；不能宣称脚本继承了当前实际被过滤掉的环境。隔离用户目录也会改变 init 脚本、properties、认证和缓存等构建输入，需要说明并验证实际采用的设置。
+薄入口转发构建环境、Gradle home 和代理，清除分析器 JVM 参数及 classpath 注入变量。隔离用户目录也会改变 init 脚本、properties、认证和缓存等构建输入，需要说明并验证实际采用的设置。
 
 临时源码副本用于减少对原快照的修改，不提供进程权限隔离。脚本仍可能访问副本以外的路径；副本位置、Git 信息、相对路径和 settings 的变化也可能影响模型。必须固定原文件字节及原路径到副本路径的映射，并检测导入期间的变动。不能将已被脚本改写的副本 AST 偏移拼接到原文件，也不能把副本路径带进公开身份。
 
 导入进程及 daemon 必须由本次分析拥有和回收，避免接入共享 daemon 后误停其他任务。正常完成、失败、取消均须验证其工具树实际停止，再释放临时资源。`ProjectConnection.close` 等待操作完成，取消令牌和 connector disconnect 也不等于所有 daemon 已退出；不能靠 API 返回或全局 `--stop` 证明回收完成。[close 契约](https://github.com/gradle/gradle/blob/v9.8.2/platforms/ide/tooling-api/src/main/java/org/gradle/tooling/ProjectConnection.java#L195)、[disconnect 契约](https://github.com/gradle/gradle/blob/v9.8.2/platforms/ide/tooling-api/src/main/java/org/gradle/tooling/GradleConnector.java#L169)。
 
-## 确认进度
+## 已接受的失败边界
 
 用户已确认 Q2：项目配置损坏或模型导入失败时，按选集方式处理。显式 `files` 保留基础图并舍弃不可信上下文；目录发现只有在其他可靠来源足以确认成员时继续，否则明确失败。读取失败、路径逃逸、资源上限或真实内部错误仍失败。不能静默把未知成员变成空成功或全仓扫描。
 
-Q1 项目成员优先、Q3 目标未知、Q4 默认平台增强、Q2 按选集区别处理失败均已直接确认。Q5 按用户意见收敛为调用方负责授权，基础部件不重复设置授权门槛；不再追问同一个开关。剩余步骤是汇总完整交付范围与验收，确认双方理解一致。
+Q1 项目成员优先、Q3 目标未知、Q4 默认平台增强、Q2 按选集区别处理失败均已直接确认。Q5 按用户意见收敛为调用方负责授权，基础部件不重复设置授权门槛；不再追问同一个开关。实现与验收均按本 ADR 的完整范围执行。
 
-## 拟验收的结果
+## 验收要求
 
 - 无声明时采用用户默认/随包平台并标记来源，可靠绑定正常输出；已声明但缺匹配 SDK、缺依赖或无可用平台时保留基础图，stderr 原因准确，不把工具平台冒充项目目标。
 - 平台扩展的语义稳定、有命名空间，无时间戳、临时路径或主机路径；记录未知目标与有效分析环境的区别，多配置不能被压成单一环境。

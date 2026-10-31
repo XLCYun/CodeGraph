@@ -280,30 +280,42 @@ package traversal share cancellation/deadline checks and the selection bound.
 
 ## Java resolution
 
-Discovery loads root `narrant-java.json` static source roots or the supported root
-`pom.xml`, rejecting an ambiguous combination. Only declared Maven modules and
-their effective local parent/source-root policies enter the model. Maven default
-roots are `src/main/java` and `src/test/java`; supported literal overrides retain
-those roles. Undeclared sibling modules and other repository folders are not
-selection roots. Metadata roots must exist; a valid POM may declare roots that
-have not been created yet, yielding an empty selection with actual POM evidence.
-An aggregator without its own source directories does not create an extra source
-configuration. Required releases and exact target JDKs are still validated.
+Discovery first uses root `narrant-java.json`, Maven effective models, or Gradle
+Tooling API source sets. Ambiguous declarations fail. Maven membership follows
+reactor modules and main/test roots; Gradle follows settings projects and the
+confirmed source-set Java file tree, including include/exclude filters. Without a
+supported declaration, conventional layouts and package declarations infer roots.
+Explicit files can be outside declared membership and never expand the full graph.
+`[]` skips model import and SDK discovery. Test roles follow owning source sets,
+not filenames; `include_tests` controls full-node selection.
 
-The loader caches POM documents/effective parents and per-root source inventories
-within the request. Both discovery and JDT context use those inventories. Only
-`.java` files in declared roots participate in this profile. Test-only membership
-comes from all owning source-root roles, not a `Test` filename suffix. Explicit
-files must match declared roots and never expand to referenced source objects;
-unselected source declarations can still resolve as repository externals.
+Maven ModelBuilder/Resolver imports parents, BOMs, profiles, settings, mirrors,
+proxies and dependencies without invoking lifecycle goals. Gradle imports actual
+JavaCompile release/compiler/classpath settings through a release-8 model bridge;
+configuration/plugins and buildSrc may execute, download and cache. Normal analysis
+assumes caller authorization. It requests no business build/test/release/deploy or
+extra code-generation tasks, and does not install project JDKs. See
+[ADR 0002](adr/0002-java-project-model-import.md) and the
+[Java capability details](../analyzers/java/README.md).
 
-Directory/source links are rejected before traversal and every returned file is
-validated inside the repository. Inventories and selection are bounded and
-checkpointed; POM parent chains are limited to 256 entries. Existing static-profile
-limitations remain: no Maven/Gradle invocation, build-plugin execution, arbitrary
-Maven compiler include/exclude rules, dependency installation, annotation processing
-or JPMS support. Gradle requires explicit static metadata. Missing or unsupported
-configuration is an error, while explicit `[]` does not load a model or target JDK.
+An explicit API release/toolchain requires a matching installed platform. Without
+an API target, the user default JDK, then bundled JDK, can enhance reliable bindings;
+`java.platforms` still records target `unknown`. Missing platforms or unprovable
+compiler overrides preserve syntax/source with unresolved references. Bounded,
+deduplicated stderr reasons distinguish default platform, missing target SDK,
+unprovable compiler, incomplete context and discarded models. Complete declared
+contexts are quiet; stdout remains one unchanged protocol result.
+
+Bad model discovery fails when members cannot be established. Explicit selection
+can discard failed model context and retain a basic graph. Path, I/O, mutation,
+resource, cleanup and internal failures remain errors. Frozen source/binary inputs
+are checked after import and parsing. Generated context and graph-external sources
+cannot add selected nodes. Temporary copies are not a sandbox or proof of checkout
+equivalence. Owned Gradle processes must exit before temporary deletion; external
+cancellation is the caller's whole-tree responsibility. Unsupported variants,
+compiler providers, replaced source trees, transports and daemon criteria are
+reported conservatively rather than guessed. Annotation processing, arbitrary
+Maven plugin-generated roots and complete JPMS semantics are not promised.
 
 ## C# resolution
 
@@ -412,7 +424,7 @@ result, and normal EOF remains successful input completion.
 | TypeScript/JavaScript | First repository snapshot bytes read | Workspace/configuration loading and program construction |
 | Python | Actual `ty.toml` or `pyproject.toml` read and parsed | Native project loading and indexing |
 | Go | Native module/project configurations loaded | Member discovery and type checking |
-| Java | Nonempty static project configurations parsed | Target binding, source inventory and JDT parsing |
+| Java | Project configurations imported | Target binding, source inventory and JDT parsing |
 | C# | First configured source text read | Roslyn parsing and compilation |
 | C/C++ | Selected source text read and raw directive regions prepared | Recoverable Clang structure parsing and optional binding enrichment |
 

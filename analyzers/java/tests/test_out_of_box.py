@@ -97,6 +97,16 @@ class OutOfBoxTests(unittest.TestCase):
         self.assertIn({"kind": "unresolved", "name": "pick"}, calls)
         self.assertTrue(any(t["kind"] == "node" and t["id"].endswith("/method:helper(int)") for t in calls))
 
+    def test_invalid_constructor_and_method_references_are_unresolved(self):
+        write(self.root, "A.java", 'class A { A(int n){} static void helper(int n){} void run(){ new A("bad"); java.util.function.Supplier<A> factory=A::new; java.util.function.Consumer<String> wrong=A::helper; java.util.function.IntConsumer good=A::helper; new A(1); } }')
+        result = self.public(["A.java"])
+        self.assertEqual(result["outcome"], "ok", result)
+        calls = [r["target"] for r in node(result["graph"], "/method:run()")["references"] if r["semantic"] in ("code.calls", "code.references")]
+        self.assertTrue(any(t["kind"] == "unresolved" and t["name"] == "helper" for t in calls), calls)
+        self.assertTrue(any(t["kind"] == "unresolved" and t["name"] == "A" for t in calls), calls)
+        self.assertTrue(any(t["kind"] == "node" and '/method:helper(int)' in t['id'] for t in calls), calls)
+        self.assertTrue(any(t["kind"] == "node" and '/constructor:' in t['id'] for t in calls), calls)
+
     def test_syntax_damage_and_jpms_keep_confirmed_structure(self):
         write(self.root, "src/main/java/p/A.java", "package p; class A { int good(){return 1;} void broken( { } }")
         write(self.root, "src/main/java/module-info.java", "module example { exports p; }")

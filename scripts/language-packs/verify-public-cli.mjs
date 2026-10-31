@@ -12,6 +12,7 @@ import { verifyNativePackPolicy } from './verify-native-pack-policy.mjs';
 import { verifyAnalyzerDistribution } from './verify-analyzer-package.mjs';
 import { preparePublicProject, writePublicProject, prepareCancellationProject, assertPublicProjectUnchanged } from './public-cli-projects.mjs';
 import { exchangeCli as exchangePublic } from './public-cli-session.mjs';
+import { verifyJavaPublicAcceptance } from './java-public-acceptance.mjs';
 import { writeLocalCandidates } from './local-candidates.mjs';
 export { fixtures, preparePublicProject, assertPublicProjectUnchanged } from './public-cli-projects.mjs';
 export { exchangeCli } from './public-cli-session.mjs';
@@ -137,8 +138,8 @@ export async function verifyPublicCli(artifacts, language = 'all') {
       const missingError = !sourceFirst && (fixture.missing || !fixture.implicit) ? ['analysis_failed', 'invalid_input'] : undefined;
       const missingResult = await exchangeCli(executable, id, request(identity, id, missing.root, 'missing'), identity, missingError);
       if (!missingError) assertGraph(missingResult, { resolvedCall: !sourceFirst });
-      // Java 保留必需配置负例；C/C++ 的显式选集也必须在缺 CDB 时交付源码。
-      if (id === 'java') await exchangeCli(executable, id, request(identity, id, missing.root, 'missing-explicit', fixture.files), identity, ['analysis_failed', 'invalid_input']);
+      // Java 无声明可推断，C/C++ 缺 CDB 可交付源码。
+      if (id === 'java') assertGraph(await exchangeCli(executable, id, request(identity, id, missing.root, 'missing-explicit', Object.keys(missingContent)), identity));
       if (sourceFirst) assertGraph(await exchangeCli(executable, id, request(identity, id, missing.root, 'missing-explicit', fixture.files), identity), { resolvedCall: false });
       assert.deepEqual(await exchangeCli(executable, id, request(identity, id, missing.root, 'missing-empty', []), identity), emptyGraph);
       await assertPublicProjectUnchanged(missing);
@@ -155,6 +156,8 @@ export async function verifyPublicCli(artifacts, language = 'all') {
       if (sourceFirst) assertGraph(malformedResult, { resolvedCall: false });
       assert.deepEqual(await exchangeCli(executable, id, request(identity, id, malformed.root, 'malformed-empty', []), identity), emptyGraph);
       await assertPublicProjectUnchanged(malformed);
+
+      if (id === 'java') await verifyJavaPublicAcceptance({ executable, identity, scratch, exchangeCli });
 
       const cancellation = await prepareCancellationProject(id, path.join(scratch, `${id}-cancellation`));
       await exchangeCli(executable, id, request(identity, id, cancellation.root, 'directory-cancel'), identity, undefined, { cancel: true });

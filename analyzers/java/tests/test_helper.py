@@ -67,6 +67,31 @@ def run(message):
     return rows[0]
 
 
+def diagnostic_codes(graph):
+    """Expected platform/context reasons independently follow the public semantic evidence."""
+    codes = set()
+    for item in graph.get('nodes', []):
+        for platform in item.get('extensions', {}).get('java.platforms', []):
+            if platform['status'] == 'missing':
+                codes.add('target_platform_missing' if platform['target'] != 'unknown' or platform.get('compiler', {}).get('toolchain') else 'platform_unavailable')
+            elif platform['target'] == 'unknown' and platform.get('api_source', 'default') == 'default':
+                codes.add('default_platform')
+            if platform.get('dependencies_complete') is False: codes.add('context_incomplete')
+    return codes
+
+
+def assert_diagnostics(case, stderr, expected=()):
+    """Successful imports allow only the scenario's fixed, unique sanitized reason codes."""
+    rows = stderr.splitlines()
+    case.assertEqual(len(rows), len(set(rows)), stderr)
+    codes = []
+    for row in rows:
+        match = re.fullmatch(r"codegraph-java: ([a-z_]+): [A-Za-z ;,.]+", row)
+        case.assertIsNotNone(match, stderr)
+        codes.append(match.group(1))
+    case.assertEqual(sorted(codes), sorted(expected), stderr)
+
+
 def write(root, path, source):
     """Write one disposable source/config fixture."""
     target = root / path

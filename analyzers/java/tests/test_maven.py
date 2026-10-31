@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from test_helper import PUBLIC_COMMAND, RUNTIME, TARGET, write, node, snapshot_files
+from test_helper import PUBLIC_COMMAND, RUNTIME, TARGET, write, node, snapshot_files, assert_diagnostics, diagnostic_codes
 
 
 def pom(artifact, content='', group='fixture', version='1'):
@@ -34,14 +34,14 @@ class MavenTests(unittest.TestCase):
     def settings(self, extra=''):
         write(self.home, '.m2/settings.xml', '<settings><localRepository>' + str(self.local) + '</localRepository>' + extra + '</settings>')
 
-    def public(self, files=None, tests=False, jvm_options=()):
+    def public(self, files=None, tests=False, jvm_options=(), diagnostics=None):
         message = {'protocol': 'codegraph.analyzer/1', 'type': 'analyze', 'id': 'maven', 'repository_root': str(self.root),
                    'options': {'include_tests': tests, 'rust_dependency_scope': 'repository-only'}}
         if files is not None: message['files'] = files
         env = dict(os.environ, CODEGRAPH_JAVA_TARGET_JDK=str(TARGET))
         result = subprocess.run([PUBLIC_COMMAND[0], '-Duser.home=' + str(self.home), *jvm_options, *PUBLIC_COMMAND[1:], 'analyze'],
                                 input=json.dumps(message), text=True, capture_output=True, env=env, timeout=40)
-        self.assertEqual(result.stderr, '', result.stderr)
+        assert_diagnostics(self, result.stderr, diagnostic_codes(json.loads(result.stdout).get('graph', {})) if diagnostics is None else diagnostics)
         self.assertEqual(len(result.stdout.splitlines()), 1, result.stdout)
         return json.loads(result.stdout)
 
@@ -111,9 +111,9 @@ class MavenTests(unittest.TestCase):
         write(self.root, 'src/main/java/p/App.java', 'package p; class App { void helper(){} void run(){helper();} }')
         write(self.root, 'pom.xml', '<broken')
         self.assertEqual(self.public()['outcome'], 'error')
-        self.assertEqual(self.public(['src/main/java/p/App.java'])['outcome'], 'ok')
+        self.assertEqual(self.public(['src/main/java/p/App.java'], diagnostics=('model_discarded','default_platform'))['outcome'], 'ok')
         write(self.root, 'pom.xml', pom('app', '<dependencies>' + dependency('missing') + '</dependencies>'))
-        result = self.public()
+        result = self.public(diagnostics=('context_incomplete','default_platform'))
         self.assertTrue(any(t['kind'] == 'node' for t in self.calls(result, '/method:run()')))
 
     def test_optional_exclusions(self):
@@ -155,7 +155,7 @@ class MavenTests(unittest.TestCase):
         self.assertEqual(result['outcome'], 'error', result)
         self.assertNotIn('graph', result)
 
-    def import_with_mutation(self, mutate, settings_extra='', jvm_options=()):
+    def import_with_mutation(self, mutate, settings_extra='', jvm_options=(), diagnostics=None):
         import http.server
         import threading
         self.install('parent', content='<packaging>pom</packaging>')
@@ -212,7 +212,7 @@ class MavenTests(unittest.TestCase):
         write(self.root, 'pom.xml', '<broken')
         write(self.root, 'src/main/java/p/App.java', 'package p; class App { void own(){} void run(){own(); Helper.value();} }')
         write(self.root, 'src/main/java/p/Helper.java', 'package p; class Helper { static void value(){} }')
-        targets = self.calls(self.public(['src/main/java/p/App.java']), '/method:run()')
+        targets = self.calls(self.public(['src/main/java/p/App.java'], diagnostics=('model_discarded','default_platform')), '/method:run()')
         self.assertEqual({target['kind'] for target in targets}, {'node', 'unresolved'})
 
     def test_declared_source_root_inside_normally_excluded_layout(self):
@@ -225,7 +225,7 @@ class MavenTests(unittest.TestCase):
         for toolchain in ('', '<jdkToolchain><version>17</version></jdkToolchain>'):
             with self.subTest(toolchain=bool(toolchain)):
                 write(self.root, 'pom.xml', pom('app', '<build><plugins><plugin><artifactId>maven-compiler-plugin</artifactId><configuration><source>8</source><target>8</target>' + toolchain + '</configuration></plugin></plugins></build>'))
-                result = self.public()
+                result = self.public(diagnostics=() if toolchain else ('default_platform',))
                 self.assertTrue(any(t['kind'] == 'external' for t in self.calls(result, '/method:run()')), result)
                 platform = node(result['graph'], '/method:run()')['extensions']['java.platforms'][0]
                 self.assertEqual(platform['target'], 'unknown')

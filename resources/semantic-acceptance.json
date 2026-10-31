@@ -993,5 +993,49 @@
       "adapters::csharp_graph::factory_preserves_source_and_local_calls"
     ],
     "command": "public-integration:csharp"
+  },
+  {
+    "language": "java",
+    "source": "analyzers/integration-tests/src/tests/directory/java.rs",
+    "name": "tests::directory::java::configless_default_platform_preserves_source_identity",
+    "platforms": [
+      "darwin",
+      "win32"
+    ],
+    "historicalNames": [],
+    "command": "public-integration:java"
+  },
+  {
+    "language": "java",
+    "source": "analyzers/integration-tests/src/tests/directory/java.rs",
+    "name": "tests::directory::java::maven_reactor_dependencies_keep_exact_selection",
+    "platforms": [
+      "darwin",
+      "win32"
+    ],
+    "historicalNames": [],
+    "command": "public-integration:java"
+  },
+  {
+    "language": "java",
+    "source": "analyzers/integration-tests/src/tests/directory/java.rs",
+    "name": "tests::directory::java::gradle_source_sets_keep_compiler_and_dependency_visibility",
+    "platforms": [
+      "darwin",
+      "win32"
+    ],
+    "historicalNames": [],
+    "command": "public-integration:java"
+  },
+  {
+    "language": "java",
+    "source": "analyzers/integration-tests/src/tests/directory/java.rs",
+    "name": "tests::directory::java::invalid_model_explicit_selection_keeps_source_graph",
+    "platforms": [
+      "darwin",
+      "win32"
+    ],
+    "historicalNames": [],
+    "command": "public-integration:java"
   }
 ]

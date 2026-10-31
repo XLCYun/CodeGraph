@@ -23,9 +23,10 @@ export const fixtures = {
     configless: { 'main.py': 'from api import target\ndef caller():\n    return target()\n', 'api.py': 'def target():\n    return 1\n' },
   },
   java: {
-    files: ['src/Sample.java', 'src/Api.java', 'checks/Checks.java'], selected: ['src/Sample.java'], prerequisite: 'narrant-java.json',
+    files: ['src/Sample.java', 'src/Api.java', 'checks/Checks.java'], selected: ['src/Sample.java'], prerequisite: 'narrant-java.json', implicit: true,
+    configless: { 'src/main/java/Sample.java': 'class Sample { int caller(){return Api.target();} }', 'src/main/java/Api.java': 'class Api { static int target(){return 1;} }' },
     content: { 'src/Sample.java': 'public class Sample { public int caller() { return Api.target(); } }\n', 'src/Api.java': 'class Api { static int target() { return 1; } }\n', 'checks/Checks.java': 'class Checks { void test_only() {} }\n', 'unused/Unused.java': 'class Unused { void excluded_member() {} }\n', 'narrant-java.json': JSON.stringify({ schema: 'java-static-v1', release: '17', source_roots: [{ path: 'src', role: 'main' }, { path: 'checks', role: 'test' }] }) + '\n' },
-    empty: { 'pom.xml': '<project><groupId>fixture</groupId><artifactId>empty</artifactId><version>1</version><properties><maven.compiler.release>17</maven.compiler.release></properties></project>\n' },
+    empty: { 'pom.xml': '<project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>empty</artifactId><version>1</version><properties><maven.compiler.release>17</maven.compiler.release></properties></project>\n' },
   },
   go: {
     files: ['main.go', 'api.go', 'main_test.go'], selected: ['main.go'], prerequisite: 'go.mod',

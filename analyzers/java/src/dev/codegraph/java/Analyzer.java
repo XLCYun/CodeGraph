@@ -128,13 +128,16 @@ final class Analyzer {
         }
     }
 
-    /** 验证期限和目标模型，进程不运行项目工具。 */
+    /** 验证期限并导入本次选集的项目模型。 */
     Analyzer(AnalysisInput input, SdkDiscovery.Provider targets) throws Failure {
         if (input.timeoutMillis() <= 0 || input.maxResultBytes() <= 0) throw new Failure("invalid_input", "invalid analysis limit");
         this.resultLimit = input.maxResultBytes();
         this.deadline = System.nanoTime() + input.timeoutMillis() * 1_000_000L;
         this.model = ProjectModel.discover(input, targets, this::checkpoint);
     }
+
+    /** 返回固定且去重的公共降级说明。 */
+    List<String> diagnostics() throws Failure { return model.diagnostics(); }
 
     /** 返回组件及公共输出边界共同使用的结果字节上限。 */
     long maxResultBytes() { return resultLimit; }
