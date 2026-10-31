@@ -31,20 +31,26 @@ class OutOfBoxTests(unittest.TestCase):
     def test_utf8_bom_offsets_preserve_raw_file_and_declarations(self):
         text = '\ufeffpackage p; class A { String label="中文😀"; int run(){return 1;} }\r\n'
         path = 'src/main/java/p/A.java'
-        write(self.root, path, text)
+        file = self.root / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(text.encode('utf-8'))
+        self.assertEqual(file.read_bytes(), text.encode('utf-8'))
         first = self.public(env={'JAVA_HOME': str(TARGET)})
         self.assertEqual(first['outcome'], 'ok', first)
         graph = first['graph']
         self.assertEqual(node(graph, '#file')['source'], text)
         self.assertEqual(node(graph, '/method:run()')['source'], 'int run(){return 1;}')
         self.assertEqual(node(graph, '/field:label')['source'], 'label="中文😀"')
-        write(self.root, path, text.removeprefix('\ufeff'))
+        plain_text = text.removeprefix('\ufeff')
+        file.write_bytes(plain_text.encode('utf-8'))
+        self.assertEqual(file.read_bytes(), plain_text.encode('utf-8'))
         plain = self.public(env={'JAVA_HOME': str(TARGET)})
         for key in ('id', 'signature'):
             self.assertEqual([n[key] for n in graph['nodes']], [n[key] for n in plain['graph']['nodes']])
         self.assertTrue(node(graph, '#file')['code'].startswith('\ufeff'))
         self.assertEqual([n['code'].removeprefix('\ufeff') for n in graph['nodes']], [n['code'] for n in plain['graph']['nodes']])
-        write(self.root, path, text)
+        file.write_bytes(text.encode('utf-8'))
+        self.assertEqual(file.read_bytes(), text.encode('utf-8'))
         syntax = run(request(self.root, [path], platforms=[]))
         self.assertEqual(syntax['outcome'], 'ok', syntax)
         self.assertEqual(node(syntax['graph'], '#file')['source'], text)

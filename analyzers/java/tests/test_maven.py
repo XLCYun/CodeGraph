@@ -65,7 +65,10 @@ class MavenTests(unittest.TestCase):
     def test_bom_self_code_is_stable_across_main_and_test_contexts(self):
         write(self.root, 'pom.xml', pom('bom', '<properties><maven.compiler.release>17</maven.compiler.release></properties>'))
         source = '\ufeffpackage p; public class A { public static int value(){return 1;} }\r\n'
-        write(self.root, 'src/main/java/p/A.java', source)
+        main_file = self.root / 'src/main/java/p/A.java'
+        main_file.parent.mkdir(parents=True, exist_ok=True)
+        main_file.write_bytes(source.encode('utf-8'))
+        self.assertEqual(main_file.read_bytes(), source.encode('utf-8'))
         write(self.root, 'src/test/java/p/T.java', 'package p; class T { int test(){return A.value();} }')
         main = self.public()['graph']
         both = self.public(tests=True)['graph']
