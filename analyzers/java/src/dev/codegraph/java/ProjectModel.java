@@ -38,6 +38,7 @@ final class ProjectModel implements AutoCloseable {
     private static final int MAX_FILES = 100000;
     private final Checkpoint checkpoint;
     private final Map<String, List<String>> inventories = new HashMap<>();
+    private final JdtResources jdtResources = new JdtResources();
 
     /** 将目录和配置加载纳入同一次请求的期限。 */
     @FunctionalInterface
@@ -307,7 +308,9 @@ final class ProjectModel implements AutoCloseable {
     }
 
     void verifyInputs() throws Failure { if (snapshot != null) snapshot.verify(); }
-    @Override public void close() throws Failure { if (snapshot != null) snapshot.close(); }
+    @Override public void close() throws Failure {
+        try (SourceSnapshot owned = snapshot) { jdtResources.close(); }
+    }
 
 
     private static boolean under(String file, String root) {
@@ -670,6 +673,7 @@ final class ProjectModel implements AutoCloseable {
             String[] paths = context.stream().map(file -> repository.resolve(file).toString()).toArray(String[]::new);
             String[] encodings = new String[context.size()];
             for (int i = 0; i < encodings.length; i++) encodings[i] = encoding(context.get(i));
+            jdtResources.attach(parser);
             parser.createASTs(paths, encodings, new String[0], requestor, monitor);
         }
 

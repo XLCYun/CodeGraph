@@ -240,6 +240,20 @@ tasks.configureEach { doFirst { error("BUSINESS_TASK_EXECUTED") } }
         result=self.public()
         self.assertEqual(result['outcome'],'ok',result)
         self.assertTrue(any(r['semantic']=='code.calls' and r['target']['kind']=='external' for r in node(result['graph'],'/method:run()')['references']),result)
+        command = [str(RUNTIME / 'bin/java'), '--enable-native-access=ALL-UNNAMED', '-cp', str(HELPER / 'build/test-classes') + os.pathsep + str(HELPER / 'build/classes') + os.pathsep + CP, 'dev.codegraph.java.GradleResourcesTest', str(self.root), 'analysis']
+        environment = dict(os.environ, CODEGRAPH_JAVA_TARGET_JDK=str(TARGET), GRADLE_USER_HOME=str(self.home), CODEGRAPH_FIXTURE_PID=str(self.base/'daemon.pid'))
+        observed = subprocess.run(command, text=True, encoding='utf-8', capture_output=True, env=environment, timeout=140)
+        self.assertEqual(observed.returncode, 0, observed.stdout + observed.stderr)
+        self.assertIn('Snapshot deleted before analyzer exit', observed.stdout)
+        parser_command = [*command[:-3], 'dev.codegraph.java.JdtResourcesTest', str(self.root), str(TARGET)]
+        parser = subprocess.run(parser_command, text=True, encoding='utf-8', capture_output=True, env=environment, timeout=30)
+        self.assertEqual(parser.returncode, 0, parser.stdout + parser.stderr)
+        self.assertIn('Parser before-ast: snapshot deleted before analyzer exit', parser.stdout)
+        self.assertIn('Parser callback: snapshot deleted before analyzer exit', parser.stdout)
+        write(self.root, 'src/main/java/p/A.java', 'package wrong; class A { int run(){return outside.External.value();} }')
+        failed = subprocess.run([*command[:-1], 'analysis-failure'], text=True, encoding='utf-8', capture_output=True, env=environment, timeout=140)
+        self.assertEqual(failed.returncode, 0, failed.stdout + failed.stderr)
+        self.assertIn('Snapshot deleted before analyzer exit', failed.stdout)
 
     def test_external_caller_cancellation(self):
         unicode_root = self.base / "project-中文丁"

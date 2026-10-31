@@ -146,7 +146,7 @@ final class Analyzer {
 
     /** 执行配置隔离解析、来源归并与关系终判。 */
     JsonObject run() throws Failure {
-        try {
+        try (model) {
             model.verifyInputs();
             model.forEachActiveConfiguration(this::parseConfiguration);
             checkpoint();
@@ -157,7 +157,7 @@ final class Analyzer {
             GraphChecks.validate(result, model);
             model.verifyInputs();
             return result;
-        } finally { model.close(); }
+        }
     }
 
     /** 检查内部分析时限；调用方通过终止进程实现取消。 */
