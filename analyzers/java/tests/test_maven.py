@@ -220,6 +220,77 @@ class MavenTests(unittest.TestCase):
         write(self.root, 'app/src/main/java/p/App.java', 'package p; class App { void run(){Lib.value();} }')
         self.assertTrue(any(t['kind'] == 'node' for t in self.calls(self.public(), '/method:run()')))
 
+    def test_default_compiler_executions_override_plugin_api_per_source_set(self):
+        main = 'src/main/java/p/App.java'
+        test = 'src/test/java/p/Check.java'
+        write(self.root, main, 'package p; class App { Object mainCall(){return java.util.List.of("x");} }')
+        write(self.root, test, 'package p; class Check { Object testCall(){return java.util.List.of("x");} }')
+        for goal, method, other in [('compile', 'mainCall', 'testCall'), ('testCompile', 'testCall', 'mainCall')]:
+            with self.subTest(goal=goal):
+                write(self.root, 'pom.xml', pom('app', '<build><plugins><plugin><artifactId>maven-compiler-plugin</artifactId><configuration><release>17</release><encoding>UTF-8</encoding></configuration><executions><execution><id>default-' + goal + '</id><configuration><release>8</release></configuration></execution></executions></plugin></plugins></build>'))
+                result = self.public(tests=True)
+                changed = node(result['graph'], '/method:' + method + '()')
+                compiler = changed['extensions']['java.platforms'][0]
+                self.assertEqual(compiler['target'], '8')
+                self.assertEqual(compiler['compiler']['release'], '8')
+                self.assertEqual(compiler['compiler']['encoding'], 'UTF-8')
+                self.assertEqual(self.calls(result, '/method:' + method + '()'), [{'kind': 'unresolved', 'name': 'of'}])
+                self.assertEqual(node(result['graph'], '/method:' + other + '()')['extensions']['java.platforms'][0]['target'], '17')
+                self.assertTrue(any(t['kind'] == 'external' for t in self.calls(result, '/method:' + other + '()')))
+
+    def test_extra_compiler_execution_withholds_ambiguous_api_only(self):
+        write(self.root, 'src/main/java/p/App.java', 'package p; class App { Object run(){return java.util.List.of();} }')
+        for goal in ('help', 'compile'):
+            with self.subTest(goal=goal):
+                write(self.root, 'pom.xml', pom('app', '<build><plugins><plugin><artifactId>maven-compiler-plugin</artifactId><configuration><release>17</release></configuration><executions><execution><id>extra</id><goals><goal>' + goal + '</goal></goals><configuration><release>8</release></configuration></execution></executions></plugin></plugins></build>'))
+                result = self.public(diagnostics=('compiler_unavailable',) if goal == 'compile' else ())
+                platform = node(result['graph'], '/method:run()')['extensions']['java.platforms'][0]
+                if goal == 'compile':
+                    self.assertEqual(platform['target'], 'unknown')
+                    self.assertNotIn('release', platform['compiler'])
+                    self.assertEqual(self.calls(result, '/method:run()'), [{'kind': 'unresolved', 'name': 'of'}])
+                else: self.assertTrue(any(t['kind'] == 'external' for t in self.calls(result, '/method:run()')))
+
+    def test_late_compiler_validation_discards_only_explicit_model(self):
+        path = 'src/main/java/p/App.java'
+        source = 'package p; class App { void own(){} void run(){own(); Helper.value();} }'
+        write(self.root, path, source)
+        write(self.root, 'src/main/java/p/Helper.java', 'package p; class Helper { static void value(){} }')
+        for setting in ('<jdkToolchain><version>[17,18)</version></jdkToolchain>', '<encoding>no-such-charset</encoding>', '<source>not-a-version</source>'):
+            with self.subTest(setting=setting):
+                write(self.root, 'pom.xml', pom('app', '<build><plugins><plugin><artifactId>maven-compiler-plugin</artifactId><configuration>' + setting + '</configuration></plugin></plugins></build>'))
+                explicit = self.public([path], diagnostics=('model_discarded', 'default_platform'))
+                self.assertEqual(explicit['graph']['root_contains'], ['java:' + path + '#file'])
+                self.assertEqual(node(explicit['graph'], '#file')['source'], source)
+                self.assertEqual({t['kind'] for t in self.calls(explicit, '/method:run()')}, {'node', 'unresolved'})
+                failed = self.public(diagnostics=())
+                self.assertEqual(failed['outcome'], 'error')
+                self.assertEqual(failed['error']['code'], 'analysis_failed')
+                self.assertNotIn('graph', failed)
+
+    def test_inactive_test_encoding_is_not_consumed(self):
+        write(self.root, 'pom.xml', pom('app', '<build><plugins><plugin><artifactId>maven-compiler-plugin</artifactId><configuration><release>17</release></configuration><executions><execution><id>default-testCompile</id><configuration><encoding>no-such-charset</encoding></configuration></execution></executions></plugin></plugins></build>'))
+        write(self.root, 'src/main/java/p/App.java', 'package p; class App { Object run(){return java.util.List.of();} }')
+        write(self.root, 'src/test/java/p/Check.java', 'package p; class Check {}')
+        self.assertTrue(any(t['kind'] == 'external' for t in self.calls(self.public(), '/method:run()')))
+        self.assertEqual(self.public(tests=True, diagnostics=())['outcome'], 'error')
+
+    def test_jpms_visible_reactor_and_module_path_are_not_flat_classpath(self):
+        write(self.root, 'pom.xml', pom('root', '<packaging>pom</packaging><modules><module>lib</module><module>app</module></modules>'))
+        write(self.root, 'lib/pom.xml', pom('lib'))
+        write(self.root, 'app/pom.xml', pom('app', '<dependencies>' + dependency('lib') + '</dependencies>'))
+        write(self.root, 'lib/src/main/java/module-info.java', 'module hidden.library {}')
+        write(self.root, 'lib/src/main/java/p/Lib.java', 'package p; public class Lib { public static void hidden(){} }')
+        path = 'app/src/main/java/p/App.java'
+        write(self.root, path, 'package p; class App { void run(){Lib.hidden();} }')
+        result = self.public([path], diagnostics=('default_platform', 'module_visibility_unavailable'))
+        self.assertEqual(self.calls(result, '/method:run()'), [{'kind': 'unresolved', 'name': 'hidden'}])
+        self.assertEqual(result['graph']['root_contains'], ['java:' + path + '#file'])
+        write(self.root, 'pom.xml', pom('app', '<build><plugins><plugin><artifactId>maven-compiler-plugin</artifactId><configuration><compilerArgs><arg>--module-path</arg><arg>modules</arg></compilerArgs></configuration></plugin></plugins></build>'))
+        write(self.root, 'src/main/java/p/Main.java', 'package p; class Main { Object run(){return java.util.List.of();} }')
+        result = self.public(diagnostics=('default_platform', 'module_visibility_unavailable'))
+        self.assertEqual(self.calls(result, '/method:run()'), [{'kind': 'unresolved', 'name': 'of'}])
+
     def test_effective_source_encoding_and_no_business_goal(self):
         write(self.root, 'pom.xml', pom('app', '''<properties><project.build.sourceEncoding>ISO-8859-1</project.build.sourceEncoding></properties>
 <build><plugins><plugin><groupId>not.available</groupId><artifactId>must-never-run</artifactId><version>1</version>

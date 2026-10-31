@@ -464,14 +464,41 @@ final class MavenProjectImporter {
 
     private ImportedProject.Compiler compiler(Model model, boolean test) {
         Xpp3Dom config = null;
-        for (Plugin plugin : model.getBuild().getPlugins()) if (plugin.getArtifactId().equals("maven-compiler-plugin"))
-            if (plugin.getConfiguration() instanceof Xpp3Dom value) config = value;
+        boolean ambiguous = false;
+        String goal = test ? "testCompile" : "compile";
+        for (Plugin plugin : model.getBuild().getPlugins()) if (plugin.getArtifactId().equals("maven-compiler-plugin") &&
+                plugin.getGroupId().equals("org.apache.maven.plugins")) {
+            if (plugin.getConfiguration() instanceof Xpp3Dom value) config = new Xpp3Dom(value);
+            for (PluginExecution execution : plugin.getExecutions()) {
+                if (execution.getId().equals("default-" + goal)) {
+                    if (execution.getConfiguration() instanceof Xpp3Dom value)
+                        config = Xpp3Dom.mergeXpp3Dom(new Xpp3Dom(value), config);
+                } else if (execution.getGoals().contains(goal)) ambiguous = true;
+            }
+        }
+        // Additional compiler executions may select different files/settings. Keep membership,
+        // but do not certify one invocation's API as the compilation context for all of them.
+        if (ambiguous) return new ImportedProject.Compiler(null, null, null, null,
+            value(model, config, "encoding", "encoding"), true, moduleOptions(config));
         return new ImportedProject.Compiler(value(model, config, test ? "testRelease" : "release", "release"),
             value(model, config, test ? "testSource" : "source", "source"),
             value(model, config, test ? "testTarget" : "target", "target"),
             config != null && config.getChild("jdkToolchain") != null && config.getChild("jdkToolchain").getChild("version") != null
                 ? config.getChild("jdkToolchain").getChild("version").getValue() : null,
-            value(model, config, "encoding", "encoding"));
+            value(model, config, "encoding", "encoding"), false, moduleOptions(config));
+    }
+    private boolean moduleOptions(Xpp3Dom config) {
+        if (config == null) return false;
+        if (Set.of("modulepath", "modulesourcepath", "upgrademodulepath", "addreads", "addexports",
+                "addmodules", "limitmodules", "patchmodule").contains(config.getName().toLowerCase(Locale.ROOT).replace("-", ""))) return true;
+        String value = config.getValue();
+        if (value != null && PatternHolder.MODULE_OPTIONS.matcher(value).find()) return true;
+        for (Xpp3Dom child : config.getChildren()) if (moduleOptions(child)) return true;
+        return false;
+    }
+    private static final class PatternHolder {
+        static final java.util.regex.Pattern MODULE_OPTIONS = java.util.regex.Pattern.compile(
+            "(^|\\s)(-p|--module[^\\s=]*|--upgrade-module-path|--add-reads|--add-exports|--add-modules|--limit-modules|--patch-module)([=\\s]|$)");
     }
     private String value(Model model, Xpp3Dom config, String name, String fallback) {
         String value = config == null || config.getChild(name) == null ? null : config.getChild(name).getValue();

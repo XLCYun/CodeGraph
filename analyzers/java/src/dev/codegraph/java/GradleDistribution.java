@@ -10,7 +10,7 @@ import static dev.codegraph.java.Main.Failure;
 
 /** Wrapper declarations select the tool distribution, independently of the target platform. */
 final class GradleDistribution {
-    record Installed(Path root, String version, Path javaHome) {}
+    record Installed(Path root, String version, Path javaHome, GradleDistributionCache.Entry cache) {}
     static Installed install(SourceSnapshot snapshot, List<SdkDiscovery.Candidate> jdks,
                              ProjectModel.Checkpoint checkpoint) throws Failure {
         Path wrapper = snapshot.root().resolve("gradle/wrapper/gradle-wrapper.properties");
@@ -40,7 +40,8 @@ final class GradleDistribution {
                     digest.update(block,0,size); out.write(block,0,size);
                 }
             }
-            if (sha != null && !sha.equalsIgnoreCase(HexFormat.of().formatHex(digest.digest())))
+            String archiveHash = HexFormat.of().formatHex(digest.digest());
+            if (sha != null && !sha.equalsIgnoreCase(archiveHash))
                 throw new ProjectModel.BoundaryFailure("unsupported_configuration", "Gradle distribution checksum mismatch");
             Path destination=Files.createDirectory(snapshot.outputRoot().resolve("distribution"));
             try (var in = new ZipInputStream(Files.newInputStream(zip))) {
@@ -63,7 +64,8 @@ final class GradleDistribution {
                     }
                 }
             }
-            return new Installed(destination.resolve("gradle-"+version),version,javaHome);
+            var cache = GradleDistributionCache.publish(destination, archiveHash, snapshot, checkpoint);
+            return new Installed(cache.root().resolve("gradle-"+version),version,javaHome,cache);
         } catch(Failure failure) { throw failure; }
         catch(IOException failure) { throw new Failure("object_extraction_failed", "cannot obtain Gradle distribution"); }
         catch(java.security.NoSuchAlgorithmException failure) { throw new IllegalStateException(failure); }

@@ -81,8 +81,9 @@ class OutOfBoxTests(unittest.TestCase):
 
     def test_unconfigured_default_helper_and_platform_source_stability(self):
         write(self.root, "src/main/java/p/A.java", "package p; class A { void helper() {} void run(){helper();} }")
-        first = self.public(env={"JAVA_HOME": str(TARGET), "PATH": "/usr/bin:/bin"})
-        second = self.public(env={"PATH": str(TARGET / "bin") + ":/usr/bin:/bin"})
+        inherited_path = os.environ.get("PATH", os.defpath)
+        first = self.public(env={"JAVA_HOME": str(TARGET), "PATH": inherited_path})
+        second = self.public(env={"PATH": str(TARGET / "bin") + os.pathsep + inherited_path})
         self.assertEqual(first["outcome"], "ok", first)
         self.assertEqual(first["graph"], second["graph"])
         method = node(first["graph"], "/method:run()")
@@ -158,6 +159,28 @@ class OutOfBoxTests(unittest.TestCase):
         self.assertTrue(any(t["kind"] == "unresolved" and t["name"] == "A" for t in calls), calls)
         self.assertTrue(any(t["kind"] == "node" and '/method:helper(int)' in t['id'] for t in calls), calls)
         self.assertTrue(any(t["kind"] == "node" and '/constructor:' in t['id'] for t in calls), calls)
+
+    def test_jpms_visibility_downgrades_even_when_descriptor_is_not_selected(self):
+        path = 'src/main/java/p/A.java'
+        source = 'package p; class A { Object run() throws Exception { return java.sql.DriverManager.getConnection("jdbc:none"); } }'
+        write(self.root, path, source)
+        write(self.root, 'unrelated/src/main/java/module-info.java', 'module unrelated {}')
+        plain = self.public([path], env={'JAVA_HOME': str(TARGET)})
+        self.assertEqual(plain['outcome'], 'ok', plain)
+        self.assertTrue(any(r['target']['kind'] == 'external' for r in node(plain['graph'], '/method:run()')['references']))
+        write(self.root, 'src/main/java/module-info.java', 'module example { exports p; }')
+        for selection in ([path], None):
+            with self.subTest(selection=selection):
+                result = self.public(selection, env={'JAVA_HOME': str(TARGET)})
+                self.assertEqual(result['outcome'], 'ok', result)
+                assert_diagnostics(self, self.last_stderr, ('default_platform', 'module_visibility_unavailable'))
+                calls = [r['target'] for r in node(result['graph'], '/method:run()')['references'] if r['semantic'] == 'code.calls']
+                self.assertEqual(calls, [{'kind': 'unresolved', 'name': 'getConnection'}])
+                for original in plain['graph']['nodes']:
+                    actual = next(n for n in result['graph']['nodes'] if n['id'] == original['id'])
+                    for field in ('source', 'code', 'signature'): self.assertEqual(actual[field], original[field])
+                    self.assertEqual(actual['extensions']['java.platforms'][0]['status'], 'available')
+                if selection: self.assertEqual(result['graph']['root_contains'], ['java:' + path + '#file'])
 
     def test_syntax_damage_and_jpms_keep_confirmed_structure(self):
         write(self.root, "src/main/java/p/A.java", "package p; class A { int good(){return 1;} void broken( { } }")

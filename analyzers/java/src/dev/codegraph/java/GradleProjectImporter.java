@@ -1,6 +1,6 @@
 package dev.codegraph.java;
 
-import dev.codegraph.gradle.SourceModel;
+import dev.codegraph.gradle.SourceAction;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
@@ -16,6 +16,8 @@ final class GradleProjectImporter {
     static ImportedProject load(SourceSnapshot snapshot,List<SdkDiscovery.Candidate> jdks,ProjectModel.Checkpoint checkpoint) throws Failure {
         var distribution=GradleDistribution.install(snapshot,jdks,checkpoint);
         Path home=snapshot.outputRoot().resolve("gradle-home");
+        String nativeSetting=System.getProperty("org.gradle.native");
+        System.setProperty("org.gradle.native", "false"); // Client native libraries cannot unload before snapshot cleanup on Windows.
         try {
             Files.createDirectory(home);
             List<String> arguments=environment(snapshot,home,jdks);
@@ -26,22 +28,22 @@ final class GradleProjectImporter {
                 "-Porg.gradle.java.installations.auto-download=false","-Dorg.gradle.java.installations.auto-detect=false","-Porg.gradle.java.installations.auto-detect=false"));
             GradleConnector connector=GradleConnector.newConnector().forProjectDirectory(snapshot.root().toFile())
                 .useInstallation(distribution.root().toFile()).useGradleUserHomeDir(home.toFile());
-            SourceModel model;
+            List<Map<String,Object>> model;
             {
-                var processes=new OwnedGradleProcesses(home);
+                var processes=new OwnedGradleProcesses(home,distribution.root());
                 ProjectConnection connection=null;
                 var token=GradleConnector.newCancellationTokenSource();
-                var result=new CompletableFuture<SourceModel>();
+                var result=new CompletableFuture<List<Map<String,Object>>>();
                 Map<String,String> env=new HashMap<>(System.getenv());
                 for(String key:List.of("JAVA_TOOL_OPTIONS","JDK_JAVA_OPTIONS","_JAVA_OPTIONS","CLASSPATH")) env.remove(key);
                 env.put("GRADLE_USER_HOME",home.toString());
                 var output=new BoundedOutput();
                 try {
                     connection=connector.connect();
-                    connection.model(SourceModel.class).setJavaHome(distribution.javaHome().toFile()).setEnvironmentVariables(env)
+                    connection.action(new SourceAction()).setJavaHome(distribution.javaHome().toFile()).setEnvironmentVariables(env)
                         .withArguments(arguments).setStandardOutput(output).setStandardError(output).withCancellationToken(token.token())
-                        .get(new ResultHandler<>() {
-                            public void onComplete(SourceModel value) { result.complete(value); }
+                        .run(new ResultHandler<>() {
+                            public void onComplete(List<Map<String,Object>> value) { result.complete(value); }
                             public void onFailure(GradleConnectionException failure) { result.completeExceptionally(failure); }
                         });
                     while(!result.isDone()) {
@@ -69,12 +71,13 @@ final class GradleProjectImporter {
                             }
                         }
                     }
+                    distribution.cache().verify(() -> {});
                     Files.write(snapshot.outputRoot().resolve("gradle-output.log"),output.buffer.toByteArray());
                 }
             }
             List<ImportedProject.SourceSet> sets=new ArrayList<>();
             List<String> roots=new ArrayList<>();
-            for(var row:model.getSourceSets()) {
+            for(var row:model) {
                 List<String> own=relative(snapshot,strings(row,"roots"),false);
                 roots.addAll(own);
                 List<String> inputs=relative(snapshot,strings(row,"inputs"),true);
@@ -84,13 +87,17 @@ final class GradleProjectImporter {
                 for(String binary:strings(row,"binaries")) binaries.add(snapshot.freezeBinary(binary));
                 sets.add(new ImportedProject.SourceSet("java-config:gradle:"+row.get("id"),String.valueOf(row.get("module")),Boolean.TRUE.equals(row.get("test")),
                     own,strings(row,"visible").stream().map(id -> "java-config:gradle:"+id).toList(), binaries,
-                    new ImportedProject.Compiler(value(row,"release"),value(row,"source"),value(row,"target"),value(row,"toolchain"),value(row,"encoding"),Boolean.TRUE.equals(row.get("apiUnavailable"))),
+                    new ImportedProject.Compiler(value(row,"release"),value(row,"source"),value(row,"target"),value(row,"toolchain"),value(row,"encoding"),Boolean.TRUE.equals(row.get("apiUnavailable")),Boolean.TRUE.equals(row.get("moduleVisibilityUnavailable"))),
                     Boolean.TRUE.equals(row.get("complete")),inputs,relative(snapshot,strings(row,"members"),false)));
             }
             snapshot.freezeGradleOutputs(roots);
             snapshot.verify();
             return new ImportedProject(sets);
         } catch(IOException failure) { throw new Failure("object_extraction_failed","cannot prepare Gradle model inputs"); }
+        finally {
+            if(nativeSetting==null) System.clearProperty("org.gradle.native");
+            else System.setProperty("org.gradle.native",nativeSetting);
+        }
     }
     private static void infrastructure(Throwable failure) throws Failure {
         Set<Throwable> seen=Collections.newSetFromMap(new IdentityHashMap<>());

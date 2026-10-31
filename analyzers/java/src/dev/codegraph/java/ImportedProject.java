@@ -5,9 +5,13 @@ import java.util.List;
 /** Build-tool-neutral immutable input to the JDT configuration boundary. Paths are repository-relative. */
 record ImportedProject(List<SourceSet> sourceSets) {
     ImportedProject { sourceSets = List.copyOf(sourceSets); }
-    record Compiler(String release, String source, String target, String toolchain, String encoding, boolean apiUnavailable) {
+    record Compiler(String release, String source, String target, String toolchain, String encoding,
+                    boolean apiUnavailable, boolean moduleVisibilityUnavailable) {
         Compiler(String release, String source, String target, String toolchain, String encoding) {
-            this(release, source, target, toolchain, encoding, false);
+            this(release, source, target, toolchain, encoding, false, false);
+        }
+        Compiler(String release, String source, String target, String toolchain, String encoding, boolean apiUnavailable) {
+            this(release, source, target, toolchain, encoding, apiUnavailable, false);
         }
     }
     record SourceSet(String id, String moduleId, boolean test, List<String> roots,

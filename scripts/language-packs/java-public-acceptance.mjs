@@ -54,6 +54,8 @@ export async function verifyJavaPublicAcceptance({ executable, identity, scratch
   const bridge = path.resolve(path.dirname(executable), '../runtime/analyzer/classes/gradle-bridge.jar');
   const javap = execFileSync(path.join(sdk, `bin/javap${process.platform === 'win32' ? '.exe' : ''}`), ['-verbose', '-classpath', bridge, 'dev.codegraph.gradle.SourceModel'], { encoding: 'utf8' });
   assert.match(javap, /major version: 52/);
+  const actionJavap = execFileSync(path.join(sdk, `bin/javap${process.platform === 'win32' ? '.exe' : ''}`), ['-verbose', '-classpath', bridge, 'dev.codegraph.gradle.SourceAction'], { encoding: 'utf8' });
+  assert.match(actionJavap, /major version: 52/);
   const bom = await fixture({ 'src/main/java/p/App.java': '\ufeff' + source, 'src/main/java/p/Lib.java': library });
   const bomGraph = await invoke(bom, 'bom-crlf-unicode', { diagnostics: ['default_platform'] });
   const bomFile = bomGraph.nodes.find(node => node.native_kind === 'file' && node.name.endsWith('App.java'));
@@ -99,6 +101,42 @@ export async function verifyJavaPublicAcceptance({ executable, identity, scratch
   await invoke(bad, 'bad-discovery', { failure: 'analysis_failed' });
   await invoke(bad, 'bad-explicit', { files: ['A.java'], diagnostics: ['model_discarded', 'default_platform'] });
   assert.equal((await invoke(bad, 'bad-empty', { files: [] })).nodes.length, 0);
+
+  // Final-review boundaries must hold in the delivered executable, including omitted descriptors.
+  const modular = await fixture({
+    'src/main/java/module-info.java': 'module example { exports p; }',
+    'src/main/java/p/App.java': 'package p; class App { Object run() throws Exception { return java.sql.DriverManager.getConnection("jdbc:none"); } }',
+  });
+  const modularGraph = await invoke(modular, 'jpms-no-read-exact', { files: ['src/main/java/p/App.java'], environment: env, diagnostics: ['default_platform', 'module_visibility_unavailable'] });
+  assert.equal(modularGraph.root_contains.length, 1);
+  assert.equal(modularGraph.nodes.find(node => node.native_kind === 'file').extensions['java.platforms'][0].status, 'available');
+  assert.deepEqual(calls(modularGraph, 'run').map(ref => ref.target), [{ kind: 'unresolved', name: 'getConnection' }]);
+  for (const goal of ['compile', 'testCompile']) {
+    const executions = await fixture({
+      'pom.xml': pom('executions', `<build><plugins><plugin><artifactId>maven-compiler-plugin</artifactId><configuration><release>17</release></configuration><executions><execution><id>default-${goal}</id><configuration><release>8</release></configuration></execution></executions></plugin></plugins></build>`),
+      'src/main/java/p/App.java': 'package p; class App { Object mainCall(){return java.util.List.of("x");} }',
+      'src/test/java/p/Check.java': 'package p; class Check { Object testCall(){return java.util.List.of("x");} }',
+    });
+    const graph = await invoke(executions, `maven-execution-${goal}`, { tests: true });
+    const changed = goal === 'compile' ? 'mainCall' : 'testCall';
+    const other = goal === 'compile' ? 'testCall' : 'mainCall';
+    assert.equal(method(graph, changed).extensions['java.platforms'][0].compiler.release, '8');
+    assert.equal(method(graph, changed).extensions['java.platforms'][0].target, '8');
+    assert.deepEqual(calls(graph, changed).map(ref => ref.target), [{ kind: 'unresolved', name: 'of' }]);
+    assert.equal(method(graph, other).extensions['java.platforms'][0].target, '17');
+    assert.ok(calls(graph, other).some(ref => ref.target.kind === 'external'));
+  }
+  for (const [label, setting] of [['toolchain-range', '<jdkToolchain><version>[17,18)</version></jdkToolchain>'], ['invalid-encoding', '<encoding>no-such-charset</encoding>']]) {
+    const invalid = await fixture({
+      'pom.xml': pom('invalid', `<build><plugins><plugin><artifactId>maven-compiler-plugin</artifactId><configuration>${setting}</configuration></plugin></plugins></build>`),
+      'src/main/java/p/App.java': 'package p; class App { void own(){} void run(){own(); Lib.target();} }',
+      'src/main/java/p/Lib.java': library,
+    });
+    const graph = await invoke(invalid, `${label}-explicit`, { files: ['src/main/java/p/App.java'], diagnostics: ['model_discarded', 'default_platform'] });
+    assert.equal(graph.root_contains.length, 1);
+    assert.deepEqual(new Set(calls(graph, 'run').map(ref => ref.target.kind)), new Set(['node', 'unresolved']));
+    await invoke(invalid, `${label}-discovery`, { failure: 'analysis_failed' });
+  }
 
   // Probe supported majors through the actual product, selecting an actually absent platform.
   let missing;

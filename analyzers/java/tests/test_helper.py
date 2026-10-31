@@ -80,13 +80,13 @@ def diagnostic_codes(graph):
     return codes
 
 
-def absent_public_release(environment):
+def absent_public_release(environment, majors=(24, 23, 22, 21, 20, 19, 18, 16, 15, 14, 13, 12, 11, 10, 9)):
     """Choose a supported missing SDK using actual public discovery, not JAVA_HOME assumptions."""
     with tempfile.TemporaryDirectory(prefix='java-absent-platform-') as directory:
         root = pathlib.Path(directory)
         (root / 'src').mkdir()
         (root / 'src/A.java').write_text('class A {}')
-        for major in (24, 23, 22, 21, 20, 19, 18, 16, 15, 14, 13, 12, 11, 10, 9):
+        for major in majors:
             (root / 'narrant-java.json').write_text(json.dumps({'schema': 'java-static-v1', 'release': str(major), 'source_roots': [{'path': 'src', 'role': 'main'}]}))
             message = {'protocol': 'codegraph.analyzer/1', 'type': 'analyze', 'id': 'missing-sdk', 'repository_root': str(root), 'files': ['src/A.java'], 'options': {'include_tests': False, 'rust_dependency_scope': 'repository-only'}}
             result = subprocess.run([*PUBLIC_COMMAND, 'analyze'], input=json.dumps(message), text=True, encoding='utf-8', capture_output=True, env=environment, timeout=20)

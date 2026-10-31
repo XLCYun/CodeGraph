@@ -53,6 +53,7 @@ final class ProjectModel implements AutoCloseable {
         ImportedProject.SourceSet imported;
         Set<String> memberFiles;
         boolean selectionOnly;
+        final Set<Boolean> moduleContexts = new HashSet<>();
         List<SourceRoot> visibleRoots = List.of();
 
         /** 保存已验证的单一配置。 */
@@ -158,24 +159,27 @@ final class ProjectModel implements AutoCloseable {
                     }
                 files.sort(Comparator.naturalOrder());
             }
-            for (String file : files) {
-                checkpoint.check();
-                List<Configuration> matches = new ArrayList<>();
-                for (Configuration config : configs) for (SourceRoot sourceRoot : config.roots) {
-                    if (confirmedMember(config,file) && under(file, sourceRoot.path) && (!config.id.startsWith("java-config:inferred:") ||
-                        inferRoot(root, file).equals(sourceRoot.path))) {
-                        if (!matches.contains(config)) matches.add(config);
-                    }
-                }
-                if (matches.isEmpty()) {
-                    Configuration independent = infer(root, List.of(file), checkpoint).getFirst();
-                    if (configs.stream().anyMatch(config -> config.imported != null && config.imported.memberFiles() != null))
-                        independent.selectionOnly = true;
-                    configs.add(independent);
-                    matches.add(independent);
-                }
-                selected.put(file, List.copyOf(matches));
+            model.selectFiles();
+            // Enumerate and check paths outside the recoverable validation boundary. Only invalid
+            // compiler/encoding evidence below may discard an otherwise imported model.
+            List<ParseConfiguration> parsing = new ArrayList<>();
+            model.forEachActiveConfiguration(parsing::add);
+            try {
+                model.validateCompilerContexts(parsing);
+            } catch (Failure failure) {
+                if (discovery || failure instanceof BoundaryFailure || !failure.code.equals("unsupported_configuration")) throw failure;
+                snapshot.verify();
+                model.discardedModel = true;
+                configs.clear();
+                configs.addAll(infer(root, files, checkpoint));
+                for (Configuration config : configs) config.selectionOnly = true;
+                selected.clear();
+                model.selectFiles();
+                parsing.clear();
+                model.forEachActiveConfiguration(parsing::add);
             }
+            for (ParseConfiguration parse : parsing)
+                if (model.unsupportedModules(parse, snapshot)) parse.config.moduleContexts.add(parse.tests);
             for (Configuration config : configs) {
                 if (files.stream().anyMatch(file -> model.activeConfigurations(file).contains(config)))
                     config.target = config.imported != null && config.imported.compiler().apiUnavailable() ? null :
@@ -187,12 +191,73 @@ final class ProjectModel implements AutoCloseable {
         } catch (Failure | RuntimeException e) { snapshot.close(); throw e; }
     }
 
+    private void selectFiles() throws Failure {
+        for (String file : files) {
+            checkpoint.check();
+            List<Configuration> matches = new ArrayList<>();
+            for (Configuration config : configurations) for (SourceRoot sourceRoot : config.roots) {
+                if (confirmedMember(config,file) && under(file, sourceRoot.path) && (!config.id.startsWith("java-config:inferred:") ||
+                    inferRoot(repository, file).equals(sourceRoot.path))) {
+                    if (!matches.contains(config)) matches.add(config);
+                }
+            }
+            if (matches.isEmpty()) {
+                Configuration independent = infer(repository, List.of(file), checkpoint).getFirst();
+                if (configurations.stream().anyMatch(config -> config.imported != null && config.imported.memberFiles() != null))
+                    independent.selectionOnly = true;
+                configurations.add(independent);
+                matches.add(independent);
+            }
+            selected.put(file, List.copyOf(matches));
+        }
+    }
+
+    /** Validate only compiler evidence and encodings that will be consumed by active parsing. */
+    private void validateCompilerContexts(List<ParseConfiguration> parsing) throws Failure {
+        for (ParseConfiguration parse : parsing) {
+            Configuration config = parse.config;
+            apiTarget(config);
+            if (config.imported != null) {
+                var compiler = config.imported.compiler();
+                for (String version : new String[] { compiler.source(), compiler.target(), compiler.toolchain() })
+                    if (version != null) validateRelease(version.startsWith("1.") ? version.substring(2) : version);
+            }
+            for (String file : parse.context) encoding(file);
+            rootEncodings(config, parse.tests);
+        }
+    }
+
+    /** Descriptors remain context evidence even when omitted from the output selection/members. */
+    private boolean unsupportedModules(ParseConfiguration parse, SourceSnapshot snapshot) throws Failure {
+        if (parse.config.imported != null && parse.config.imported.compiler().moduleVisibilityUnavailable()) return true;
+        if (parse.config.imported != null) for (String visible : parse.config.imported.visibleSourceSets())
+            if (configurations.stream().anyMatch(config -> config.id.equals(visible) &&
+                    config.imported.compiler().moduleVisibilityUnavailable())) return true;
+        for (SourceRoot source : parsingRoots(parse.config)) {
+            if (source.test && !parse.tests) continue;
+            String relative = (source.path.isEmpty() ? "" : source.path + "/") + "module-info.java";
+            checkpoint.check();
+            snapshot.validatePath(relative, false);
+            try {
+                Files.readAttributes(repository.resolve(relative), BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+                checkedFile(repository, relative);
+                return true;
+            } catch (NoSuchFileException absent) { /* A nonmodular source root is supported. */ }
+            catch (IOException | SecurityException failure) {
+                throw new Failure("object_extraction_failed", "cannot inspect Java module descriptor");
+            }
+        }
+        return false;
+    }
+
     /** Fixed bounded messages never interpolate model logs, host paths or credentials. */
     List<String> diagnostics() throws Failure {
         Set<String> reasons = new java.util.TreeSet<>();
         if (discardedModel) reasons.add("model_discarded: Failed project context was discarded; analyzing the explicit selection.");
         for (Configuration config : configurations) {
             if (files.stream().noneMatch(file -> activeConfigurations(file).contains(config))) continue;
+            if (!config.moduleContexts.isEmpty())
+                reasons.add("module_visibility_unavailable: Module visibility could not be proved; bindings are disabled.");
             if (config.imported != null && config.imported.compiler().apiUnavailable())
                 reasons.add("compiler_unavailable: Explicit compiler context could not be proved; bindings are disabled.");
             else if (config.target == null)
@@ -578,13 +643,13 @@ final class ProjectModel implements AutoCloseable {
             }
             options.put(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.DISABLED);
             parser.setCompilerOptions(options);
-            parser.setResolveBindings(config.target != null);
+            parser.setResolveBindings(config.target != null && !config.moduleContexts.contains(tests));
             parser.setBindingsRecovery(true);
             parser.setStatementsRecovery(true);
             List<String> roots = new ArrayList<>();
             for (SourceRoot root : parsingRoots(config))
                 if (!config.selectionOnly && !confirmedMembers(config) && (!root.test || tests) && Files.isDirectory(repository.resolve(root.path))) roots.add(repository.resolve(root.path).toString());
-            if (config.target == null) {
+            if (config.target == null || config.moduleContexts.contains(tests)) {
                 // Parse syntax without any environment or binding recovery; compiler options remain explicit.
                 for (String file : context) {
                     checkpoint.check();

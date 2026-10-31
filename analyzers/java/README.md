@@ -15,7 +15,7 @@
 
 正常分析以调用方已经完成授权为前提，不增加仓库信任开关或授权字段。Maven 解析依赖，Gradle 配置、插件和 buildSrc 可执行代码、访问网络并写入缓存；不主动请求业务 build/test/release/deploy 或额外生成任务，不自动安装项目 JDK。临时副本不是沙箱，也不能证明与原 checkout 的任意动态行为完全等价。
 
-成功分析的降级原因只写 stderr，stdout 仍是唯一 JSON。固定诊断代码为 `default_platform`、`platform_unavailable`、`target_platform_missing`、`compiler_unavailable`、`context_incomplete`、`model_discarded`，每种最多一次，不包含私有路径、URL、凭据或原始构建日志。完整且明确声明目标的导入不输出诊断。
+成功分析的降级原因只写 stderr，stdout 仍是唯一 JSON。固定诊断代码为 `default_platform`、`platform_unavailable`、`target_platform_missing`、`compiler_unavailable`、`module_visibility_unavailable`、`context_incomplete`、`model_discarded`，每种最多一次，不包含私有路径、URL、凭据或原始构建日志。完整且明确声明目标的导入不输出诊断。
 
 ## release 与目标 JDK
 
@@ -51,17 +51,21 @@ standalone 声明可为不同源码根指定不同 release：
 
 Maven 模块通过有效 POM 获得继承、属性、profiles 和编译器配置。每份配置使用独立的 JDT 语义环境与 binding 索引，来源证据列出各自的平台 ID。同一物理源码可属于多份配置，最终图仍按原有身份与关系并集规则合并；某配置中的未知关系不会被另一配置的确定关系抹去。
 
+当前扁平 JDT 环境尚不支持 JPMS 的 reads/exports 可见性。活动源码根及其可见源码根存在 `module-info.java`，或模型含模块路径/可见性编译参数时，保留平台可用性与结构，停用该上下文的绑定并输出 `module_visibility_unavailable`。描述符不必出现在显式选集或 Gradle 成员中；无关源码根不影响当前分析。
+
+Maven 编译器插件的 `default-compile` 与 `default-testCompile` 配置按有效模型合并规则覆盖插件级设置，分别决定 main/test 的编译证据。额外 compile/testCompile execution 的文件与编译设置组合尚不支持，对应源集停用 API 绑定并输出 `compiler_unavailable`；无关插件目标不影响绑定。
+
 Maven 的 main/test 各自形成独立 source set。测试可以看到本模块生产源码；跨模块可见性由 Resolver 的依赖图决定。reactor 模块不要求先编译或安装，生产源码不会看见测试源码和 test 依赖。release、source、target、toolchain 与 encoding 分别保留。API 平台只由 release 或 toolchain 选择；仅有 source/target 时使用默认平台，目标仍为 unknown，字节码 target 不作为 API 限制。只有 release 开启 JDT 的 release 限制。节点的 `java.platforms` 记录 `api_source`、独立的 `compiler` 字段和 `dependencies_complete`。缺失依赖会标记模型不完整，Resolver 已确认的健康依赖分支仍保留。reactor 先用 Maven 两阶段构建的第一阶段取得有效坐标，再导入 BOM，属性版本不受模块声明顺序影响。
 
 用户 `~/.m2/settings.xml`、`MAVEN_HOME/conf/settings.xml`、mirrors、活动 proxies、认证、离线模式和本地仓库参与导入。密码按标准 `~/.m2/settings-security.xml` 解密；`settings.security` 覆盖及本地 relocation 链在读取前逐项监视，远程安全文件位置明确拒绝，诊断不输出凭据。网络连接和读取设有有界超时；请求期限及调用方取消仍适用。有效 POM 不等于插件执行模型，动态插件生成的源码根不在本阶段的保证范围内。
 
-分析前建立临时输入副本，冻结源码及构建配置，导入和 JDT 均在副本上工作。导入后、解析前后核验原输入与副本，JDT 回调读取原文时也立即核验冻结摘要；原文件或副本被修改时失败，不把不同版本的 AST 偏移和原文拼接起来。副本不是沙箱，不承诺防御同一权限主体对文件进行瞬时改写并复原；自有 Gradle 工具在 JDT 解析前已退出。.git 的目录存在性保留，内部文件默认不复制；`.gradle`、`.idea`、`.tools`、`vendor` 和 `node_modules` 只复制源码及构建声明，避免复制缓存二进制。项目声明的源码成员及明确选中的文件仍然优先。空目录与文件 profile 的存在/缺失条件也会冻结、复核；实际引用的缓存内 marker 会补入副本。工具输出置于独立目录，不改变模型读取的输入目录。每文件上限 32 MiB、输入总量 512 MiB、文件数 100,000。正常及可处理失败都会关闭 Resolver 并删除副本。显式坏模型回退先复核输入，丢弃失败配置，只用明确选集重建上下文。
+分析前建立临时输入副本，冻结源码及构建配置，导入和 JDT 均在副本上工作。导入后、解析前后核验原输入与副本，JDT 回调读取原文时也立即核验冻结摘要；原文件或副本被修改时失败，不把不同版本的 AST 偏移和原文拼接起来。副本不是沙箱，不承诺防御同一权限主体对文件进行瞬时改写并复原；自有 Gradle 工具在 JDT 解析前已退出。.git 的目录存在性保留，内部文件默认不复制；`.gradle`、`.idea`、`.tools`、`vendor` 和 `node_modules` 只复制源码及构建声明，避免复制缓存二进制。项目声明的源码成员及明确选中的文件仍然优先。空目录与文件 profile 的存在/缺失条件也会冻结、复核；实际引用的缓存内 marker 会补入副本。工具输出置于独立目录，不改变模型读取的输入目录。每文件上限 32 MiB、输入总量 512 MiB、文件数 100,000。正常及可处理失败都会关闭 Resolver 并删除副本。显式坏模型回退先复核输入，丢弃失败配置，只用明确选集重建上下文。活动编译器版本与源码字符集在平台选择和解析前校验，不支持的设置也遵守该回退规则；目录发现仍失败，路径、读取、资源或内部错误不会被该分支隐藏。
 
 ## Gradle 模型导入
 
-Gradle 项目使用锁定的 Tooling API 8.14.3 和独立编译为 Java 8 字节码的模型桥。导入读取 settings 确定的项目、Java source set、JavaCompile 配置及其实际 classpath；不解析脚本文字猜测动态成员。Groovy、Kotlin DSL 和必要的 buildSrc 编译均可参与配置求值。导入关闭 configuration cache、configure-on-demand 和 isolated projects，确保整个 settings 项目树完成配置。请求不设置 `forTasks`，不会主动运行项目的 build、test、发布或额外代码生成任务。配置和插件本身仍可产生副作用；输入副本不是沙箱。
+Gradle 项目使用锁定的 Tooling API 8.14.3 和独立编译为 Java 8 字节码的模型桥。模型专用 BuildAction 在构建端读取 SourceModel，再复制成仅含普通 Java 集合、字符串及基础值的结果，避免把构建脚本的类加载器和临时模型 JAR 带回分析器。导入读取 settings 确定的项目、Java source set、JavaCompile 配置及其实际 classpath；不解析脚本文字猜测动态成员。Groovy、Kotlin DSL 和必要的 buildSrc 编译均可参与配置求值。导入关闭 configuration cache、configure-on-demand 和 isolated projects，确保整个 settings 项目树完成配置。请求不设置 `forTasks`，不会主动运行项目的 build、test、发布或额外代码生成任务。配置和插件本身仍可产生副作用；输入副本不是沙箱。
 
-有 wrapper 时使用其分发 URL、版本及可选 SHA-256，不擅自改成默认版本；无 wrapper 时固定使用 Gradle 9.1.0 并校验官方摘要。支持尝试稳定的 Gradle 7.6+、8.x、9.x，预发布及 10+ 暂不支持。工具 JVM 按官方运行兼容表选择已有候选，并检查本机系统、架构和可执行文件。有效用户默认优先，随后是其他已有 JDK，最后才是兼容的随包 JDK。工具 JVM 不成为项目的 API 目标，不自动安装 JDK。分发每次在独立输出目录验证、展开；当前没有持久分发缓存，首次或重复导入均可能下载。
+有 wrapper 时使用其分发 URL、版本及可选 SHA-256，不擅自改成默认版本；无 wrapper 时固定使用 Gradle 9.1.0 并校验官方摘要。支持尝试稳定的 Gradle 7.6+、8.x、9.x，预发布及 10+ 暂不支持。工具 JVM 按官方运行兼容表选择已有候选，并检查本机系统、架构和可执行文件。有效用户默认优先，随后是其他已有 JDK，最后才是兼容的随包 JDK。工具 JVM 不成为项目的 API 目标，不自动安装 JDK。分发每次下载或读取所选归档，校验摘要并在独立输出目录展开，以归档实际内容建立完整文件清单。仅分发文件按归档 SHA-256 缓存在用户目录的 `.cache/codegraph/gradle-distributions`，加锁并原子发布；复用前及导入后都按本次归档清单核验字节、目录成员和路径别名。缓存元数据不能替代归档证据，损坏直接失败。强制终止发布进程可能留下尚未提交的分发缓存事务；下次访问同一摘要时持锁检查所有者标记与路径边界，再清理该事务并重新验证归档，不采用不完整内容。正常完成和可处理失败会立即清理事务；不会清理无关缓存或临时目录。源码、生成文件、依赖副本、私有 Gradle home 和日志仍属本次快照，并在成功返回前删除；重复导入仍可能下载归档。
 
 | Gradle | 可运行的 JDK major |
 | --- | --- |
@@ -82,7 +86,7 @@ Gradle 项目使用锁定的 Tooling API 8.14.3 和独立编译为 Java 8 字节
 
 当前 Tooling API 路径可能忽略 daemon JVM criteria，因此导入前按 criteria 的 major 选择已有兼容 JDK；vendor 只接受与 release 文件 IMPLEMENTOR 一致的证据及已验证的 ADOPTIUM 别名，J9 需要 Openj9 元数据。不认识或无法满足的条件不会被忽略。Java 安装自动发现和自动供给均关闭，仅提供已发现路径；测试用 HTTP 哨兵确认缺失目标不会触发 JDK 下载。
 
-正常、失败和内部超时都会记录本次工具的 PID 与启动身份，回收并确认退出后才删除快照。`connection.close()` 不作为 daemon 已退出的证据。另用锁定 Tooling API 的客户端服务关闭方法结束本进程的非 daemon executor；这是一次性分析器内的兼容适配，不会全局停止用户 daemon。外部取消仍由既有调用方进程树所有者负责。无法确认工具退出时保留临时目录并报告 cleanup failure。
+分析器进程关闭自身的 Gradle 原生服务，避免 Windows 上已加载的临时动态库阻止删除快照；daemon 仍由本次导入拥有和回收。正常、失败和内部超时都会记录本次工具的 PID 与启动身份，回收并确认退出后才删除快照。`connection.close()` 不作为 daemon 已退出的证据。另用锁定 Tooling API 的客户端服务关闭方法结束本进程的非 daemon executor；这是一次性分析器内的兼容适配，不会全局停止用户 daemon。外部取消仍由既有调用方进程树所有者负责。无法确认工具退出时保留临时目录并报告 cleanup failure。
 
 ## 编译与验证
 

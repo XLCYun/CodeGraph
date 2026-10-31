@@ -9,13 +9,14 @@ import static dev.codegraph.java.Main.Failure;
 /** Retains process identities while the Tooling API is active, including reparented daemons. */
 final class OwnedGradleProcesses implements AutoCloseable {
     private final Path home;
+    private final Path distribution;
     private boolean closed;
     private boolean interrupted;
     private boolean unverifiable;
     private final Instant started = Instant.now();
     private final Map<Long, ProcessHandle> owned = new LinkedHashMap<>();
     private final Map<Long, Instant> identities = new HashMap<>();
-    OwnedGradleProcesses(Path home) { this.home=home; }
+    OwnedGradleProcesses(Path home, Path distribution) { this.home=home; this.distribution=distribution; }
     void observe() throws Failure {
         ProcessHandle.current().descendants().forEach(this::remember);
         // A daemon can detach between descendant observations. Its private registry log plus
@@ -30,7 +31,7 @@ final class OwnedGradleProcesses implements AutoCloseable {
                     var info=process.info();
                     if(info.startInstant().map(time -> !time.isBefore(started.minusSeconds(1))).orElse(false) &&
                         info.commandLine().orElse("").contains("org.gradle.launcher.daemon.bootstrap.GradleDaemon") &&
-                        info.commandLine().orElse("").contains(home.getParent().resolve("distribution").toString())) remember(process);
+                        info.commandLine().orElse("").contains(distribution.toString())) remember(process);
                 });
             }
         } catch(IOException failure) { throw new Failure("object_extraction_failed", "cannot inspect owned Gradle processes"); }

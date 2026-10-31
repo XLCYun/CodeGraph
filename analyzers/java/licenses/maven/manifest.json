@@ -1362,7 +1362,7 @@
         "kind": "canonical-full-license-text"
       }
     ],
-    "sourceOffer": "Exact corresponding sources retained at source-jars/org.eclipse.sisu.inject-0.9.0.M4-sources.jar; make source availability clear when redistributing EPL component."
+    "sourceOffer": "Corresponding source for org.eclipse.sisu:org.eclipse.sisu.inject:0.9.0.M4 is available at https://repo.maven.apache.org/maven2/org/eclipse/sisu/org.eclipse.sisu.inject/0.9.0.M4/org.eclipse.sisu.inject-0.9.0.M4-sources.jar."
   },
   {
     "coordinate": "org.codehaus.plexus:plexus-cipher:2.0",

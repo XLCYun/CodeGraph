@@ -99,6 +99,10 @@ class CodeGraphBuilder implements ToolingModelBuilder {
                 roots:roots.collect { it.absolutePath }, members:members.collect { it.absolutePath }, visible:[], binaries:[], complete:true,
                 release:task.options.release.orNull?.toString(), toolchain:javaExtension?.toolchain?.languageVersion?.orNull?.toString(),
                 apiUnavailable:false, source:null, target:null, encoding:task.options.encoding, inputs:[p.buildFile.absolutePath]]
+            // The flat JDT environment cannot establish JPMS reads/exports or custom providers.
+            row.moduleVisibilityUnavailable = !task.options.compilerArgumentProviders.empty ||
+                task.options.compilerArgs.any { argument -> argument == '-p' || argument.startsWith('-p=') ||
+                    argument ==~ /--(module[^=]*|upgrade-module-path|add-reads|add-exports|add-modules|limit-modules|patch-module)(=.*)?/ }
             // Membership/release survive unavailable task providers. Never use a conflicting
             // extension target or the default platform after an uninspectable explicit override.
             try {
