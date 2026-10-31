@@ -55,7 +55,7 @@ Maven 的 main/test 各自形成独立 source set。测试可以看到本模块�
 
 ## Gradle 模型导入
 
-Gradle 项目使用锁定的 Tooling API 8.14.3 和独立编译为 Java 8 字节码的模型桥。导入读取 settings 确定的项目、Java source set、JavaCompile 配置及实际 compileClasspath；不解析脚本文字猜测动态成员。Groovy、Kotlin DSL 和必要的 buildSrc 编译均可参与配置求值。导入关闭 configuration cache、configure-on-demand 和 isolated projects，确保整个 settings 项目树完成配置。请求不设置 `forTasks`，不会主动运行项目的 build、test、发布或额外代码生成任务。配置和插件本身仍可产生副作用；输入副本不是沙箱。
+Gradle 项目使用锁定的 Tooling API 8.14.3 和独立编译为 Java 8 字节码的模型桥。导入读取 settings 确定的项目、Java source set、JavaCompile 配置及其实际 classpath；不解析脚本文字猜测动态成员。Groovy、Kotlin DSL 和必要的 buildSrc 编译均可参与配置求值。导入关闭 configuration cache、configure-on-demand 和 isolated projects，确保整个 settings 项目树完成配置。请求不设置 `forTasks`，不会主动运行项目的 build、test、发布或额外代码生成任务。配置和插件本身仍可产生副作用；输入副本不是沙箱。
 
 有 wrapper 时使用其分发 URL、版本及可选 SHA-256，不擅自改成默认版本；无 wrapper 时固定使用 Gradle 9.1.0 并校验官方摘要。支持尝试稳定的 Gradle 7.6+、8.x、9.x，预发布及 10+ 暂不支持。工具 JVM 按官方运行兼容表选择已有候选，并检查本机系统、架构和可执行文件。有效用户默认优先，随后是其他已有 JDK，最后才是兼容的随包 JDK。工具 JVM 不成为项目的 API 目标，不自动安装 JDK。分发每次在独立输出目录验证、展开；当前没有持久分发缓存，首次或重复导入均可能下载。
 
@@ -70,7 +70,7 @@ Gradle 项目使用锁定的 Tooling API 8.14.3 和独立编译为 Java 8 字节
 
 每个 source set 保留 release、source、target、toolchain 和 encoding。显式 JavaCompile.javaCompiler 覆盖项目 toolchain 时使用其有效 metadata；覆盖失败或无法确认的 compiler convention 会保留成员和 release 证据，但停用该配置的 API 上下文，只输出结构与原文。未声明目标且仍使用普通 Java 插件默认 convention 时，继续按用户默认平台规则处理。反射适配仅用于识别 Gradle property 的显式状态，能力缺失不能当作“未声明”。
 
-源码可见性来自实际 classpath 的 source-set output 或经过检查的普通 main JAR。过滤、重命名、额外内容或无法确认的 archive 不映射成完整项目源码；不存在的二进制保持 unresolved，并标记依赖不完整。source-set 的 include/exclude 使用 Gradle 返回的实际 Java 文件成员，不自行解释 glob。完整选集和 JDT 批量上下文都仅包含获准成员，关闭这些配置的隐式 sourcepath 搜索；明确选择过滤外文件时只分析该选集。另行替换 JavaCompile.source 且与 source set 不一致的配置仍按坏模型处理。普通测试源集按 Test 任务的 classesDirs 关联及以 test 结尾的惯用名称识别，`include_tests` 继续生效。外部二进制复制到拥有的目录，并核对原件、复制件与目录成员。配置求值生成的 Java 只作为冻结的上下文，不能扩大原仓库选集，也不能产生临时路径的公共节点。
+源码可见性来自实际 JavaCompile.classpath 的 source-set output 或经过检查的普通 main JAR。过滤、重命名、额外内容或无法确认的 archive 不映射成完整项目源码；不存在的二进制保持 unresolved，并标记依赖不完整。source-set 的 include/exclude 使用 Gradle 返回的实际 Java 文件成员，不自行解释 glob。完整选集和 JDT 批量上下文都仅包含获准成员，关闭这些配置的隐式 sourcepath 搜索；明确选择过滤外文件时只分析该选集。另行替换 JavaCompile.source 且与 source set 不一致的配置仍按坏模型处理。普通测试源集按 Test 任务的 classesDirs 关联及以 test 结尾的惯用名称识别，`include_tests` 继续生效。外部二进制复制到拥有的目录，并核对原件、复制件与目录成员。配置求值生成的 Java 只作为冻结的上下文，不能扩大原仓库选集，也不能产生临时路径的公共节点。
 
 每次导入使用独立 Gradle user home。用户 gradle.properties 保留有效值，用户 init.gradle、init.gradle.kts 和 init.d 脚本使用原路径，以保留脚本相对资源语义；副本路径和 GRADLE_USER_HOME 字符串仍会变化，不能保证任意路径依赖的自定义脚本完全等价。launcher 转发构建环境，但清除 JAVA_TOOL_OPTIONS、JDK_JAVA_OPTIONS、_JAVA_OPTIONS、CLASSPATH 等分析器注入变量。固定 JVM 参数启用 Gradle 本地库访问。
 

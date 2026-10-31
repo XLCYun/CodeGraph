@@ -125,7 +125,8 @@ class CodeGraphBuilder implements ToolingModelBuilder {
             try { row.source=task.sourceCompatibility; row.target=task.targetCompatibility }
             catch (Exception failure) { infrastructure(failure); row.complete=false }
             try {
-                s.compileClasspath.files.each { f ->
+                // SourceSet supplies only a convention; the compile task can replace or extend it.
+                task.classpath.files.each { f ->
                     def matches=owners[f.absolutePath]
                     if (matches.size()==1) row.visible.add(matches.first())
                     else if (matches.empty && f.exists()) row.binaries.add(f.absolutePath)

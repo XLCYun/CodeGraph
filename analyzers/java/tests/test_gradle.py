@@ -69,6 +69,26 @@ class GradleTests(unittest.TestCase):
         excluded=self.public()
         self.assertFalse(any('Check.java' in n['id'] for n in excluded['graph']['nodes']))
 
+    def test_effective_task_classpath_removal_and_addition(self):
+        write(self.root,'settings.gradle', "include 'app', 'lib'")
+        write(self.root,'build.gradle', "subprojects { apply plugin:'java'; tasks.withType(JavaCompile).configureEach { options.release=17 }; "+self.sentinel()+" }")
+        write(self.root,'lib/build.gradle','')
+        write(self.root,'lib/src/main/java/p/Lib.java','package p; public class Lib { public static int value(){return 1;} }')
+        write(self.root,'app/src/main/java/p/App.java','package p; class App { int run(){return Lib.value();} }')
+        variants = [
+            ('removed', "dependencies { implementation project(':lib') }; tasks.named('compileJava') { classpath=files() }; afterEvaluate { assert !sourceSets.main.compileClasspath.files.empty; assert tasks.compileJava.classpath.files.empty }", 'unresolved'),
+            ('added', "tasks.named('compileJava') { classpath += project(':lib').sourceSets.main.output }; afterEvaluate { assert sourceSets.main.compileClasspath.files.empty; assert !tasks.compileJava.classpath.files.empty }", 'node'),
+        ]
+        for name, configuration, target_kind in variants:
+            with self.subTest(classpath=name):
+                write(self.root,'app/build.gradle',configuration)
+                result=self.public()
+                self.assertEqual(result['outcome'],'ok',result)
+                call=node(result['graph'],'/method:run()')
+                calls=[ref for ref in call['references'] if ref['semantic']=='code.calls']
+                self.assertEqual([ref['target']['kind'] for ref in calls],[target_kind],result)
+                self.assertTrue(call['extensions']['java.platforms'][0]['dependencies_complete'],result)
+
     def test_missing_toolchain_keeps_members(self):
         write(self.root,'build.gradle', "plugins { id 'java' }; java { toolchain { languageVersion=JavaLanguageVersion.of(21) } }; "+self.sentinel())
         result=self.public()
