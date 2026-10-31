@@ -6,6 +6,7 @@ import pathlib
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from process_identity import ProcessIdentity, process_alive
 from test_helper import PUBLIC_COMMAND, TARGET, write, node, snapshot_files, assert_diagnostics, diagnostic_codes, absent_public_release
 
@@ -39,7 +40,7 @@ class GradleTests(unittest.TestCase):
         if files is not None: message['files']=files
         environment=dict(os.environ,CODEGRAPH_JAVA_TARGET_JDK=str(TARGET),GRADLE_USER_HOME=str(self.home),CODEGRAPH_FIXTURE_PID=str(self.base/'daemon.pid'))
         environment.update(env or {})
-        result=subprocess.run([PUBLIC_COMMAND[0], '--enable-native-access=ALL-UNNAMED', *PUBLIC_COMMAND[1:], 'analyze'],input=json.dumps(message),text=True,capture_output=True,env=environment,timeout=120)
+        result=subprocess.run([PUBLIC_COMMAND[0], '--enable-native-access=ALL-UNNAMED', *PUBLIC_COMMAND[1:], 'analyze'],input=json.dumps(message),text=True, encoding="utf-8",capture_output=True,env=environment,timeout=120)
         assert_diagnostics(self, result.stderr, diagnostic_codes(json.loads(result.stdout).get('graph', {})) if diagnostics is None else diagnostics)
         self.assertEqual(len(result.stdout.splitlines()),1,result.stdout)
         if (self.base/'daemon.pid').exists():
@@ -155,7 +156,7 @@ tasks.configureEach { doFirst { error("BUSINESS_TASK_EXECUTED") } }
         write(self.root,'build.gradle', "plugins { id 'java' }; "+self.sentinel()+"Thread.sleep(120000)")
         command=[str(RUNTIME/'bin/java'),'--enable-native-access=ALL-UNNAMED','-cp',str(HELPER/'build/test-classes')+os.pathsep+str(HELPER/'build/classes')+os.pathsep+CP,'dev.codegraph.java.GradleModelDriver',str(self.root),'20000']
         env=dict(os.environ,CODEGRAPH_JAVA_TARGET_JDK=str(TARGET),GRADLE_USER_HOME=str(self.home),CODEGRAPH_FIXTURE_PID=str(self.base/'daemon.pid'))
-        result=subprocess.run(command,text=True,capture_output=True,env=env,timeout=40)
+        result=subprocess.run(command,text=True, encoding="utf-8",capture_output=True,env=env,timeout=40)
         self.assertNotEqual(result.returncode,0)
         self.assertIn('resource_limit: analysis timeout',result.stdout)
         self.assertTrue((self.base/'daemon.pid').exists())
@@ -192,14 +193,19 @@ tasks.configureEach { doFirst { error("BUSINESS_TASK_EXECUTED") } }
         self.assertTrue(any(r['semantic']=='code.calls' and r['target']['kind']=='external' for r in node(result['graph'],'/method:run()')['references']),result)
 
     def test_external_caller_cancellation(self):
+        unicode_root = self.base / "project-中文丁"
+        self.root.rename(unicode_root)
+        self.root = unicode_root
         write(self.root,'build.gradle', "plugins { id 'java' }; "+self.sentinel()+"new File(System.getenv('CODEGRAPH_FIXTURE_SNAPSHOT')).text=rootDir.parentFile.absolutePath; Thread.sleep(120000)")
         message={'protocol':'codegraph.analyzer/1','type':'analyze','id':'cancel','repository_root':str(self.root),'options':{'include_tests':False,'rust_dependency_scope':'repository-only'}}
         marker=self.base/'daemon.pid'
         config={'command':[PUBLIC_COMMAND[0],'--enable-native-access=ALL-UNNAMED',*PUBLIC_COMMAND[1:],'analyze'],'root':str(self.root),'marker':str(marker),'snapshotMarker':str(self.base/'snapshot.path'),'message':message,'environment':dict(os.environ,CODEGRAPH_JAVA_TARGET_JDK=str(TARGET),GRADLE_USER_HOME=str(self.home),CODEGRAPH_FIXTURE_PID=str(marker),CODEGRAPH_FIXTURE_SNAPSHOT=str(self.base/'snapshot.path'))}
         path=self.base/'cancel.json'; path.write_text(json.dumps(config))
-        result=subprocess.run(['node',str(pathlib.Path(__file__).with_name('gradle_cancel.mjs')),str(path)],text=True,capture_output=True,timeout=100)
+        with mock.patch.object(subprocess, "_text_encoding", return_value="cp1252"):
+            result=subprocess.run(['node',str(pathlib.Path(__file__).with_name('gradle_cancel.mjs')),str(path)],text=True, encoding="utf-8",capture_output=True,timeout=100)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertFalse(json.loads(result.stdout)['alive'])
+        self.assertEqual(json.loads(result.stdout)['repositoryRoot'], str(self.root))
 
     def test_side_daemon_is_not_stopped(self):
         import signal, time, zipfile

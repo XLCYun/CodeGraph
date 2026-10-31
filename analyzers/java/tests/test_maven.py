@@ -40,7 +40,7 @@ class MavenTests(unittest.TestCase):
         if files is not None: message['files'] = files
         env = dict(os.environ, CODEGRAPH_JAVA_TARGET_JDK=str(TARGET))
         result = subprocess.run([PUBLIC_COMMAND[0], '-Duser.home=' + str(self.home), *jvm_options, *PUBLIC_COMMAND[1:], 'analyze'],
-                                input=json.dumps(message), text=True, capture_output=True, env=env, timeout=40)
+                                input=json.dumps(message), text=True, encoding="utf-8", capture_output=True, env=env, timeout=40)
         assert_diagnostics(self, result.stderr, diagnostic_codes(json.loads(result.stdout).get('graph', {})) if diagnostics is None else diagnostics)
         self.assertEqual(len(result.stdout.splitlines()), 1, result.stdout)
         return json.loads(result.stdout)
@@ -146,13 +146,13 @@ class MavenTests(unittest.TestCase):
         from test_helper import HELPER, CP
         result = subprocess.run([str(RUNTIME / 'bin/java'), '-cp', str(HELPER / 'build/test-classes') + os.pathsep +
                                  str(HELPER / 'build/classes') + os.pathsep + CP, 'dev.codegraph.java.SourceSnapshotTest'],
-                                text=True, capture_output=True, timeout=15)
+                                text=True, encoding="utf-8", capture_output=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('PASS', result.stdout)
 
     def test_post_parse_source_read_checks_frozen_bytes(self):
         from test_helper import HELPER, CP
-        result = subprocess.run([str(RUNTIME / 'bin/java'), '-cp', str(HELPER / 'build/test-classes') + os.pathsep + str(HELPER / 'build/classes') + os.pathsep + CP, 'dev.codegraph.java.ParsingSnapshotTest'], text=True, capture_output=True, timeout=15)
+        result = subprocess.run([str(RUNTIME / 'bin/java'), '-cp', str(HELPER / 'build/test-classes') + os.pathsep + str(HELPER / 'build/classes') + os.pathsep + CP, 'dev.codegraph.java.ParsingSnapshotTest'], text=True, encoding="utf-8", capture_output=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('post-parse frozen source PASS', result.stdout)
 
@@ -285,7 +285,7 @@ class MavenTests(unittest.TestCase):
         from test_helper import HELPER, CP
         result = subprocess.run([str(RUNTIME / 'bin/java'), '-cp', str(HELPER / 'build/test-classes') + os.pathsep +
                                  str(HELPER / 'build/classes') + os.pathsep + CP, 'dev.codegraph.java.SecurityFixtureWriter', str(self.home)],
-                                text=True, capture_output=True, timeout=15)
+                                text=True, encoding="utf-8", capture_output=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, '')
         return (self.home / 'servers.xml').read_text()

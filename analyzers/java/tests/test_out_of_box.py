@@ -24,7 +24,7 @@ class OutOfBoxTests(unittest.TestCase):
             environment.pop(key, None)
         environment.update(env or {})
         result = subprocess.run([*PUBLIC_COMMAND, "analyze"], input=json.dumps(message),
-                                capture_output=True, text=True, env=environment, timeout=30)
+                                capture_output=True, text=True, encoding="utf-8", env=environment, timeout=30)
         self.last_stderr = result.stderr
         return json.loads(result.stdout)
 

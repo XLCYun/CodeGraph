@@ -37,7 +37,7 @@ try {
   const alive = survivors.some(item => item.pid === pid);
   if (survivors.length) throw new Error('caller cancellation leaked owned processes: ' + JSON.stringify(survivors));
   if (stdout || stderr) throw new Error('cancellation produced protocol noise');
-  console.log(JSON.stringify({ daemon: pid, alive, observed: observed.size, daemonStateAfter: after.find(item => item.pid === pid)?.state ?? 'absent', status: owner.rootStatus() }));
+  console.log(JSON.stringify({ repositoryRoot: config.root, daemon: pid, alive, observed: observed.size, daemonStateAfter: after.find(item => item.pid === pid)?.state ?? 'absent', status: owner.rootStatus() }));
 } finally {
   if (owner) {
     await owner.reap(); await owner.dispose();
