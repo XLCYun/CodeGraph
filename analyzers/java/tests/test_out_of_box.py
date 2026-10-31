@@ -28,6 +28,28 @@ class OutOfBoxTests(unittest.TestCase):
         self.last_stderr = result.stderr
         return json.loads(result.stdout)
 
+    def test_utf8_bom_offsets_preserve_raw_file_and_declarations(self):
+        text = '\ufeffpackage p; class A { String label="中文😀"; int run(){return 1;} }\r\n'
+        path = 'src/main/java/p/A.java'
+        write(self.root, path, text)
+        first = self.public(env={'JAVA_HOME': str(TARGET)})
+        self.assertEqual(first['outcome'], 'ok', first)
+        graph = first['graph']
+        self.assertEqual(node(graph, '#file')['source'], text)
+        self.assertEqual(node(graph, '/method:run()')['source'], 'int run(){return 1;}')
+        self.assertEqual(node(graph, '/field:label')['source'], 'label="中文😀"')
+        write(self.root, path, text.removeprefix('\ufeff'))
+        plain = self.public(env={'JAVA_HOME': str(TARGET)})
+        for key in ('id', 'signature'):
+            self.assertEqual([n[key] for n in graph['nodes']], [n[key] for n in plain['graph']['nodes']])
+        self.assertTrue(node(graph, '#file')['code'].startswith('\ufeff'))
+        self.assertEqual([n['code'].removeprefix('\ufeff') for n in graph['nodes']], [n['code'] for n in plain['graph']['nodes']])
+        write(self.root, path, text)
+        syntax = run(request(self.root, [path], platforms=[]))
+        self.assertEqual(syntax['outcome'], 'ok', syntax)
+        self.assertEqual(node(syntax['graph'], '#file')['source'], text)
+        self.assertEqual(node(syntax['graph'], '/method:run()')['source'], 'int run(){return 1;}')
+
     def test_default8_preserves_modern_structure_without_new_apis(self):
         target8 = pathlib.Path(os.environ['CODEGRAPH_JAVA_TARGET_8'])
         write(self.root, 'src/main/java/p/A.java', 'package p; class A { void helper(){} void run(){helper();} Object modern(){return java.util.List.of();} }')

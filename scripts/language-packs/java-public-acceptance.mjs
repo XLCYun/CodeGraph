@@ -1,6 +1,8 @@
 import { withJavaRepository } from './java-public-dependencies.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import os from 'node:os';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -10,7 +12,7 @@ import { writePublicProject, assertPublicProjectUnchanged } from './public-cli-p
 
 const pom = (name, body = '') => `<project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>${name}</artifactId><version>1</version>${body}</project>`;
 const release = '<properties><maven.compiler.release>17</maven.compiler.release></properties>';
-const source = 'package p; class App { int caller(){return Lib.target();} void helper(){} void local(){helper();} Object modern(){return java.util.List.of();} }\r\n';
+const source = 'package p; class App { String label="中文😀"; int caller(){return Lib.target();} void helper(){} void local(){helper();} Object modern(){return java.util.List.of();} }\r\n';
 const library = 'package p; public class Lib { public static int target(){return 1;} }';
 const method = (graph, name) => { const node = graph.nodes.find(node => node.name === name && node.native_kind === 'method'); assert.ok(node, name); return node; };
 const calls = (graph, name) => method(graph, name).references.filter(ref => ref.semantic === 'code.calls');
@@ -31,6 +33,7 @@ export async function verifyJavaPublicAcceptance({ executable, identity, scratch
   const unconfigured = { 'src/main/java/p/App.java': source, 'src/main/java/p/Lib.java': library, 'src/test/java/p/Check.java': 'package p; class Check {}' };
   const plain = await fixture(unconfigured);
   const defaults = await invoke(plain, 'default', { diagnostics: ['default_platform'] });
+  assert.equal(defaults.nodes.find(node => node.native_kind === 'file' && node.name.endsWith('App.java')).source, source);
   assert.equal(method(defaults, 'caller').source, 'int caller(){return Lib.target();}');
   assert.ok(calls(defaults, 'caller').some(ref => ref.target.kind === 'node'));
   assert.ok(!defaults.nodes.some(node => node.name === 'Check'));
@@ -47,6 +50,21 @@ export async function verifyJavaPublicAcceptance({ executable, identity, scratch
   assert.deepEqual(structure(defaults), structure(onHome));
   assert.ok(calls(defaults, 'modern').every(ref => ref.target.kind === 'unresolved'), 'Default JDK8 acquired newer API');
   assert.ok(calls(onHome, 'modern').some(ref => ref.target.kind === 'external'));
+
+  const bridge = path.resolve(path.dirname(executable), '../runtime/analyzer/classes/gradle-bridge.jar');
+  const javap = execFileSync(path.join(sdk, `bin/javap${process.platform === 'win32' ? '.exe' : ''}`), ['-verbose', '-classpath', bridge, 'dev.codegraph.gradle.SourceModel'], { encoding: 'utf8' });
+  assert.match(javap, /major version: 52/);
+  const bom = await fixture({ 'src/main/java/p/App.java': '\ufeff' + source, 'src/main/java/p/Lib.java': library });
+  const bomGraph = await invoke(bom, 'bom-crlf-unicode', { diagnostics: ['default_platform'] });
+  const bomFile = bomGraph.nodes.find(node => node.native_kind === 'file' && node.name.endsWith('App.java'));
+  assert.equal(bomFile.source, '\ufeff' + source);
+  assert.ok(bomFile.code.startsWith('\ufeff'), 'File self-code lost its BOM prefix');
+  assert.equal(method(bomGraph, 'caller').source, method(defaults, 'caller').source);
+  for (const node of bomGraph.nodes) {
+    const previous = defaults.nodes.find(old => old.id === node.id);
+    assert.ok(previous, 'BOM changed lexical identity');
+    assert.equal(node.code.replace(/^\ufeff/, ''), previous.code);
+  }
 
   const reactor = await fixture({
     'pom.xml': pom('root', `<packaging>pom</packaging>${release}<modules><module>lib</module><module>app</module></modules>`),
@@ -93,9 +111,11 @@ export async function verifyJavaPublicAcceptance({ executable, identity, scratch
   const sentinel = `assert System.getenv('CUSTOM_BUILD_VALUE') == 'forwarded'; new File(System.getenv('FIXTURE_MARKER')).text=groovy.json.JsonOutput.toJson([pid:java.lang.management.ManagementFactory.runtimeMXBean.name.split('@')[0].toLong(), root:rootDir.absolutePath]); println 'PRIVATE_BUILD_LOG'; defaultTasks('build'); tasks.configureEach { doFirst { new File(System.getenv('FIXTURE_BUSINESS')).text='executed'; throw new GradleException('business task requested') } };`;
   const beforeReap = async () => {
     const { pid, root } = JSON.parse(await fs.readFile(marker, 'utf8'));
-    assert.ok(!(await processSnapshot()).some(item => item.pid === pid), 'Product returned with its daemon alive before caller reap');
+    const aliveAtProductCompletion = (await processSnapshot()).some(item => item.pid === pid && !item.state?.startsWith('Z'));
+    assert.equal(aliveAtProductCompletion, false, 'Product returned with its daemon alive before caller reap');
     assert.equal(await fs.stat(path.dirname(root)).then(() => true, error => { if (error.code !== 'ENOENT') throw error; return false; }), false, 'Product did not remove owned snapshot');
     assert.equal(await fs.stat(business).then(() => true, () => false), false, 'Business task ran');
+    return { daemonPid: pid, aliveAtProductCompletion, ownedSnapshotDeleted: true, businessTaskExecuted: false };
   };
   const gradleContent = {
     'gradle/wrapper/gradle-wrapper.properties': wrapper,
@@ -124,6 +144,10 @@ export async function verifyJavaPublicAcceptance({ executable, identity, scratch
     assert.ok(calls(mavenExternal, 'external').some(ref => ref.target.kind === 'external'));
     assert.ok(calls(mavenExternal, 'hidden').every(ref => ref.target.kind === 'unresolved'));
     assert.ok(calls(mavenExternal, 'visible').some(ref => ref.target.kind === 'external'));
+    const incomplete = await fixture({ ...sourceFiles, 'pom.xml': pom('incomplete', `${release}<dependencies>${dependency('api')}${dependency('missing')}</dependencies>`) });
+    const incompleteGraph = await invoke(incomplete, 'maven-incomplete-context', { environment: { ...environment, MAVEN_HOME: mavenHome }, diagnostics: ['context_incomplete'] });
+    assert.ok(calls(incompleteGraph, 'external').some(ref => ref.target.kind === 'external'));
+    assert.equal(method(incompleteGraph, 'external').extensions['java.platforms'][0].dependencies_complete, false);
     const gradleDependencies = await fixture({ ...sourceFiles,
       'gradle/wrapper/gradle-wrapper.properties': wrapper,
       'settings.gradle': "rootProject.name='external'",
@@ -141,18 +165,26 @@ export async function verifyJavaPublicAcceptance({ executable, identity, scratch
     'settings.gradle.kts': 'rootProject.name="kotlin"',
     'buildSrc/build.gradle': "plugins { id 'java-gradle-plugin' }; gradlePlugin { plugins { fixture { id='fixture.plugin'; implementationClass='fixture.Helper' } } }",
     'buildSrc/src/main/java/fixture/Helper.java': 'package fixture; public class Helper implements org.gradle.api.Plugin<org.gradle.api.Project> { public void apply(org.gradle.api.Project p) { p.getExtensions().getExtraProperties().set("helperValue", System.getenv("CUSTOM_BUILD_VALUE")); } }',
-    'build.gradle.kts': `plugins { java; id("fixture.plugin") }
+    'build.gradle.kts': `import java.lang.management.ManagementFactory
+plugins { java; id("fixture.plugin") }
 check(property("fixtureUser") == "from-user")
 check(extra["fixtureInit"] == "from-init")
 check(extra["helperValue"] == "forwarded")
 tasks.withType<JavaCompile>().configureEach { options.release.set(17) }
-file(System.getenv("FIXTURE_MARKER")).writeText("{\\\"pid\\\":" + java.lang.management.ManagementFactory.getRuntimeMXBean().name.split("@")[0] + ",\\\"root\\\":\\\"" + rootDir.absolutePath.replace("\\\\", "/") + "\\\"}")
+file(System.getenv("FIXTURE_MARKER")).writeText("{\\\"pid\\\":" + ManagementFactory.getRuntimeMXBean().name.split("@")[0] + ",\\\"root\\\":\\\"" + rootDir.absolutePath.replace("\\\\", "/") + "\\\"}")
 tasks.configureEach { doFirst { error("business task requested") } }
 `,
     'src/main/java/p/App.java': 'package p; class App { void helper(){} void local(){helper();} }',
   });
   const kotlinGraph = await invoke(kotlin, 'default-distribution-kotlin-buildsrc', { environment, beforeReap, timeoutMs: 240_000 });
   assert.ok(calls(kotlinGraph, 'local').some(ref => ref.target.kind === 'node'));
+  const unprovable = await fixture({
+    'gradle/wrapper/gradle-wrapper.properties': wrapper, 'settings.gradle': "rootProject.name='unprovable'",
+    'build.gradle': `plugins { id 'java' }; tasks.withType(JavaCompile).configureEach { options.release=17 }; tasks.named('compileJava') { javaCompiler=providers.provider { throw new GradleException('unprovable compiler') } }; ${sentinel}`,
+    'src/main/java/p/App.java': 'package p; class App { void helper(){} void local(){helper();} }',
+  });
+  const unprovableGraph = await invoke(unprovable, 'compiler-unprovable-with-sdk17', { environment, beforeReap, diagnostics: ['compiler_unavailable', 'context_incomplete'] });
+  assert.ok(calls(unprovableGraph, 'local').every(ref => ref.target.kind === 'unresolved'));
   const generated = await fixture({
     'gradle/wrapper/gradle-wrapper.properties': wrapper, 'settings.gradle': "rootProject.name='generated'",
     'build.gradle': `plugins { id 'java' }; tasks.withType(JavaCompile).configureEach { options.release=17 }; sourceSets.main.java.srcDir 'build/generated'; def f=file('build/generated/p/Generated.java'); f.parentFile.mkdirs(); f.text='package p; class Generated { static int value(){return 1;} }'; ${sentinel}`,
@@ -179,11 +211,13 @@ tasks.configureEach { doFirst { error("business task requested") } }
       assert.ok(!closed(), 'Import finished before cancellation');
       const markerText = await fs.readFile(marker, 'utf8').catch(error => { if (error.code !== 'ENOENT') throw error; });
       if (markerText) {
-        const markerValue = JSON.parse(markerText);
+        let markerValue;
+        try { markerValue = JSON.parse(markerText); } catch (error) { if (!(error instanceof SyntaxError)) throw error; await delay(30); continue; }
         const current = await processSnapshot(); observeTree(current, observed);
         assert.ok(liveObservedProcesses(current, observed).some(item => item.pid === markerValue.pid), 'Import daemon not in owned tree');
         ownedSnapshot = path.dirname(markerValue.root);
-        assert.match(path.basename(ownedSnapshot), /^codegraph-java-/);
+        assert.match(path.basename(ownedSnapshot), /^codegraph-java-input-/);
+        assert.equal(await fs.realpath(path.dirname(ownedSnapshot)), await fs.realpath(os.tmpdir()));
         await terminate(); return;
       }
       assert.ok(Date.now() < deadline, 'Actual Gradle import marker missing');

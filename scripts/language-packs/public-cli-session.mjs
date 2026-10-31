@@ -162,7 +162,7 @@ export async function exchangeCli(executable, pack, request, identity, expectedF
   catch (error) { if (probeDirectory) await fs.rm(probeDirectory, { recursive: true, force: true }); throw error; }
   const { child } = owner;
   const chunks = [], observed = new Map();
-  let length = 0, stderr = '', failure, stopped = false, exitStatus, decoded;
+  let length = 0, stderr = '', failure, stopped = false, exitStatus, decoded, productCompletion;
   const cleanupFailures = [];
   let stopWaiting;
   const interrupted = new Promise((_, reject) => { stopWaiting = reject; });
@@ -180,7 +180,8 @@ export async function exchangeCli(executable, pack, request, identity, expectedF
     if (cancelImport) await Promise.race([cancelImport({ observed, closed: () => stopped || owner.closed() || length > 0, terminate: () => owner.reap() }), interrupted]);
     else if (cancel) await Promise.race([cancelLoadedProject(child, pack, request, observed, () => stopped || owner.closed() || length > 0, probe, { terminate: () => owner.reap() }), interrupted]);
     exitStatus = await Promise.race([owner.completed, interrupted]);
-    if (beforeReap) await beforeReap({ exitStatus, stderr });
+    if (beforeReap) try { productCompletion = await beforeReap({ exitStatus, stderr }); }
+    catch (error) { cleanupFailures.push(error); }
   } catch (error) { failure ??= error; }
   clearTimeout(timer);
   // 根退出和 pipe EOF 都不能释放后代；成功、失败、超时逐条经过同一树/排空/join屏障。
@@ -214,7 +215,7 @@ export async function exchangeCli(executable, pack, request, identity, expectedF
       await fs.writeFile(path.join(trace, 'request.json'), rawInput ?? JSON.stringify(request), { flag: 'wx' });
       await fs.writeFile(path.join(trace, 'stdout.json'), Buffer.concat(chunks), { flag: 'wx' });
       await fs.writeFile(path.join(trace, 'stderr.txt'), stderr, { flag: 'wx' });
-      await fs.writeFile(path.join(trace, 'status.json'), JSON.stringify({ ...exitStatus, expectedFailure: expectedFailure ?? null, callerTreeTermination: cancel, failure: failure?.message ?? null, cleanupFailures: cleanupFailures.map(error => error.message) }), { flag: 'wx' });
+      await fs.writeFile(path.join(trace, 'status.json'), JSON.stringify({ ...exitStatus, expectedFailure: expectedFailure ?? null, callerTreeTermination: cancel, ...(productCompletion ? { productCompletion } : {}), failure: failure?.message ?? null, cleanupFailures: cleanupFailures.map(error => error.message) }), { flag: 'wx' });
     }
     if (probeDirectory) await fs.rm(probeDirectory, { recursive: true, force: true });
   } catch (error) { cleanupFailures.push(error); }

@@ -118,11 +118,13 @@ final class Analyzer {
     private static final class FilePart {
         final String path;
         final String source;
+        final String originalSource;
         final CompilationUnit unit;
 
         /** 保存只读获取的本侧源码。 */
-        FilePart(String path, String source, CompilationUnit unit) {
+        FilePart(String path, String originalSource, String source, CompilationUnit unit) {
             this.path = path;
+            this.originalSource = originalSource;
             this.source = source;
             this.unit = unit;
         }
@@ -177,7 +179,7 @@ final class Analyzer {
                         checkpoint();
                         String relative = model.relativePath(path);
                         String source = model.readSource(relative);
-                        FilePart part = new FilePart(relative, source, unit);
+                        FilePart part = new FilePart(relative, source, config.parserSource(relative, source), unit);
                         parts.put(relative, part);
                         parsed.add(relative);
                         rejectDuplicateDeclarations(part);
@@ -271,7 +273,7 @@ final class Analyzer {
                               String signature, ASTNode ast, IBinding binding) {
             ASTNode seen = state.seen.putIfAbsent(id, ast);
             if (seen != null && seen != ast) throw new DuplicateDeclaration(id);
-            String startSource = ast == part.unit ? part.source : excerpt(part.source, ast);
+            String startSource = ast == part.unit ? part.originalSource : excerpt(part.source, ast);
             GraphNode node = new GraphNode(category, id, kind, name, signature, part.path, ast, startSource);
             if (selected) {
                 GraphNode existing = nodes.putIfAbsent(id, node);
@@ -792,7 +794,11 @@ final class Analyzer {
             cursor = childEnd;
         }
         result.append(canonical(source, cursor, end));
-        return result.toString().trim();
+        String projected = result.toString().trim();
+        FilePart part = parts.get(node.path);
+        // The parser omits one UTF-8 BOM; it is still original file-level self content.
+        return node.ast == part.unit && part.originalSource.length() == part.source.length() + 1
+            ? "\ufeff" + projected : projected;
     }
 
     /** JDT 词法器去除排版及普通注释，同时保留字面量。 */

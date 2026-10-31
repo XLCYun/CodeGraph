@@ -591,7 +591,7 @@ final class ProjectModel implements AutoCloseable {
                     ASTParser syntax = ASTParser.newParser(AST.getJLSLatest());
                     syntax.setCompilerOptions(options);
                     syntax.setStatementsRecovery(true);
-                    syntax.setSource(readSource(file).toCharArray());
+                    syntax.setSource(parserSource(file, readSource(file)).toCharArray());
                     syntax.setUnitName(file);
                     requestor.acceptAST(repository.resolve(file).toString(),
                         (org.eclipse.jdt.core.dom.CompilationUnit) syntax.createAST(monitor));
@@ -606,6 +606,11 @@ final class ProjectModel implements AutoCloseable {
             String[] encodings = new String[context.size()];
             for (int i = 0; i < encodings.length; i++) encodings[i] = encoding(context.get(i));
             parser.createASTs(paths, encodings, new String[0], requestor, monitor);
+        }
+
+        /** Match JDT's UTF-8 file decoder while retaining raw text separately for file.source. */
+        String parserSource(String file, String source) throws Failure {
+            return encoding(file).equals("UTF-8") && source.startsWith("\ufeff") ? source.substring(1) : source;
         }
 
         /** 只有选中且在当前配置中未被测试过滤的文件才贡献图节点。 */
