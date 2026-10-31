@@ -797,7 +797,7 @@ final class Analyzer {
         String projected = result.toString().trim();
         FilePart part = parts.get(node.path);
         // The parser omits one UTF-8 BOM; it is still original file-level self content.
-        return node.ast == part.unit && part.originalSource.length() == part.source.length() + 1
+        return node.ast instanceof CompilationUnit && part.originalSource.length() == part.source.length() + 1
             ? "\ufeff" + projected : projected;
     }
 

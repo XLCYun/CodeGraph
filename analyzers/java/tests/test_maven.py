@@ -62,6 +62,21 @@ class MavenTests(unittest.TestCase):
         self.assertEqual(result['outcome'], 'ok', result)
         return [ref['target'] for ref in node(result['graph'], suffix)['references'] if ref['semantic'] == 'code.calls']
 
+    def test_bom_self_code_is_stable_across_main_and_test_contexts(self):
+        write(self.root, 'pom.xml', pom('bom', '<properties><maven.compiler.release>17</maven.compiler.release></properties>'))
+        source = '\ufeffpackage p; public class A { public static int value(){return 1;} }\r\n'
+        write(self.root, 'src/main/java/p/A.java', source)
+        write(self.root, 'src/test/java/p/T.java', 'package p; class T { int test(){return A.value();} }')
+        main = self.public()['graph']
+        both = self.public(tests=True)['graph']
+        for original in main['nodes']:
+            actual = next(item for item in both['nodes'] if item['id'] == original['id'])
+            for field in ('source', 'code', 'signature'):
+                self.assertEqual(actual[field], original[field], (field, original['id']))
+        file = next(item for item in both['nodes'] if item['id'].endswith('A.java#file'))
+        self.assertEqual(file['source'], source)
+        self.assertTrue(file['code'].startswith('\ufeff'))
+
     def test_reactor_without_binaries_and_exact_selection(self):
         write(self.root, 'pom.xml', pom('root', '<packaging>pom</packaging><modules><module>app</module><module>lib</module></modules><properties><maven.compiler.release>17</maven.compiler.release></properties>'))
         parent = '<parent><groupId>fixture</groupId><artifactId>root</artifactId><version>1</version></parent>'

@@ -66,6 +66,21 @@ export async function verifyJavaPublicAcceptance({ executable, identity, scratch
     assert.equal(node.code.replace(/^\ufeff/, ''), previous.code);
   }
 
+  const bomContexts = await fixture({
+    'pom.xml': pom('bom-contexts', release),
+    'src/main/java/p/App.java': '\ufeff' + source,
+    'src/main/java/p/Lib.java': library,
+    'src/test/java/p/Test.java': 'package p; class Test { int run(){return Lib.target();} }',
+  });
+  const bomMain = await invoke(bomContexts, 'bom-main-context');
+  const bomTests = await invoke(bomContexts, 'bom-main-test-contexts', { tests: true });
+  for (const original of bomMain.nodes) {
+    const actual = bomTests.nodes.find(node => node.id === original.id);
+    assert.ok(actual, 'Main/test context changed lexical identity');
+    for (const field of ['source', 'code', 'signature']) assert.equal(actual[field], original[field]);
+  }
+  assert.ok(bomTests.nodes.find(node => node.native_kind === 'file' && node.name.endsWith('App.java')).code.startsWith('\ufeff'));
+
   const reactor = await fixture({
     'pom.xml': pom('root', `<packaging>pom</packaging>${release}<modules><module>lib</module><module>app</module></modules>`),
     'lib/pom.xml': pom('lib', release),
