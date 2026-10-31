@@ -560,8 +560,14 @@ final class ProjectModel implements AutoCloseable {
             ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
             Map<String, String> options = new HashMap<>();
             JavaCore.setComplianceOptions(config.release == null ? JavaCore.latestSupportedJavaVersion() : compilerVersion(config.release), options);
-            options.put(JavaCore.COMPILER_RELEASE, config.imported == null || config.imported.compiler().release() != null
-                ? JavaCore.ENABLED : JavaCore.DISABLED);
+            options.put(JavaCore.COMPILER_RELEASE, config.release != null ? JavaCore.ENABLED : JavaCore.DISABLED);
+            // JDT requires modular libraries at compliance 9+, even when source syntax is independent.
+            // A default/toolchain-only Java 8 platform supplies rt.jar; keep modern syntax without
+            // inventing a project release or importing the runtime JVM's newer APIs.
+            if (config.release == null && config.target != null && jdkRelease(config.target.version()).equals("8")) {
+                options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_1_8);
+                options.put(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_1_8);
+            }
             if (config.imported != null && config.imported.compiler().source() != null) {
                 String source = config.imported.compiler().source();
                 options.put(JavaCore.COMPILER_SOURCE, source.startsWith("1.") ? source : compilerVersion(source));
@@ -659,7 +665,10 @@ final class ProjectModel implements AutoCloseable {
 
     /** 每次读取重新检查仓库边界，并拒绝被替换解码的非法源码。 */
     String readSource(String relative) throws IOException, Failure {
-        String source = Files.readString(checkedFile(repository, relative), java.nio.charset.Charset.forName(encoding(relative)));
+        Path file = checkedFile(repository, relative);
+        byte[] bytes = snapshot == null ? Files.readAllBytes(file) : snapshot.readSourceBytes(relative);
+        String source = java.nio.charset.Charset.forName(encoding(relative)).newDecoder()
+            .decode(java.nio.ByteBuffer.wrap(bytes)).toString();
         if (source.indexOf('\uFFFD') >= 0)
             throw new Failure("object_extraction_failed", "invalid UTF-8 source", List.of(relative));
         return source;

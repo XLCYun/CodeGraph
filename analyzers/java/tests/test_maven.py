@@ -150,6 +150,12 @@ class MavenTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('PASS', result.stdout)
 
+    def test_post_parse_source_read_checks_frozen_bytes(self):
+        from test_helper import HELPER, CP
+        result = subprocess.run([str(RUNTIME / 'bin/java'), '-cp', str(HELPER / 'build/test-classes') + os.pathsep + str(HELPER / 'build/classes') + os.pathsep + CP, 'dev.codegraph.java.ParsingSnapshotTest'], text=True, capture_output=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('post-parse frozen source PASS', result.stdout)
+
     def test_changed_source_during_public_model_import_fails(self):
         result = self.import_with_mutation(lambda: write(self.root, 'src/main/java/p/App.java', 'package p; class Changed {}'))
         self.assertEqual(result['outcome'], 'error', result)

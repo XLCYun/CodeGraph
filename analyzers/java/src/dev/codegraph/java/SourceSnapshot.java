@@ -200,6 +200,15 @@ final class SourceSnapshot implements AutoCloseable {
         hashes.put(relative, digest(data));
     }
 
+    /** Return only bytes matching the original/generated freeze, including reads after JDT parsing. */
+    byte[] readSourceBytes(String name) throws IOException, Failure {
+        Path relative = Path.of(name);
+        byte[] expected = hashes.containsKey(relative) ? hashes.get(relative) : generated.get(relative);
+        byte[] contents = Files.readAllBytes(root.resolve(relative));
+        if (expected == null || !Arrays.equals(expected, digest(contents))) throw changed();
+        return contents;
+    }
+
     boolean originalMember(String relative) { return hashes.containsKey(Path.of(relative)); }
 
     /** Admit only auxiliary build output and model-declared context, then freeze it before JDT. */

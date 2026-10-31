@@ -6,7 +6,8 @@ import pathlib
 import subprocess
 import tempfile
 import unittest
-from test_helper import PUBLIC_COMMAND, TARGET, write, node, snapshot_files, assert_diagnostics, diagnostic_codes
+from process_identity import ProcessIdentity, process_alive
+from test_helper import PUBLIC_COMMAND, TARGET, write, node, snapshot_files, assert_diagnostics, diagnostic_codes, absent_public_release
 
 FIXTURES = pathlib.Path(__file__).resolve().parents[3] / '.tools/java-native'
 DIST = pathlib.Path(os.environ.get('CODEGRAPH_GRADLE_9_ZIP', str(FIXTURES/'gradle-9.1.0-bin.zip')))
@@ -43,7 +44,7 @@ class GradleTests(unittest.TestCase):
         self.assertEqual(len(result.stdout.splitlines()),1,result.stdout)
         if (self.base/'daemon.pid').exists():
             pid=int((self.base/'daemon.pid').read_text())
-            with self.assertRaises(ProcessLookupError): os.kill(pid,0)
+            self.assertFalse(process_alive(pid), 'owned daemon survived product completion')
         return json.loads(result.stdout)
 
     def test_real_model(self):
@@ -90,11 +91,12 @@ class GradleTests(unittest.TestCase):
                 self.assertTrue(call['extensions']['java.platforms'][0]['dependencies_complete'],result)
 
     def test_missing_toolchain_keeps_members(self):
-        write(self.root,'build.gradle', "plugins { id 'java' }; java { toolchain { languageVersion=JavaLanguageVersion.of(21) } }; "+self.sentinel())
+        missing = absent_public_release(dict(os.environ, CODEGRAPH_JAVA_TARGET_JDK=str(TARGET)))
+        write(self.root,'build.gradle', "plugins { id 'java' }; java { toolchain { languageVersion=JavaLanguageVersion.of(" + str(missing) + ") } }; "+self.sentinel())
         result=self.public(diagnostics=('target_platform_missing','context_incomplete'))
         self.assertEqual(result['outcome'],'ok',result)
         platform=result['graph']['nodes'][0]['extensions']['java.platforms'][0]
-        self.assertEqual(platform['compiler']['toolchain'],'21')
+        self.assertEqual(platform['compiler']['toolchain'],str(missing))
         self.assertFalse(platform['dependencies_complete'])
 
     def test_bad_model_exact_and_empty(self):
@@ -157,7 +159,7 @@ tasks.configureEach { doFirst { error("BUSINESS_TASK_EXECUTED") } }
         self.assertNotEqual(result.returncode,0)
         self.assertIn('resource_limit: analysis timeout',result.stdout)
         self.assertTrue((self.base/'daemon.pid').exists())
-        with self.assertRaises(ProcessLookupError): os.kill(int((self.base/'daemon.pid').read_text()),0)
+        self.assertFalse(process_alive(int((self.base/'daemon.pid').read_text())))
 
     def test_filtered_jar_does_not_claim_source_visibility(self):
         write(self.root,'settings.gradle', "include 'app','lib'")
@@ -210,32 +212,30 @@ tasks.configureEach { doFirst { error("BUSINESS_TASK_EXECUTED") } }
         command=[str(RUNTIME/'bin/java'),'--enable-native-access=ALL-UNNAMED','-cp',str(HELPER/'build/test-classes')+os.pathsep+str(HELPER/'build/classes')+os.pathsep+CP,'dev.codegraph.java.GradleSideDaemonDriver',str(side),str(installation/'gradle-9.1.0'),str(home),str(TARGET),str(self.base/'ready')]
         side_process=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         pids=[]
+        identities=[]
         try:
             until=time.monotonic()+30
             while not (self.base/'ready').exists() and time.monotonic()<until: time.sleep(.05)
             self.assertTrue((self.base/'ready').exists())
             pids=[int(path.name.split('-')[1].split('.')[0]) for path in home.glob('daemon/*/daemon-*.out.log')]
             self.assertTrue(pids)
-            for pid in pids: os.kill(pid,0)
+            for pid in pids: identities.append(ProcessIdentity(pid, owned=True))
+            self.assertTrue(all(identity.alive() for identity in identities))
             self.assertEqual(self.public(env={'GRADLE_USER_HOME':str(home)})['outcome'],'ok')
-            for pid in pids: os.kill(pid,0)
+            self.assertTrue(all(identity.alive() for identity in identities))
         finally:
             try: side_process.communicate(timeout=20)
             except subprocess.TimeoutExpired:
                 side_process.kill(); side_process.communicate(timeout=5)
-            pids=[int(path.name.split('-')[1].split('.')[0]) for path in home.glob('daemon/*/daemon-*.out.log')]
-            for pid in pids:
-                try: os.kill(pid,signal.SIGTERM)
-                except ProcessLookupError: continue
+            try:
+                for identity in identities:
+                    identity.terminate()
                 until=time.monotonic()+5
-                while time.monotonic()<until:
-                    try: os.kill(pid,0)
-                    except ProcessLookupError: break
+                while any(identity.alive() for identity in identities) and time.monotonic()<until:
                     time.sleep(.05)
-                else:
-                    os.kill(pid,signal.SIGKILL)
-                    time.sleep(.1)
-                with self.assertRaises(ProcessLookupError): os.kill(pid,0)
+                self.assertTrue(all(not identity.alive() for identity in identities))
+            finally:
+                for identity in identities: identity.close()
 
     def test_distribution_auth_proxy_and_redirect_scope(self):
         import base64, http.server, threading

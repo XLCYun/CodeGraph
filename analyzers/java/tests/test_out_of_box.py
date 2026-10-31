@@ -5,7 +5,7 @@ import pathlib
 import subprocess
 import tempfile
 import unittest
-from test_helper import PUBLIC_COMMAND, RUNTIME, TARGET, write, metadata, request, run, node, platform
+from test_helper import PUBLIC_COMMAND, RUNTIME, TARGET, write, metadata, request, run, node, platform, assert_diagnostics
 
 
 class OutOfBoxTests(unittest.TestCase):
@@ -25,7 +25,31 @@ class OutOfBoxTests(unittest.TestCase):
         environment.update(env or {})
         result = subprocess.run([*PUBLIC_COMMAND, "analyze"], input=json.dumps(message),
                                 capture_output=True, text=True, env=environment, timeout=30)
+        self.last_stderr = result.stderr
         return json.loads(result.stdout)
+
+    def test_default8_preserves_modern_structure_without_new_apis(self):
+        target8 = pathlib.Path(os.environ['CODEGRAPH_JAVA_TARGET_8'])
+        write(self.root, 'src/main/java/p/A.java', 'package p; class A { void helper(){} void run(){helper();} Object modern(){return java.util.List.of();} }')
+        write(self.root, 'src/main/java/p/R.java', 'package p; record R(int value) {}')
+        old = self.public(env={'JAVA_HOME': str(target8)})
+        self.assertEqual(old['outcome'], 'ok', old)
+        assert_diagnostics(self, self.last_stderr, ('default_platform',))
+        calls = node(old['graph'], '/method:run()')['references']
+        self.assertTrue(any(r['semantic'] == 'code.calls' and r['target']['kind'] == 'node' for r in calls))
+        modern = node(old['graph'], '/method:modern()')['references']
+        self.assertTrue(any(r['semantic'] == 'code.calls' and r['target']['kind'] == 'unresolved' for r in modern))
+        newer = self.public(env={'JAVA_HOME': str(TARGET)})
+        self.assertEqual(newer['outcome'], 'ok', newer)
+        keys = ('id', 'native_kind', 'name', 'signature', 'source', 'code', 'contains')
+        shape = lambda graph: [{key: n[key] for key in keys} for n in graph['nodes']]
+        self.assertEqual(shape(old['graph']), shape(newer['graph']))
+        write(self.root, 'pom.xml', '<project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>app</artifactId><version>1</version><build><plugins><plugin><artifactId>maven-compiler-plugin</artifactId><configuration><jdkToolchain><version>8</version></jdkToolchain></configuration></plugin></plugins></build></project>')
+        toolchain = self.public(env={'JAVA_HOME': str(target8)})
+        self.assertEqual(toolchain['outcome'], 'ok', toolchain)
+        assert_diagnostics(self, self.last_stderr, ())
+        self.assertEqual(node(toolchain['graph'], '/method:run()')['extensions']['java.platforms'][0]['api_source'], 'toolchain')
+        self.assertTrue(any(r['semantic'] == 'code.calls' and r['target']['kind'] == 'unresolved' for r in node(toolchain['graph'], '/method:modern()')['references']))
 
     def test_unconfigured_default_helper_and_platform_source_stability(self):
         write(self.root, "src/main/java/p/A.java", "package p; class A { void helper() {} void run(){helper();} }")

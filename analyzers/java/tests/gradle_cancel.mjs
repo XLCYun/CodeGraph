@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { processSnapshot, observeTree, liveObservedProcesses } from '../../../scripts/language-packs/public-cli-session.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { spawnOwnedCli } from '../../../scripts/language-packs/public-cli-owner.mjs';
 
@@ -18,20 +19,25 @@ try {
   owner.child.stderr.on('data', value => { stderr += value; });
   owner.child.stdin.on('error', () => {});
   owner.child.stdin.end(JSON.stringify(config.message));
+  const observed = new Map([[owner.child.pid, config.command[0]]]);
   const deadline = Date.now() + 60000;
   while (!pid && Date.now() < deadline) {
+    observeTree(await processSnapshot(), observed);
     try { pid = Number(await fs.readFile(config.marker, 'utf8')); }
     catch (error) { if (error.code !== 'ENOENT') throw error; }
     if (!pid) await delay(25);
   }
   if (!pid) throw new Error('real Gradle configuration was not reached');
-  await delay(200);
+  const beforeSnapshot = await processSnapshot(); observeTree(beforeSnapshot, observed);
+  const before = liveObservedProcesses(beforeSnapshot, observed).find(item => item.pid === pid);
+  if (!before) throw new Error('marked Gradle daemon is not live in caller-owned tree');
   await owner.reap();
-  let alive = true;
-  try { process.kill(pid, 0); } catch (error) { if (error.code === 'ESRCH') alive = false; else throw error; }
-  if (alive) throw new Error('caller cancellation leaked owned daemon');
+  const after = await processSnapshot();
+  const survivors = liveObservedProcesses(after, observed);
+  const alive = survivors.some(item => item.pid === pid);
+  if (survivors.length) throw new Error('caller cancellation leaked owned processes: ' + JSON.stringify(survivors));
   if (stdout || stderr) throw new Error('cancellation produced protocol noise');
-  console.log(JSON.stringify({ daemon: pid, alive, status: owner.rootStatus() }));
+  console.log(JSON.stringify({ daemon: pid, alive, observed: observed.size, daemonStateAfter: after.find(item => item.pid === pid)?.state ?? 'absent', status: owner.rootStatus() }));
 } finally {
   if (owner) {
     await owner.reap(); await owner.dispose();

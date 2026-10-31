@@ -31,8 +31,8 @@ export async function processSnapshot() {
     const { stdout } = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { timeout: 10_000, maxBuffer: 8 * 1024 * 1024 });
     return [].concat(JSON.parse(stdout)).map(item => ({ pid: item.ProcessId, parent: item.ParentProcessId, command: item.CommandLine ?? '', started: item.Started ?? null }));
   }
-  const { stdout } = await run('ps', ['-axo', 'pid=,ppid=,command='], { timeout: 10_000, maxBuffer: 8 * 1024 * 1024 });
-  return stdout.split('\n').flatMap(line => { const match = line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/); return match ? [{ pid: Number(match[1]), parent: Number(match[2]), command: match[3] }] : []; });
+  const { stdout } = await run('ps', ['-axo', 'pid=,ppid=,stat=,command='], { timeout: 10_000, maxBuffer: 8 * 1024 * 1024 });
+  return stdout.split('\n').flatMap(line => { const match = line.match(/^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/); return match ? [{ pid: Number(match[1]), parent: Number(match[2]), state: match[3], command: match[4] }] : []; });
 }
 
 /** Windows 以出生时间绑定同一个进程；Unix 保留原有命令观察方式。 */
@@ -72,7 +72,7 @@ export function observeTree(snapshot, observed) {
 
 /** PID 被复用的新进程不能冒充原来的成员，真实存活成员仍须通过退出断言。 */
 export function liveObservedProcesses(snapshot, observed) {
-  return snapshot.filter(item => sameBirth(observed.get(item.pid), item) && observed.get(item.pid).command === item.command);
+  return snapshot.filter(item => !item.state?.startsWith('Z') && sameBirth(observed.get(item.pid), item) && observed.get(item.pid).command === item.command);
 }
 
 /** 只在真实加载标记出现后触发调用方终止；stdin 已正常 EOF，不发送控制消息。 */
