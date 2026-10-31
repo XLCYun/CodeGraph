@@ -71,16 +71,41 @@ fn command(root: &Path, language: Language) -> io::Result<Command> {
             let libraries = resource(root, "runtime/analyzer/lib")?.join("*");
             let classpath = std::env::join_paths([classes, libraries]).map_err(io::Error::other)?;
             command
-                .args(["-Dfile.encoding=UTF-8", "-cp"])
+                .args([
+                    "--enable-native-access=ALL-UNNAMED",
+                    "-Dfile.encoding=UTF-8",
+                    "-cp",
+                ])
                 .arg(classpath)
                 .arg("dev.codegraph.java.Main");
             command
         }
     };
-    let environment = ENVIRONMENT
-        .iter()
-        .filter_map(|key| std::env::var_os(key).map(|value| (*key, value)));
-    command.env_clear().envs(environment);
+    match language {
+        Language::TypeScriptJavaScript => {
+            let environment = ENVIRONMENT
+                .iter()
+                .filter_map(|key| std::env::var_os(key).map(|value| (*key, value)));
+            command.env_clear().envs(environment);
+        }
+        Language::Java => {
+            // Build model evaluation needs the caller's repository, proxy and plugin environment.
+            // JVM launcher injection still cannot alter the packaged analyzer.
+            command
+                .env_clear()
+                .envs(std::env::vars_os().filter(|(key, _)| {
+                    ![
+                        "JAVA_TOOL_OPTIONS",
+                        "JDK_JAVA_OPTIONS",
+                        "_JAVA_OPTIONS",
+                        "CLASSPATH",
+                        "NODE_OPTIONS",
+                    ]
+                    .iter()
+                    .any(|blocked| key.to_string_lossy().eq_ignore_ascii_case(blocked))
+                }));
+        }
+    }
     command
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())

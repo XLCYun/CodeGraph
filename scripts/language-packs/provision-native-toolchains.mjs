@@ -137,6 +137,14 @@ export async function provisionToolchains(output, target = nativeTargets[`${proc
       throw error;
     } finally { if (!preserveTemporary) await fs.rm(temporary, { recursive: true, force: true }); }
   }
+  if (selected.includes('jdk25')) {
+    const fixtures = JSON.parse(await fs.readFile(path.join(repository, 'resources/gradle-test-distributions.json'), 'utf8'));
+    for (const fixture of fixtures) {
+      const archive = path.join(output, `gradle-${fixture.version}-bin.zip`);
+      await download({ name: `gradle-${fixture.version}`, url: `https://services.gradle.org/distributions/gradle-${fixture.version}-bin.zip`, algorithm: 'sha256', digest: fixture.sha256 }, archive);
+      environment[fixture.environment] = archive;
+    }
+  }
   await prepareDotnetFixtureReferences(environment);
   finalizeToolchainEnvironment(environment, output);
   await fs.writeFile(path.join(output, 'environment.json'), `${JSON.stringify(environment, null, 2)}\n`);

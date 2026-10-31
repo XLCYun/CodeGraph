@@ -118,17 +118,19 @@ final class Analyzer {
     private static final class FilePart {
         final String path;
         final String source;
+        final String originalSource;
         final CompilationUnit unit;
 
         /** 保存只读获取的本侧源码。 */
-        FilePart(String path, String source, CompilationUnit unit) {
+        FilePart(String path, String originalSource, String source, CompilationUnit unit) {
             this.path = path;
+            this.originalSource = originalSource;
             this.source = source;
             this.unit = unit;
         }
     }
 
-    /** 验证期限和目标模型，进程不运行项目工具。 */
+    /** 验证期限并导入本次选集的项目模型。 */
     Analyzer(AnalysisInput input, SdkDiscovery.Provider targets) throws Failure {
         if (input.timeoutMillis() <= 0 || input.maxResultBytes() <= 0) throw new Failure("invalid_input", "invalid analysis limit");
         this.resultLimit = input.maxResultBytes();
@@ -136,19 +138,26 @@ final class Analyzer {
         this.model = ProjectModel.discover(input, targets, this::checkpoint);
     }
 
+    /** 返回固定且去重的公共降级说明。 */
+    List<String> diagnostics() throws Failure { return model.diagnostics(); }
+
     /** 返回组件及公共输出边界共同使用的结果字节上限。 */
     long maxResultBytes() { return resultLimit; }
 
     /** 执行配置隔离解析、来源归并与关系终判。 */
     JsonObject run() throws Failure {
-        model.forEachActiveConfiguration(this::parseConfiguration);
-        checkpoint();
-        for (GraphNode node : nodes.values()) node.code = projection(node);
-        JsonObject result = new JsonObject();
-        result.add("graph", graph());
-        result.add("evidence", evidence());
-        GraphChecks.validate(result, model);
-        return result;
+        try (model) {
+            model.verifyInputs();
+            model.forEachActiveConfiguration(this::parseConfiguration);
+            checkpoint();
+            for (GraphNode node : nodes.values()) node.code = projection(node);
+            JsonObject result = new JsonObject();
+            result.add("graph", graph());
+            result.add("evidence", evidence());
+            GraphChecks.validate(result, model);
+            model.verifyInputs();
+            return result;
+        }
     }
 
     /** 检查内部分析时限；调用方通过终止进程实现取消。 */
@@ -160,6 +169,7 @@ final class Analyzer {
     private void parseConfiguration(ProjectModel.ParseConfiguration config) throws Failure {
         try {
             ConfigState state = new ConfigState();
+            Set<String> parsed = new HashSet<>();
             final Failure[] callbackFailure = new Failure[1];
             config.parse(new FileASTRequestor() {
                 /** 不让 JDT 回调异常消失在解析器内部。 */
@@ -169,9 +179,10 @@ final class Analyzer {
                         checkpoint();
                         String relative = model.relativePath(path);
                         String source = model.readSource(relative);
-                        FilePart part = new FilePart(relative, source, unit);
+                        FilePart part = new FilePart(relative, source, config.parserSource(relative, source), unit);
                         parts.put(relative, part);
-                        rejectMalformed(part);
+                        parsed.add(relative);
+                        rejectDuplicateDeclarations(part);
                         config.verifyPackage(relative, unit.getPackage() == null ? "" : unit.getPackage().getName().getFullyQualifiedName());
                         new Visitor(part, config.selects(relative), state).extract();
                     } catch (Failure problem) { callbackFailure[0] = problem; }
@@ -192,7 +203,7 @@ final class Analyzer {
                 }
             });
             if (callbackFailure[0] != null) throw callbackFailure[0];
-            config.requireParsed(parts.keySet());
+            config.requireParsed(parsed);
         } catch (Failure e) { throw e; }
         catch (DuplicateDeclaration e) { throw new Failure("object_extraction_failed", "duplicate Java declaration: " + e.getMessage()); }
         catch (UnionConflict e) { throw new Failure("union_conflict", "incompatible source identity: " + e.getMessage()); }
@@ -202,25 +213,14 @@ final class Analyzer {
         }
     }
 
-    /** 语法恢复可能遗漏声明，因此拒绝畸形选中树。 */
-    private static void rejectMalformed(FilePart part) throws Failure {
-        final boolean[] malformed = {false};
-        part.unit.accept(new ASTVisitor() {
-            /** 仅标记结构损坏；缺依赖诊断仍可保留对象。 */
-            @Override public void preVisit(ASTNode node) {
-                if ((node.getFlags() & ASTNode.MALFORMED) != 0) malformed[0] = true;
-            }
-        });
-        if (malformed[0]) throw new Failure("object_extraction_failed", "malformed Java syntax", List.of(part.path));
+    /** 重复声明不能被恢复或合并成同一个确定对象。 */
+    private static void rejectDuplicateDeclarations(FilePart part) throws Failure {
         Set<Integer> duplicates = Set.of(IProblem.DuplicateMethod, IProblem.DuplicateField,
             IProblem.DuplicateTypes, IProblem.DuplicateNestedType, IProblem.DuplicateMethodErasure,
             IProblem.DuplicateParameterizedMethods, IProblem.DuplicateAnnotationMember,
             IProblem.RecordDuplicateComponent);
         for (IProblem problem : part.unit.getProblems()) {
             if (!problem.isError()) continue;
-            if ((problem.getID() & (IProblem.Syntax | IProblem.Compliance | IProblem.PreviewRelated)) != 0)
-                throw new Failure("object_extraction_failed", "invalid Java syntax or disabled language feature: " +
-                    problem.getMessage(), List.of(part.path));
             if (duplicates.contains(problem.getID()))
                 throw new Failure("object_extraction_failed", "duplicate Java declaration", List.of(part.path));
         }
@@ -232,6 +232,7 @@ final class Analyzer {
         private final boolean selected;
         private final ConfigState state;
         private final Deque<GraphNode> owners = new ArrayDeque<>();
+        private ASTNode current;
         private final Map<ASTNode, GraphNode> opened = new HashMap<>();
         private final Map<String, Integer> slots = new HashMap<>();
 
@@ -272,7 +273,7 @@ final class Analyzer {
                               String signature, ASTNode ast, IBinding binding) {
             ASTNode seen = state.seen.putIfAbsent(id, ast);
             if (seen != null && seen != ast) throw new DuplicateDeclaration(id);
-            String startSource = ast == part.unit ? part.source : excerpt(part.source, ast);
+            String startSource = ast == part.unit ? part.originalSource : excerpt(part.source, ast);
             GraphNode node = new GraphNode(category, id, kind, name, signature, part.path, ast, startSource);
             if (selected) {
                 GraphNode existing = nodes.putIfAbsent(id, node);
@@ -310,8 +311,17 @@ final class Analyzer {
             if (opened.remove(node) != null) owners.pop();
         }
 
+        /** Recovered declarations may have invented names/ranges; retain their sound siblings. */
+        @Override public boolean preVisit2(ASTNode ast) {
+            if ((ast.getFlags() & ASTNode.RECOVERED) != 0 &&
+                (ast instanceof BodyDeclaration || ast instanceof VariableDeclaration)) return false;
+            preVisit(ast);
+            return true;
+        }
+
         /** 按 AST 具体形态创建源码声明。 */
         @Override public void preVisit(ASTNode ast) {
+            current = ast;
             if (ast instanceof TypeDeclaration node) {
                 checkTopLevel(node.getName().getIdentifier(), ast);
                 String kind = node.isInterface() ? "interface" : "class";
@@ -456,6 +466,15 @@ final class Analyzer {
 
         /** 将关系归属最近的独立源码对象。 */
         private void refer(String semantic, String observed, IBinding binding) {
+            if (current != null) for (IProblem problem : part.unit.getProblems()) {
+                if (!problem.isError()) continue;
+                ASTNode affected = current;
+                if ((problem.getID() & (IProblem.Syntax | IProblem.Compliance | IProblem.PreviewRelated)) != 0) {
+                    while (affected.getParent() != null && !(affected instanceof BodyDeclaration)) affected = affected.getParent();
+                }
+                if (problem.getSourceStart() < affected.getStartPosition() + affected.getLength() &&
+                    problem.getSourceEnd() >= affected.getStartPosition()) { binding = null; break; }
+            }
             if (selected && !owners.isEmpty()) owners.peek().pending.add(new Pending(semantic, observed, binding, state));
         }
 
@@ -515,6 +534,7 @@ final class Analyzer {
             entry.add("references", refs);
             JsonObject extensions = new JsonObject();
             extensions.addProperty("java.declaration_kind", node.nativeKind);
+            model.addPlatformExtensions(node.path, extensions);
             entry.add("extensions", extensions);
             entries.add(entry);
         }
@@ -774,7 +794,11 @@ final class Analyzer {
             cursor = childEnd;
         }
         result.append(canonical(source, cursor, end));
-        return result.toString().trim();
+        String projected = result.toString().trim();
+        FilePart part = parts.get(node.path);
+        // The parser omits one UTF-8 BOM; it is still original file-level self content.
+        return node.ast instanceof CompilationUnit && part.originalSource.length() == part.source.length() + 1
+            ? "\ufeff" + projected : projected;
     }
 
     /** JDT 词法器去除排版及普通注释，同时保留字面量。 */

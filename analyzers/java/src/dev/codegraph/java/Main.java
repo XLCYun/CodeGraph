@@ -43,7 +43,11 @@ public final class Main {
             request.validateSource();
             JsonObject graph;
             if (request.files() != null && request.files().isEmpty()) graph = emptyGraph();
-            else graph = new Analyzer(request.analysisInput(), SdkDiscovery::discover).run().getAsJsonObject("graph");
+            else {
+                Analyzer analyzer = new Analyzer(request.analysisInput(), SdkDiscovery::discover);
+                graph = analyzer.run().getAsJsonObject("graph");
+                for (String diagnostic : analyzer.diagnostics()) System.err.println(diagnostic);
+            }
             completed = base(request.id(), "ok");
             completed.add("graph", graph);
             if (completed.toString().getBytes(StandardCharsets.UTF_8).length + 1 > MAX_BYTES)
@@ -204,7 +208,7 @@ public final class Main {
     }
 
     /** 受控失败及其仓内相对来源；公共输出只保留代码与说明。 */
-    static final class Failure extends Exception {
+    static class Failure extends Exception {
         final String code;
         final List<String> paths;
 

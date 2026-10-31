@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { finalizeToolchainEnvironment, validateToolchainManifest, verifyArchive } from '../language-packs/provision-native-toolchains.mjs';
-import { runVerificationCommands, verificationCommands } from '../language-packs/verify-native-analyzers.mjs';
+import { runVerificationCommands, verificationCommands, validateNativeFixtures } from '../language-packs/verify-native-analyzers.mjs';
 import { publicEnvironment } from '../language-packs/public-cli-session.mjs';
 
 const manifest = JSON.parse(await fs.readFile(new URL('../../resources/native-toolchains.json', import.meta.url), 'utf8'));
@@ -326,4 +326,19 @@ test('self-contained runtime packs bind official RID version and digest', async 
     for (const mutation of [{ rid: 'other' }, { version: '10.0.1' }, { digest: 'abc' }, { url: entry.url.replace('10.0.0', '10.0.1') }, { metadata_source: 'https://example.org/' }]) assert.throws(() => validateRuntimePack({ ...entry, ...mutation }, target), /fixed .NET runtime/);
   }
   assert.notEqual(manifest.runtime_packs['aarch64-apple-darwin'].digest, manifest.runtime_packs['x86_64-pc-windows-msvc'].digest);
+});
+
+/** Full Java verification must fail before a missing Gradle archive can turn tests into skips. */
+test('native Java verification requires all pinned Gradle distribution fixtures', { skip: !['darwin', 'win32'].includes(process.platform) }, async t => {
+  const entries = JSON.parse(await fs.readFile(new URL('../../resources/gradle-test-distributions.json', import.meta.url), 'utf8'));
+  assert.deepEqual(entries.map(item => item.version), ['7.6.4', '8.14.3', '9.1.0', '9.8.2']);
+  assert.equal(new Set(entries.map(item => item.environment)).size, 4);
+  for (const item of entries) assert.match(item.sha256, /^[0-9a-f]{64}$/);
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'required-gradle-fixtures-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const target = process.platform === 'win32' ? 'x86_64-pc-windows-msvc' : 'aarch64-apple-darwin';
+  const bin = path.join(root, 'smoke-installed/java/0.1.2', target, 'bin');
+  await fs.mkdir(bin, { recursive: true });
+  await fs.writeFile(path.join(bin, `codegraph-java${process.platform === 'win32' ? '.exe' : ''}`), 'fixture');
+  await assert.rejects(validateNativeFixtures({ CODEGRAPH_NATIVE_PACKS: root }, 'java'), /Missing real Gradle fixture: CODEGRAPH_GRADLE_7_ZIP/);
 });

@@ -210,3 +210,22 @@ test('one-shot exchange retains invalid-final diagnostics alongside cleanup fail
     return true;
   });
 });
+
+/** Product cleanup must be observed before the caller's fallback can hide a surviving child. */
+test('product completion observation precedes caller reap and still cleans up on assertion failure', async t => {
+  const fixture = await descendantFixture(t, false);
+  let observed = false;
+  await assert.rejects(exchangeCli(process.execPath, 'go', request, identity, undefined, {
+    args: ['-e', fixture.body], timeoutMs: 2000,
+    beforeReap: async () => {
+      const record = await readDescendant(fixture.marker);
+      process.kill(record.pid, 0);
+      observed = true;
+      throw new Error('product leaked before caller reap');
+    },
+  }), /product leaked before caller reap/);
+  assert.equal(observed, true);
+  const record = await readDescendant(fixture.marker);
+  assert.throws(() => process.kill(record.pid, 0), { code: 'ESRCH' });
+  assert.equal(fixture.usedFallback(), false);
+});

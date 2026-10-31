@@ -153,3 +153,5 @@ identity. The publication PATCH also pins that tag and target commit, while the
 existing-tag commit checks remain mandatory before and after publication.
 The earlier public `v0.1.0` release uses release ID `422619176`, source `0552cc97f217d772b6d883ba75cc9007d3fc8309`,
 and the 29 exact CI assets. It remains a prerelease with `make_latest: false`.
+
+Java packages include the locked Maven/Resolver and Gradle Tooling API dependency closure, the release-8 bridge, and verified full license/evidence manifests. The thin launcher forwards caller build settings while removing JVM/classpath injection variables. Java model import may acquire a wrapper/default Gradle distribution and dependencies; this is distinct from project-JDK installation. Full native verification requires all four pinned Gradle fixtures and runs actual installed CLI model/lifecycle acceptance on both platforms. Java-only validation does not generate a complete seven-language receipt.

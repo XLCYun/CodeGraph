@@ -19,12 +19,20 @@ final class SdkDiscovery {
     interface Provider { List<Candidate> discover() throws Failure; }
 
     /** 已发现版本与标准库布局共同证明的候选声明。 */
-    record Candidate(String id, String version, Path root, String release) {}
+    record Candidate(String id, String version, Path root, String release, String source) {
+        Candidate(String id, String version, Path root, String release) { this(id, version, root, release, "explicit"); }
+        boolean defaultEligible() { return !source.equals("installation"); }
+    }
 
     /** 汇总既有 SDK 提示、常见安装目录、PATH 与随包运行 JDK。 */
     static List<Candidate> discover() throws Failure {
         List<Path> roots = new ArrayList<>();
-        for (String key : List.of("CODEGRAPH_JAVA_TARGET_JDK", "JAVA_HOME", "JDK_HOME")) addEnvironment(roots, key);
+        List<Candidate> preferred = new ArrayList<>();
+        for (String key : List.of("CODEGRAPH_JAVA_TARGET_JDK", "JAVA_HOME", "JDK_HOME")) {
+            List<Path> hints = new ArrayList<>();
+            addEnvironment(hints, key);
+            for (Candidate candidate : inRoots(hints)) preferred.add(withSource(candidate, key));
+        }
         List<Path> containers = new ArrayList<>(List.of(Path.of("/Library/Java/JavaVirtualMachines"), Path.of("/usr/lib/jvm")));
         String home = System.getenv(System.getProperty("os.name").startsWith("Windows") ? "USERPROFILE" : "HOME");
         if (home != null) {
@@ -48,11 +56,20 @@ final class SdkDiscovery {
         if (search != null) for (String directory : search.split(Pattern.quote(java.io.File.pathSeparator))) {
             try {
                 Path candidate = Path.of(directory).resolve(System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java");
-                if (candidate.isAbsolute()) roots.add(candidate.toRealPath().getParent().getParent());
+                if (candidate.isAbsolute()) for (Candidate found : inRoots(List.of(candidate.toRealPath().getParent().getParent())))
+                    preferred.add(withSource(found, "PATH"));
             } catch (Exception ignored) { /* 缺失 PATH 候选不是安装或运行工具的理由。 */ }
         }
-        roots.add(Path.of(System.getProperty("java.home")));
-        return inRoots(roots);
+        for (Candidate candidate : inRoots(List.of(Path.of(System.getProperty("java.home")))))
+            preferred.add(withSource(candidate, "bundled"));
+        for (Candidate candidate : inRoots(roots)) preferred.add(withSource(candidate, "installation"));
+        Map<String, Candidate> unique = new java.util.LinkedHashMap<>();
+        for (Candidate candidate : preferred) unique.putIfAbsent(candidate.release(), candidate);
+        return List.copyOf(unique.values());
+    }
+
+    private static Candidate withSource(Candidate candidate, String source) {
+        return new Candidate(candidate.id(), candidate.version(), candidate.root(), candidate.release(), source);
     }
 
     /** 环境只作为既有路径提示；不接受相对路径或执行字符串。 */
@@ -94,7 +111,6 @@ final class SdkDiscovery {
                 } catch (Exception ignored) { /* 候选声明不完整或无法读取时不冒充可用 SDK。 */ }
             }
         }
-        if (chosen.isEmpty()) throw new Failure("target_unavailable", "no installed Java standard declarations; prepare the exact project JDK");
         return List.copyOf(chosen.values());
     }
 

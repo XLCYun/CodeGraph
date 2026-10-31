@@ -1,0 +1,419 @@
+"""Real model-only Gradle imports through the public product entrypoint."""
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+import tempfile
+import unittest
+from unittest import mock
+from process_identity import ProcessIdentity, process_alive
+from test_helper import PUBLIC_COMMAND, TARGET, RUNTIME, HELPER, CP, write, node, snapshot_files, assert_diagnostics, diagnostic_codes, absent_public_release
+
+FIXTURES = pathlib.Path(__file__).resolve().parents[3] / '.tools/java-native'
+DIST = pathlib.Path(os.environ.get('CODEGRAPH_GRADLE_9_ZIP', str(FIXTURES/'gradle-9.1.0-bin.zip')))
+DIST8 = pathlib.Path(os.environ.get('CODEGRAPH_GRADLE_8_ZIP', str(FIXTURES/'gradle-8.14.3-bin.zip')))
+DIST7 = pathlib.Path(os.environ.get('CODEGRAPH_GRADLE_7_ZIP', str(FIXTURES/'gradle-7.6.4-bin.zip')))
+DIST_CURRENT = pathlib.Path(os.environ.get('CODEGRAPH_GRADLE_CURRENT_ZIP', str(FIXTURES/'gradle-9.8.2-bin.zip')))
+
+@unittest.skipUnless(DIST.exists(), 'real Gradle distribution required')
+class GradleTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='codegraph-gradle-test-')
+        self.addCleanup(self.temp.cleanup)
+        self.base=pathlib.Path(self.temp.name).resolve()
+        self.root=self.base/'project'; self.root.mkdir()
+        self.home=self.base/'user'; self.home.mkdir()
+        self.wrapper(DIST)
+        write(self.root,'settings.gradle', "rootProject.name='fixture'\n")
+        write(self.root,'src/main/java/p/A.java','package p; class A { int run(){return 1;} }')
+        write(self.root,'build.gradle', "plugins { id 'java' }; tasks.withType(JavaCompile).configureEach { options.release=17 }\n" + self.sentinel())
+
+    def wrapper(self, distribution):
+        write(self.root,'gradle/wrapper/gradle-wrapper.properties','distributionUrl='+distribution.as_uri()+'\ndistributionSha256Sum='+hashlib.sha256(distribution.read_bytes()).hexdigest()+'\n')
+
+    def sentinel(self):
+        return "new File(System.getenv('CODEGRAPH_FIXTURE_PID')).text=java.lang.management.ManagementFactory.runtimeMXBean.name.split('@')[0]; println 'CONFIGURATION_STDOUT_SENTINEL'; defaultTasks('build'); tasks.configureEach { doFirst { throw new RuntimeException('BUSINESS_TASK_EXECUTED') } }\n"
+
+    def public(self, files=None, tests=False, env=None, diagnostics=None):
+        message={'protocol':'codegraph.analyzer/1','type':'analyze','id':'gradle','repository_root':str(self.root),'options':{'include_tests':tests,'rust_dependency_scope':'repository-only'}}
+        if files is not None: message['files']=files
+        environment=dict(os.environ,CODEGRAPH_JAVA_TARGET_JDK=str(TARGET),GRADLE_USER_HOME=str(self.home),CODEGRAPH_FIXTURE_PID=str(self.base/'daemon.pid'))
+        environment.update(env or {})
+        result=subprocess.run([PUBLIC_COMMAND[0], '--enable-native-access=ALL-UNNAMED', *PUBLIC_COMMAND[1:], 'analyze'],input=json.dumps(message),text=True, encoding="utf-8",capture_output=True,env=environment,timeout=120)
+        assert_diagnostics(self, result.stderr, diagnostic_codes(json.loads(result.stdout).get('graph', {})) if diagnostics is None else diagnostics)
+        self.assertEqual(len(result.stdout.splitlines()),1,result.stdout)
+        if (self.base/'daemon.pid').exists():
+            pid=int((self.base/'daemon.pid').read_text())
+            self.assertFalse(process_alive(pid), 'owned daemon survived product completion')
+        return json.loads(result.stdout)
+
+    def test_module_descriptor_exclusion_and_explicit_module_path_disable_bindings(self):
+        path = 'src/main/java/p/A.java'
+        write(self.root, path, 'package p; class A { Object run(){return java.util.List.of();} }')
+        descriptor = self.root / 'src/main/java/module-info.java'
+        descriptor.write_text('module example { exports p; }', encoding='utf-8')
+        base = "plugins { id 'java' }; tasks.withType(JavaCompile).configureEach { options.release=17 }; "
+        write(self.root, 'build.gradle', base + "sourceSets.main.java.exclude('module-info.java'); " + self.sentinel())
+        for arguments in (False, True):
+            with self.subTest(arguments=arguments):
+                if arguments:
+                    descriptor.unlink()
+                    write(self.root, 'build.gradle', base + "tasks.named('compileJava') { options.compilerArgs += ['--module-path', 'modules'] }; " + self.sentinel())
+                result = self.public([path], diagnostics=('module_visibility_unavailable',))
+                self.assertEqual(result['outcome'], 'ok', result)
+                self.assertEqual(result['graph']['root_contains'], ['java:' + path + '#file'])
+                method = node(result['graph'], '/method:run()')
+                self.assertEqual(method['extensions']['java.platforms'][0]['status'], 'available')
+                self.assertEqual([r['target'] for r in method['references'] if r['semantic'] == 'code.calls'], [{'kind': 'unresolved', 'name': 'of'}])
+
+    def test_distribution_cache_integrity_and_concurrent_publication(self):
+        command = [str(RUNTIME / 'bin/java'), '-Duser.home=' + str(self.home), '-cp', str(HELPER / 'build/test-classes') + os.pathsep + str(HELPER / 'build/classes') + os.pathsep + CP, 'dev.codegraph.java.GradleDistributionCacheTest', str(self.base)]
+        result = subprocess.run(command, text=True, encoding='utf-8', capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertIn('Cache concurrent publication, reuse, archive-anchored tamper and membership checks passed', result.stdout)
+
+    def test_model_completion_releases_private_handles_before_snapshot_deletion(self):
+        for failure in (False, True):
+            with self.subTest(failure=failure):
+                if failure: write(self.root, 'build.gradle', "throw new GradleException('fixture model failure')")
+                command = [str(RUNTIME / 'bin/java'), '--enable-native-access=ALL-UNNAMED', '-cp', str(HELPER / 'build/test-classes') + os.pathsep + str(HELPER / 'build/classes') + os.pathsep + CP, 'dev.codegraph.java.GradleResourcesTest', str(self.root), str(failure).lower()]
+                environment = dict(os.environ, CODEGRAPH_JAVA_TARGET_JDK=str(TARGET), GRADLE_USER_HOME=str(self.home), CODEGRAPH_FIXTURE_PID=str(self.base/'daemon.pid'))
+                result = subprocess.run(command, text=True, encoding='utf-8', capture_output=True, env=environment, timeout=140)
+                self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+                self.assertIn('Snapshot deleted before analyzer exit', result.stdout)
+
+    def test_distribution_mutation_during_import_is_fatal_for_explicit_selection(self):
+        write(self.root, 'build.gradle', "plugins { id 'java' }; new File(gradle.gradleHomeDir, 'LICENSE').append('changed distribution'); " + self.sentinel())
+        request = {'protocol': 'codegraph.analyzer/1', 'type': 'analyze', 'id': 'cache-change', 'repository_root': str(self.root), 'files': ['src/main/java/p/A.java'], 'options': {'include_tests': False, 'rust_dependency_scope': 'repository-only'}}
+        environment = dict(os.environ, CODEGRAPH_JAVA_TARGET_JDK=str(TARGET), GRADLE_USER_HOME=str(self.home), CODEGRAPH_FIXTURE_PID=str(self.base/'daemon.pid'))
+        command = [PUBLIC_COMMAND[0], '--enable-native-access=ALL-UNNAMED', '-Duser.home=' + str(self.home), *PUBLIC_COMMAND[1:], 'analyze']
+        result = subprocess.run(command, input=json.dumps(request), text=True, encoding='utf-8', capture_output=True, env=environment, timeout=140)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        response = json.loads(result.stdout)
+        self.assertEqual(response['outcome'], 'error')
+        self.assertEqual(response['error']['message'], 'Gradle distribution cache changed')
+        self.assertNotIn('graph', response)
+        self.assertEqual(result.stderr, '')
+        if (self.base/'daemon.pid').exists(): self.assertFalse(process_alive(int((self.base/'daemon.pid').read_text())))
+
+    def test_real_model(self):
+        before=snapshot_files(self.root)
+        result=self.public()
+        self.assertEqual(result['outcome'],'ok',result)
+        self.assertEqual(before,snapshot_files(self.root))
+        self.assertTrue(result['graph']['nodes'])
+        self.assertEqual(result['graph']['nodes'][0]['extensions']['java.platforms'][0]['compiler']['release'],'17')
+
+    def test_modules_custom_classpath_and_tests(self):
+        write(self.root,'settings.gradle', "include 'app', 'lib'\n")
+        write(self.root,'build.gradle', "subprojects { apply plugin:'java'; tasks.withType(JavaCompile).configureEach { options.release=17 }; "+self.sentinel()+" }\n")
+        write(self.root,'lib/build.gradle', '')
+        write(self.root,'lib/src/main/java/p/Lib.java','package p; public class Lib { public static int value(){return 1;} }')
+        write(self.root,'app/build.gradle', "dependencies { implementation project(':lib') }; sourceSets { integrationTest { java.srcDir 'checks'; compileClasspath += sourceSets.main.output + configurations.testCompileClasspath } }; tasks.named('compileIntegrationTestJava') { options.release=8 }")
+        write(self.root,'app/checks/p/Check.java','package p; class Check { int run(){return Lib.value();} }')
+        result=self.public(tests=True, env={'JAVA_HOME':os.environ['CODEGRAPH_JAVA_TARGET_8']})
+        self.assertEqual(result['outcome'],'ok',result)
+        call=node(result['graph'],'/method:run()')
+        self.assertEqual(call['extensions']['java.platforms'][0]['compiler']['release'],'8')
+        self.assertTrue(any(ref['semantic']=='code.calls' and ref['target']['kind']=='node' for ref in call['references']),result)
+        excluded=self.public()
+        self.assertFalse(any('Check.java' in n['id'] for n in excluded['graph']['nodes']))
+
+    def test_effective_task_classpath_removal_and_addition(self):
+        write(self.root,'settings.gradle', "include 'app', 'lib'")
+        write(self.root,'build.gradle', "subprojects { apply plugin:'java'; tasks.withType(JavaCompile).configureEach { options.release=17 }; "+self.sentinel()+" }")
+        write(self.root,'lib/build.gradle','')
+        write(self.root,'lib/src/main/java/p/Lib.java','package p; public class Lib { public static int value(){return 1;} }')
+        write(self.root,'app/src/main/java/p/App.java','package p; class App { int run(){return Lib.value();} }')
+        variants = [
+            ('removed', "dependencies { implementation project(':lib') }; tasks.named('compileJava') { classpath=files() }; afterEvaluate { assert !sourceSets.main.compileClasspath.files.empty; assert tasks.compileJava.classpath.files.empty }", 'unresolved'),
+            ('added', "tasks.named('compileJava') { classpath += project(':lib').sourceSets.main.output }; afterEvaluate { assert sourceSets.main.compileClasspath.files.empty; assert !tasks.compileJava.classpath.files.empty }", 'node'),
+        ]
+        for name, configuration, target_kind in variants:
+            with self.subTest(classpath=name):
+                write(self.root,'app/build.gradle',configuration)
+                result=self.public()
+                self.assertEqual(result['outcome'],'ok',result)
+                call=node(result['graph'],'/method:run()')
+                calls=[ref for ref in call['references'] if ref['semantic']=='code.calls']
+                self.assertEqual([ref['target']['kind'] for ref in calls],[target_kind],result)
+                self.assertTrue(call['extensions']['java.platforms'][0]['dependencies_complete'],result)
+
+    def test_missing_toolchain_keeps_members(self):
+        missing = absent_public_release(dict(os.environ, CODEGRAPH_JAVA_TARGET_JDK=str(TARGET)))
+        write(self.root,'build.gradle', "plugins { id 'java' }; java { toolchain { languageVersion=JavaLanguageVersion.of(" + str(missing) + ") } }; "+self.sentinel())
+        result=self.public(diagnostics=('target_platform_missing','context_incomplete'))
+        self.assertEqual(result['outcome'],'ok',result)
+        platform=result['graph']['nodes'][0]['extensions']['java.platforms'][0]
+        self.assertEqual(platform['compiler']['toolchain'],str(missing))
+        self.assertFalse(platform['dependencies_complete'])
+
+    def test_bad_model_exact_and_empty(self):
+        write(self.root,'build.gradle', self.sentinel()+"throw new RuntimeException('bad model')")
+        self.assertEqual(self.public()['outcome'],'error')
+        self.assertEqual(self.public(['src/main/java/p/A.java'], diagnostics=('model_discarded','default_platform'))['outcome'],'ok')
+        (self.base/'daemon.pid').unlink(missing_ok=True)
+        self.assertEqual(self.public([])['outcome'],'ok')
+        self.assertFalse((self.base/'daemon.pid').exists())
+
+    @unittest.skipUnless(DIST8.exists(), 'Gradle 8 distribution required')
+    def test_kotlin_buildsrc_environment_and_user_settings(self):
+        self.wrapper(DIST8)
+        (self.root/'build.gradle').unlink()
+        write(self.home,'gradle.properties','userProperty=from-user\n')
+        write(self.home,'init.d/user.gradle', "allprojects { ext.userInit='from-init' }")
+        write(self.root,'buildSrc/build.gradle', "plugins { id 'java-gradle-plugin' }; gradlePlugin { plugins { fixture { id='fixture.plugin'; implementationClass='fixture.Helper' } } }")
+        write(self.root,'buildSrc/src/main/java/fixture/Helper.java', 'package fixture; public class Helper implements org.gradle.api.Plugin<org.gradle.api.Project> { public void apply(org.gradle.api.Project p) { p.getExtensions().getExtraProperties().set("helperValue", System.getenv("CUSTOM_BUILD_VALUE")); } }')
+        write(self.root,'build.gradle.kts', '''import java.lang.management.ManagementFactory
+plugins { java; id("fixture.plugin") }
+check(property("userProperty") == "from-user")
+check(extra["userInit"] == "from-init")
+check(extra["helperValue"] == "forwarded")
+tasks.withType<JavaCompile>().configureEach { options.release.set(17) }
+println("KOTLIN_CONFIGURATION_SENTINEL")
+file(System.getenv("CODEGRAPH_FIXTURE_PID")).writeText(ManagementFactory.getRuntimeMXBean().name.split("@")[0])
+tasks.configureEach { doFirst { error("BUSINESS_TASK_EXECUTED") } }
+''')
+        result=self.public(env={'CUSTOM_BUILD_VALUE':'forwarded','JAVA_HOME':os.environ['CODEGRAPH_JAVA_TARGET_8']})
+        self.assertEqual(result['outcome'],'ok',result)
+        self.assertFalse((self.root/'buildSrc/build').exists())
+
+    def test_generated_context_is_frozen_not_selected(self):
+        write(self.root,'build.gradle', "plugins { id 'java' }; tasks.withType(JavaCompile).configureEach { options.release=17 }; sourceSets.main.java.srcDir 'build/generated'; def generated=file('build/generated/p/Generated.java'); generated.parentFile.mkdirs(); generated.text='package p; class Generated { static int value(){return 1;} }'; "+self.sentinel())
+        write(self.root,'src/main/java/p/A.java','package p; class A { int run(){return Generated.value();} }')
+        result=self.public()
+        self.assertEqual(result['outcome'],'ok',result)
+        self.assertFalse(any('Generated.java' in n['id'] for n in result['graph']['nodes']))
+        self.assertNotIn('codegraph-java-input-',json.dumps(result))
+        self.assertTrue(any(r['semantic']=='code.calls' and r['target']['kind']=='external' for r in node(result['graph'],'/method:run()')['references']),result)
+
+    def test_copy_mutation_does_not_fallback(self):
+        write(self.root,'build.gradle', "plugins { id 'java' }; file('src/main/java/p/A.java').text='package p; class Changed {}'; "+self.sentinel()+"throw new RuntimeException('bad')")
+        result=self.public(['src/main/java/p/A.java'])
+        self.assertEqual(result['outcome'],'error',result)
+
+    def test_checksum_is_enforced(self):
+        path=self.root/'gradle/wrapper/gradle-wrapper.properties'
+        path.write_text(path.read_text().split('distributionSha256Sum=')[0]+'distributionSha256Sum='+'0'*64+'\n')
+        result=self.public(['src/main/java/p/A.java'])
+        self.assertEqual(result['outcome'],'error',result)
+        self.assertFalse((self.base/'daemon.pid').exists())
+
+    def test_internal_timeout_cleans_tools(self):
+        from test_helper import CP, HELPER, RUNTIME
+        write(self.root,'build.gradle', "plugins { id 'java' }; "+self.sentinel()+"Thread.sleep(120000)")
+        command=[str(RUNTIME/'bin/java'),'--enable-native-access=ALL-UNNAMED','-cp',str(HELPER/'build/test-classes')+os.pathsep+str(HELPER/'build/classes')+os.pathsep+CP,'dev.codegraph.java.GradleModelDriver',str(self.root),'20000']
+        env=dict(os.environ,CODEGRAPH_JAVA_TARGET_JDK=str(TARGET),GRADLE_USER_HOME=str(self.home),CODEGRAPH_FIXTURE_PID=str(self.base/'daemon.pid'))
+        result=subprocess.run(command,text=True, encoding="utf-8",capture_output=True,env=env,timeout=40)
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('resource_limit: analysis timeout',result.stdout)
+        self.assertTrue((self.base/'daemon.pid').exists())
+        self.assertFalse(process_alive(int((self.base/'daemon.pid').read_text())))
+
+    def test_filtered_jar_does_not_claim_source_visibility(self):
+        write(self.root,'settings.gradle', "include 'app','lib'")
+        write(self.root,'build.gradle', "subprojects { apply plugin:'java'; tasks.withType(JavaCompile).configureEach { options.release=17 }; "+self.sentinel()+" }")
+        write(self.root,'lib/build.gradle', "tasks.jar { exclude '**/Lib.class' }")
+        write(self.root,'app/build.gradle', "dependencies { implementation project(':lib') }")
+        write(self.root,'lib/src/main/java/p/Lib.java','package p; public class Lib { public static int value(){return 1;} }')
+        write(self.root,'app/src/main/java/p/App.java','package p; class App { int run(){return Lib.value();} }')
+        result=self.public(['app/src/main/java/p/App.java'], diagnostics=('context_incomplete',))
+        self.assertEqual(result['outcome'],'ok',result)
+        call=node(result['graph'],'/method:run()')
+        self.assertFalse(call['extensions']['java.platforms'][0]['dependencies_complete'])
+        self.assertTrue(any(r['semantic']=='code.calls' and r['target']['kind']=='unresolved' for r in call['references']))
+
+    def test_original_mutation_is_detected(self):
+        write(self.root,'build.gradle', "plugins { id 'java' }; new File(System.getenv('ORIGINAL_SOURCE')).text='package p; class Changed {}'; "+self.sentinel())
+        result=self.public(['src/main/java/p/A.java'],env={'ORIGINAL_SOURCE':str(self.root/'src/main/java/p/A.java')})
+        self.assertEqual(result['outcome'],'error',result)
+
+    def test_external_binary_dependency(self):
+        from test_helper import RUNTIME
+        classes=self.base/'classes'; classes.mkdir()
+        write(self.base,'External.java','package outside; public class External { public static int value(){return 2;} }')
+        subprocess.run([str(RUNTIME/'bin/javac'),'--release','17','-d',str(classes),str(self.base/'External.java')],check=True,capture_output=True)
+        subprocess.run([str(RUNTIME/'bin/jar'),'cf',str(self.root/'external.jar'),'-C',str(classes),'.'],check=True,capture_output=True)
+        write(self.root,'build.gradle', "plugins { id 'java' }; tasks.withType(JavaCompile).configureEach { options.release=17 }; dependencies { implementation files('external.jar') }; "+self.sentinel())
+        write(self.root,'src/main/java/p/A.java','package p; class A { int run(){return outside.External.value();} }')
+        result=self.public()
+        self.assertEqual(result['outcome'],'ok',result)
+        self.assertTrue(any(r['semantic']=='code.calls' and r['target']['kind']=='external' for r in node(result['graph'],'/method:run()')['references']),result)
+        command = [str(RUNTIME / 'bin/java'), '--enable-native-access=ALL-UNNAMED', '-cp', str(HELPER / 'build/test-classes') + os.pathsep + str(HELPER / 'build/classes') + os.pathsep + CP, 'dev.codegraph.java.GradleResourcesTest', str(self.root), 'analysis']
+        environment = dict(os.environ, CODEGRAPH_JAVA_TARGET_JDK=str(TARGET), GRADLE_USER_HOME=str(self.home), CODEGRAPH_FIXTURE_PID=str(self.base/'daemon.pid'))
+        observed = subprocess.run(command, text=True, encoding='utf-8', capture_output=True, env=environment, timeout=140)
+        self.assertEqual(observed.returncode, 0, observed.stdout + observed.stderr)
+        self.assertIn('Snapshot deleted before analyzer exit', observed.stdout)
+        parser_command = [*command[:-3], 'dev.codegraph.java.JdtResourcesTest', str(self.root), str(TARGET)]
+        parser = subprocess.run(parser_command, text=True, encoding='utf-8', capture_output=True, env=environment, timeout=30)
+        self.assertEqual(parser.returncode, 0, parser.stdout + parser.stderr)
+        self.assertIn('Parser before-ast: snapshot deleted before analyzer exit', parser.stdout)
+        self.assertIn('Parser callback: snapshot deleted before analyzer exit', parser.stdout)
+        write(self.root, 'src/main/java/p/A.java', 'package wrong; class A { int run(){return outside.External.value();} }')
+        failed = subprocess.run([*command[:-1], 'analysis-failure'], text=True, encoding='utf-8', capture_output=True, env=environment, timeout=140)
+        self.assertEqual(failed.returncode, 0, failed.stdout + failed.stderr)
+        self.assertIn('Snapshot deleted before analyzer exit', failed.stdout)
+
+    def test_external_caller_cancellation(self):
+        unicode_root = self.base / "project-中文丁"
+        self.root.rename(unicode_root)
+        self.root = unicode_root
+        write(self.root,'build.gradle', "plugins { id 'java' }; "+self.sentinel()+"new File(System.getenv('CODEGRAPH_FIXTURE_SNAPSHOT')).text=rootDir.parentFile.absolutePath; Thread.sleep(120000)")
+        message={'protocol':'codegraph.analyzer/1','type':'analyze','id':'cancel','repository_root':str(self.root),'options':{'include_tests':False,'rust_dependency_scope':'repository-only'}}
+        marker=self.base/'daemon.pid'
+        config={'command':[PUBLIC_COMMAND[0],'--enable-native-access=ALL-UNNAMED',*PUBLIC_COMMAND[1:],'analyze'],'root':str(self.root),'marker':str(marker),'snapshotMarker':str(self.base/'snapshot.path'),'message':message,'environment':dict(os.environ,CODEGRAPH_JAVA_TARGET_JDK=str(TARGET),GRADLE_USER_HOME=str(self.home),CODEGRAPH_FIXTURE_PID=str(marker),CODEGRAPH_FIXTURE_SNAPSHOT=str(self.base/'snapshot.path'))}
+        path=self.base/'cancel.json'; path.write_text(json.dumps(config))
+        with mock.patch.object(subprocess, "_text_encoding", return_value="cp1252"):
+            result=subprocess.run(['node',str(pathlib.Path(__file__).with_name('gradle_cancel.mjs')),str(path)],text=True, encoding="utf-8",capture_output=True,timeout=100)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertFalse(json.loads(result.stdout)['alive'])
+        self.assertEqual(json.loads(result.stdout)['repositoryRoot'], str(self.root))
+
+    def test_side_daemon_is_not_stopped(self):
+        import signal, time, zipfile
+        from test_helper import CP, HELPER, RUNTIME
+        side=self.base/'side'; side.mkdir()
+        home=self.base/'side-home'; home.mkdir()
+        write(side,'settings.gradle',"rootProject.name='side'")
+        installation=self.base/'side-distribution'
+        with zipfile.ZipFile(DIST) as archive: archive.extractall(installation)
+        command=[str(RUNTIME/'bin/java'),'--enable-native-access=ALL-UNNAMED','-cp',str(HELPER/'build/test-classes')+os.pathsep+str(HELPER/'build/classes')+os.pathsep+CP,'dev.codegraph.java.GradleSideDaemonDriver',str(side),str(installation/'gradle-9.1.0'),str(home),str(TARGET),str(self.base/'ready')]
+        side_process=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        pids=[]
+        identities=[]
+        try:
+            until=time.monotonic()+30
+            while not (self.base/'ready').exists() and time.monotonic()<until: time.sleep(.05)
+            self.assertTrue((self.base/'ready').exists())
+            pids=[int(path.name.split('-')[1].split('.')[0]) for path in home.glob('daemon/*/daemon-*.out.log')]
+            self.assertTrue(pids)
+            for pid in pids: identities.append(ProcessIdentity(pid, owned=True))
+            self.assertTrue(all(identity.alive() for identity in identities))
+            self.assertEqual(self.public(env={'GRADLE_USER_HOME':str(home)})['outcome'],'ok')
+            self.assertTrue(all(identity.alive() for identity in identities))
+        finally:
+            try: side_process.communicate(timeout=20)
+            except subprocess.TimeoutExpired:
+                side_process.kill(); side_process.communicate(timeout=5)
+            try:
+                for identity in identities:
+                    identity.terminate()
+                until=time.monotonic()+5
+                while any(identity.alive() for identity in identities) and time.monotonic()<until:
+                    time.sleep(.05)
+                self.assertTrue(all(not identity.alive() for identity in identities))
+            finally:
+                for identity in identities: identity.close()
+
+    def test_distribution_auth_proxy_and_redirect_scope(self):
+        import base64, http.server, threading
+        expected='Basic '+base64.b64encode(b'synthetic:credential').decode()
+        events=[]
+        payload=DIST.read_bytes()
+        class Download(http.server.BaseHTTPRequestHandler):
+            def log_message(self,*args): pass
+            def do_GET(self):
+                events.append((self.path,self.headers.get('Authorization')))
+                if self.path.startswith('http://') and self.headers.get('Proxy-Authorization')!=expected:
+                    self.send_response(407); self.send_header('Proxy-Authenticate','Basic realm="fixture"'); self.end_headers(); return
+                if self.path.startswith('http://download.invalid/'):
+                    if self.headers.get('Authorization')!=expected:
+                        self.send_response(401); self.end_headers(); return
+                    self.send_response(302)
+                    self.send_header('Location',f'http://127.0.0.1:{self.server.server_port}/gradle-9.1.0-bin.zip')
+                    self.end_headers(); return
+                self.send_response(200); self.send_header('Content-Length',str(len(payload))); self.end_headers(); self.wfile.write(payload)
+        server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Download)
+        thread=threading.Thread(target=server.serve_forever,daemon=True); thread.start()
+        try:
+            write(self.home,'gradle.properties',f'systemProp.http.proxyHost=127.0.0.1\nsystemProp.http.proxyPort={server.server_port}\nsystemProp.http.proxyUser=synthetic\nsystemProp.http.proxyPassword=credential\nsystemProp.http.nonProxyHosts=127.0.0.1\nsystemProp.gradle.download_invalid.wrapperUser=synthetic\nsystemProp.gradle.download_invalid.wrapperPassword=credential\n')
+            write(self.root,'gradle/wrapper/gradle-wrapper.properties','distributionUrl=http://download.invalid/gradle-9.1.0-bin.zip\ndistributionSha256Sum='+hashlib.sha256(payload).hexdigest()+'\n')
+            result=self.public()
+            self.assertEqual(result['outcome'],'ok',result)
+            self.assertEqual(events[0][1],expected)
+            self.assertIsNone(events[-1][1],events)
+            self.assertNotIn('credential',json.dumps(result))
+        finally:
+            server.shutdown(); server.server_close(); thread.join()
+
+    def test_daemon_criteria_never_downloads_jdk(self):
+        import http.server, threading
+        requests=[]
+        absent = absent_public_release(dict(os.environ, CODEGRAPH_JAVA_TARGET_JDK=str(TARGET)), majors=(24, 23, 22, 21, 20, 19, 18))
+        self.assertIn(absent, range(17, 26), 'Missing SDK must be a supported Gradle 9.1 runtime major')
+        class Download(http.server.BaseHTTPRequestHandler):
+            def log_message(self,*args): pass
+            def do_GET(self):
+                requests.append(self.path); self.send_response(404); self.end_headers()
+        server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Download)
+        thread=threading.Thread(target=server.serve_forever,daemon=True); thread.start()
+        try:
+            write(self.root,'gradle/gradle-daemon-jvm.properties','toolchainVersion=17\n')
+            self.assertEqual(self.public()['outcome'],'ok')
+            write(self.root,'gradle/gradle-daemon-jvm.properties',f'toolchainVersion={absent}\ntoolchainUrl.MAC_OS.AARCH64=http\\://127.0.0.1\\:{server.server_port}/jdk.zip\ntoolchainUrl.WINDOWS.X86_64=http\\://127.0.0.1\\:{server.server_port}/jdk.zip\n')
+            result=self.public()
+            self.assertEqual(result['outcome'],'error',result)
+            self.assertEqual(requests,[])
+            self.assertEqual(result['error']['code'], 'analysis_failed')
+            print(f'Daemon criteria evidence: local 17 accepted; requested {absent}, absent through public SDK discovery; rejected with zero JDK download requests')
+        finally:
+            server.shutdown(); server.server_close(); thread.join()
+
+    def test_task_compiler_overrides_extension_and_failed_provider(self):
+        write(self.root,'build.gradle', "plugins { id 'java' }; java.toolchain.languageVersion=JavaLanguageVersion.of(25); tasks.named('compileJava') { javaCompiler=javaToolchains.compilerFor { languageVersion=JavaLanguageVersion.of(17) } }; "+self.sentinel())
+        write(self.root,'src/main/java/p/A.java','package p; class A { String run(){return java.util.List.of("x").getFirst();} }')
+        result=self.public(env={'JAVA_HOME':os.environ['CODEGRAPH_JAVA_TARGET_8']})
+        self.assertEqual(result['outcome'],'ok',result)
+        platform=node(result['graph'],'/method:run()')['extensions']['java.platforms'][0]
+        self.assertEqual(platform['compiler']['toolchain'],'17',result)
+        self.assertTrue(platform['version'].startswith('17.'))
+        self.assertTrue(any(r['semantic']=='code.calls' and r['target']['kind']=='unresolved' for r in node(result['graph'],'/method:run()')['references']))
+        write(self.root,'build.gradle', "plugins { id 'java' }; java.toolchain.languageVersion=JavaLanguageVersion.of(17); tasks.named('compileJava') { javaCompiler=providers.provider { throw new GradleException('unavailable task compiler') } }; "+self.sentinel())
+        failed=self.public(diagnostics=('compiler_unavailable','context_incomplete'))
+        self.assertEqual(failed['outcome'],'ok',failed)
+        platform=node(failed['graph'],'/method:run()')['extensions']['java.platforms'][0]
+        self.assertEqual(platform['status'],'missing',failed)
+        self.assertNotIn('toolchain',platform['compiler'])
+        self.assertFalse(platform['dependencies_complete'])
+
+    @unittest.skipUnless(all(p.exists() for p in (DIST8,DIST7,DIST_CURRENT)), 'representative Gradle distributions required')
+    def test_compiler_shim_representative_versions(self):
+        from test_helper import RUNTIME
+        paths=[DIST8,DIST7,DIST_CURRENT]
+        for distribution in paths:
+            with self.subTest(distribution=distribution.name):
+                self.assertTrue(distribution.exists(),distribution)
+                self.wrapper(distribution)
+                write(self.root,'build.gradle', "plugins { id 'java' }; tasks.named('compileJava') { javaCompiler=javaToolchains.compilerFor { languageVersion=JavaLanguageVersion.of(17) } }; "+self.sentinel())
+                result=self.public(env={'CODEGRAPH_JAVA_TARGET_JDK':str(RUNTIME),'JDK_HOME':str(TARGET)})
+                self.assertEqual(result['outcome'],'ok',result)
+                platform=result['graph']['nodes'][0]['extensions']['java.platforms'][0]
+                self.assertEqual(platform['status'],'available',result)
+                self.assertEqual(platform['compiler']['toolchain'],'17',result)
+
+    def test_custom_compiler_convention_is_not_default_platform(self):
+        write(self.root,'build.gradle', "plugins { id 'java' }; tasks.named('compileJava') { javaCompiler.convention(javaToolchains.compilerFor { languageVersion=JavaLanguageVersion.of(17) }) }; "+self.sentinel())
+        result=self.public(diagnostics=('compiler_unavailable','context_incomplete'))
+        self.assertEqual(result['outcome'],'ok',result)
+        self.assertEqual(result['graph']['nodes'][0]['extensions']['java.platforms'][0]['status'],'missing',result)
+
+    def test_filtered_membership_and_batch_context(self):
+        write(self.root,'gradle.properties','org.gradle.configureondemand=true\norg.gradle.configuration-cache=true\norg.gradle.unsafe.isolated-projects=true\n')
+        write(self.root,'settings.gradle', "include 'lib'")
+        write(self.root,'build.gradle', "plugins { id 'java' }; tasks.withType(JavaCompile).configureEach { options.release=17 }; sourceSets.main.java { include '**/p/*.java'; exclude '**/Excluded.java' }; dependencies { implementation project(':lib') }; "+self.sentinel())
+        write(self.root,'lib/build.gradle',"plugins { id 'java' }; tasks.withType(JavaCompile).configureEach { options.release=17 }; "+self.sentinel())
+        write(self.root,'lib/src/main/java/p/Lib.java','package p; public class Lib { public static int value(){return 1;} }')
+        write(self.root,'src/main/java/p/Allowed.java','package p; class Allowed { static int value(){return 2;} }')
+        write(self.root,'src/main/java/p/Excluded.java','package p; class Excluded { static int value(){return Allowed.value();} }')
+        write(self.root,'src/main/java/p/A.java','package p; class A { int run(){return Allowed.value()+Excluded.value()+Lib.value();} }')
+        result=self.public()
+        self.assertEqual(result['outcome'],'ok',result)
+        self.assertFalse(any('Excluded.java' in n['id'] for n in result['graph']['nodes']))
+        calls=[r['target'] for r in node(result['graph'],'/method:run()')['references'] if r['semantic']=='code.calls']
+        self.assertEqual(sum(t['kind']=='node' for t in calls),2,result)
+        self.assertEqual(sum(t['kind']=='unresolved' for t in calls),1,result)
+        explicit=self.public(['src/main/java/p/Excluded.java'], diagnostics=('default_platform',))
+        self.assertEqual(explicit['outcome'],'ok',explicit)
+        calls=[r['target'] for r in node(explicit['graph'],'/method:value()')['references'] if r['semantic']=='code.calls']
+        self.assertTrue(calls and all(t['kind']=='unresolved' for t in calls),explicit)

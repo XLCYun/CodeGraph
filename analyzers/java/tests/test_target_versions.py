@@ -78,7 +78,9 @@ class TargetVersionTests(unittest.TestCase):
             int run(Object value) { return switch (value) { case String text -> text.length(); default -> 0; }; }
         }""")
         metadata(self.root, release="17")
-        self.assert_complete_failure(run(request(self.root, [self.path])), "object_extraction_failed")
+        recovered = run(request(self.root, [self.path]))
+        self.assertEqual(recovered["outcome"], "ok", recovered)
+        self.assertFalse(recovered["graph"]["external_symbols"])
         metadata(self.root, release="25")
         result = run(request(self.root, [self.path], target=TARGET25))
         self.assertEqual(result["outcome"], "ok", result)
@@ -133,11 +135,11 @@ class TargetVersionTests(unittest.TestCase):
 
     def test_maven_modules_can_declare_distinct_releases(self):
         """聚合 POM 的两个子模块通过字面 release 选择不同目标，无需 Maven。"""
-        write(self.root, "pom.xml", """<project><groupId>p</groupId><artifactId>root</artifactId>
+        write(self.root, "pom.xml", """<project><modelVersion>4.0.0</modelVersion><groupId>p</groupId><artifactId>root</artifactId>
           <version>1</version><packaging>pom</packaging><modules><module>a</module><module>b</module></modules></project>""")
         files = []
         for module, release in (("a", "17"), ("b", "25")):
-            write(self.root, module + "/pom.xml", "<project><groupId>p</groupId><artifactId>" + module +
+            write(self.root, module + "/pom.xml", "<project><modelVersion>4.0.0</modelVersion><groupId>p</groupId><artifactId>" + module +
                   "</artifactId><version>1</version><properties><maven.compiler.release>" + release +
                   "</maven.compiler.release></properties></project>")
             path = module + "/src/main/java/p/Main.java"
@@ -146,30 +148,38 @@ class TargetVersionTests(unittest.TestCase):
         before = snapshot_files(self.root)
         result = run(request(self.root, files, platforms=[platform(TARGET), platform(TARGET25)]))
         self.assertEqual(result["outcome"], "ok", result)
-        self.assertEqual({item["id"]: item["platform_ids"] for item in result["evidence"]["configurations"]},
-                         {"java-config:a": ["jdk17"], "java-config:b": ["jdk25"]})
+        self.assertEqual({item["id"]: item["platform_ids"] for item in result["evidence"]["configurations"] if item["platform_ids"]},
+                         {"java-config:a:main": ["jdk17"], "java-config:b:main": ["jdk25"]})
         self.assertEqual(snapshot_files(self.root), before)
 
-    def test_missing_wrong_and_ambiguous_target_fail(self):
-        """没有相同 major、伪造真实版本、错配 major 或重复目标时均不得回退运行时。"""
+    def test_missing_target_recovers_but_forged_and_ambiguous_targets_fail(self):
+        """缺少同 major 时保结构；伪造真实版本、错配 major 或重复目标仍拒绝。"""
         metadata(self.root)
         write(self.root, self.path, "package p; class Main {}")
         wrong_major = platform(TARGET25, "17")
         wrong_version = dict(platform(TARGET), version="17.0.0")
         duplicate = dict(platform(TARGET), id="second-jdk17")
-        for platforms, code in (([], "target_unavailable"), ([platform(TARGET25)], "target_unavailable"),
-                                ([wrong_major], "target_unavailable"), ([wrong_version], "target_unavailable"),
+        for platforms in ([], [platform(TARGET25)]):
+            result = run(request(self.root, [self.path], platforms=platforms))
+            self.assertEqual(result["outcome"], "ok", result)
+            self.assertEqual(result["graph"]["nodes"][0]["extensions"]["java.platforms"], [{"target": "17", "status": "missing"}])
+        for platforms, code in (([wrong_major], "target_unavailable"), ([wrong_version], "target_unavailable"),
                                 ([platform(TARGET), duplicate], "invalid_input")):
             with self.subTest(platforms=platforms):
                 self.assert_complete_failure(run(request(self.root, [self.path], platforms=platforms)), code)
 
-    def test_invalid_or_compiler_unsupported_releases_fail(self):
-        """规范整数之外的 release 与超出锁定编译器能力的 release 在选 JDK 前失败。"""
+    def test_invalid_release_recovers_selection_but_fails_discovery(self):
+        """坏 release 的明确选集退回未知目标；目录发现仍报告坏配置。"""
         write(self.root, self.path, "package p; class Main {}")
         for release in ("0", "08", "1.8", "17-preview", "17-ea", " 17", "999", "${java.version}"):
             with self.subTest(release=release):
                 metadata(self.root, release=release)
-                self.assert_complete_failure(run(request(self.root, [self.path], platforms=[])), "unsupported_configuration")
+                result = run(request(self.root, [self.path], platforms=[]))
+                self.assertEqual(result["outcome"], "ok", result)
+                self.assertEqual(result["graph"]["nodes"][0]["extensions"]["java.platforms"], [{"target": "unknown", "status": "missing"}])
+                discovery = request(self.root, [self.path], platforms=[])
+                del discovery["input"]["files"]
+                self.assert_complete_failure(run(discovery), "unsupported_configuration")
 
     @unittest.skipUnless((TARGET8 / "jre/lib/rt.jar").is_file(), "需要 CODEGRAPH_JAVA_TARGET_8 指向真实 JDK8")
     def test_classic_target_loads_standard_jars_without_new_api(self):
@@ -199,7 +209,9 @@ class TargetVersionTests(unittest.TestCase):
         """record 不得借固定运行时或最新 AST 层级进入 Java 8 图。"""
         metadata(self.root, release="8")
         write(self.root, self.path, "package p; record Main(String value) {}")
-        self.assert_complete_failure(run(request(self.root, [self.path], target=TARGET8)), "object_extraction_failed")
+        result = run(request(self.root, [self.path], target=TARGET8))
+        self.assertEqual(result["outcome"], "ok", result)
+        self.assertFalse(result["graph"]["external_symbols"])
         metadata(self.root, release="17")
         self.assertEqual(run(request(self.root, [self.path]))["outcome"], "ok")
 

@@ -71,7 +71,7 @@ fn fixed_runtime_commands_use_analyzer_resources() {
     let java = command(&package.0, Language::Java).unwrap();
     let args = java.get_args().collect::<Vec<_>>();
     assert_eq!(args.last().unwrap(), &"dev.codegraph.java.Main");
-    let classpath = std::env::split_paths(args[2]).collect::<Vec<_>>();
+    let classpath = std::env::split_paths(args[3]).collect::<Vec<_>>();
     assert_eq!(classpath[0], package.0.join("runtime/analyzer/classes"));
     assert_eq!(classpath[1], package.0.join("runtime/analyzer/lib/*"));
 }
@@ -95,8 +95,10 @@ fn runtime_environment_is_bounded() {
     let package = Package::new();
     for language in [Language::TypeScriptJavaScript, Language::Java] {
         let command = command(&package.0, language).unwrap();
-        for (key, _) in command.get_envs() {
-            assert!(ENVIRONMENT.iter().any(|allowed| key == *allowed));
+        if matches!(language, Language::TypeScriptJavaScript) {
+            for (key, _) in command.get_envs() {
+                assert!(ENVIRONMENT.iter().any(|allowed| key == *allowed));
+            }
         }
         assert!(command
             .get_envs()

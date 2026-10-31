@@ -1,0 +1,6 @@
+[
+  {"version":"7.6.4","environment":"CODEGRAPH_GRADLE_7_ZIP","sha256":"bed1da33cca0f557ab13691c77f38bb67388119e4794d113e051039b80af9bb1"},
+  {"version":"8.14.3","environment":"CODEGRAPH_GRADLE_8_ZIP","sha256":"bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531"},
+  {"version":"9.1.0","environment":"CODEGRAPH_GRADLE_9_ZIP","sha256":"a17ddd85a26b6a7f5ddb71ff8b05fc5104c0202c6e64782429790c933686c806"},
+  {"version":"9.8.2","environment":"CODEGRAPH_GRADLE_CURRENT_ZIP","sha256":"21bd5da2de49b642904077f38c0efdc7778e92b3ed0889392dca61b97e389607"}
+]

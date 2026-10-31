@@ -67,6 +67,48 @@ def run(message):
     return rows[0]
 
 
+def diagnostic_codes(graph):
+    """Expected platform/context reasons independently follow the public semantic evidence."""
+    codes = set()
+    for item in graph.get('nodes', []):
+        for platform in item.get('extensions', {}).get('java.platforms', []):
+            if platform['status'] == 'missing':
+                codes.add('target_platform_missing' if platform['target'] != 'unknown' or platform.get('compiler', {}).get('toolchain') else 'platform_unavailable')
+            elif platform['target'] == 'unknown' and platform.get('api_source', 'default') == 'default':
+                codes.add('default_platform')
+            if platform.get('dependencies_complete') is False: codes.add('context_incomplete')
+    return codes
+
+
+def absent_public_release(environment, majors=(24, 23, 22, 21, 20, 19, 18, 16, 15, 14, 13, 12, 11, 10, 9)):
+    """Choose a supported missing SDK using actual public discovery, not JAVA_HOME assumptions."""
+    with tempfile.TemporaryDirectory(prefix='java-absent-platform-') as directory:
+        root = pathlib.Path(directory)
+        (root / 'src').mkdir()
+        (root / 'src/A.java').write_text('class A {}')
+        for major in majors:
+            (root / 'narrant-java.json').write_text(json.dumps({'schema': 'java-static-v1', 'release': str(major), 'source_roots': [{'path': 'src', 'role': 'main'}]}))
+            message = {'protocol': 'codegraph.analyzer/1', 'type': 'analyze', 'id': 'missing-sdk', 'repository_root': str(root), 'files': ['src/A.java'], 'options': {'include_tests': False, 'rust_dependency_scope': 'repository-only'}}
+            result = subprocess.run([*PUBLIC_COMMAND, 'analyze'], input=json.dumps(message), text=True, encoding='utf-8', capture_output=True, env=environment, timeout=20)
+            response = json.loads(result.stdout)
+            if response['outcome'] != 'ok': raise AssertionError(response)
+            platform = response['graph']['nodes'][0]['extensions']['java.platforms'][0]
+            if platform['target'] == str(major) and platform['status'] == 'missing': return major
+    raise AssertionError('No absent supported SDK candidate found')
+
+
+def assert_diagnostics(case, stderr, expected=()):
+    """Successful imports allow only the scenario's fixed, unique sanitized reason codes."""
+    rows = stderr.splitlines()
+    case.assertEqual(len(rows), len(set(rows)), stderr)
+    codes = []
+    for row in rows:
+        match = re.fullmatch(r"codegraph-java: ([a-z_]+): [A-Za-z ;,.]+", row)
+        case.assertIsNotNone(match, stderr)
+        codes.append(match.group(1))
+    case.assertEqual(sorted(codes), sorted(expected), stderr)
+
+
 def write(root, path, source):
     """Write one disposable source/config fixture."""
     target = root / path
@@ -179,8 +221,8 @@ class JavaHelperTests(unittest.TestCase):
         self.assertTrue(all(hashlib.sha256((self.root / path).read_bytes()).hexdigest() == before[path] for path in files))
         self.assertEqual(len(completed["evidence"]["origins"]), len(graph["nodes"]))
 
-    def test_malformed_syntax_fails_without_graph_or_evidence(self):
-        """缺依赖可恢复，真正畸形语法必须完整失败，不能交付部分图。"""
+    def test_malformed_syntax_retains_confirmed_structure(self):
+        """缺依赖和局部畸形语法保留原文与可确认结构。"""
         metadata(self.root)
         path = "src/main/java/p/Main.java"
         write(self.root, path, "package p; class Main { void run(){ missing.Type.nope(); } }")
@@ -192,10 +234,8 @@ class JavaHelperTests(unittest.TestCase):
         write(self.root, path, "package p; class Main { void broken( { } }")
         before = snapshot_files(self.root)
         malformed = run(request(self.root, [path]))
-        self.assertEqual(malformed["outcome"], "error", malformed)
-        self.assertEqual(malformed["error"]["code"], "object_extraction_failed")
-        self.assertNotIn("graph", malformed)
-        self.assertNotIn("evidence", malformed)
+        self.assertEqual(malformed["outcome"], "ok", malformed)
+        self.assertTrue(any(n["native_kind"] == "file" for n in malformed["graph"]["nodes"]))
         self.assertEqual(snapshot_files(self.root), before)
 
     def test_lombok_processor_candidate_is_not_loaded(self):
@@ -219,8 +259,8 @@ class JavaHelperTests(unittest.TestCase):
         self.assertFalse(marker.exists(), "annotation processor class was loaded")
         self.assertEqual(snapshot_files(self.root), before)
 
-    def test_maven_lombok_processor_configuration_rejected_without_execution(self):
-        """声明 Maven Lombok 处理器的 POM 静态拒绝，不能调用构建或加载处理器。"""
+    def test_unimported_maven_processor_configuration_keeps_structure(self):
+        """本阶段尚未导入的 Maven 插件配置允许明确选集保结构，不加载处理器。"""
         scratch = pathlib.Path(self.temp.name) / "processor-work"
         marker = scratch / "processor-loaded.txt"
         build_lombok_sentinel(scratch, self.root, marker)
@@ -236,10 +276,7 @@ class JavaHelperTests(unittest.TestCase):
         write(self.root, path, "package p; @lombok.Getter class Model { int value; }")
         before = snapshot_files(self.root)
         result = run(request(self.root, [path]))
-        self.assertEqual(result["outcome"], "error", result)
-        self.assertEqual(result["error"]["code"], "unsupported_configuration")
-        self.assertNotIn("graph", result)
-        self.assertNotIn("evidence", result)
+        self.assertEqual(result["outcome"], "ok", result)
         self.assertFalse(marker.exists(), "annotation processor class was loaded")
         self.assertEqual(snapshot_files(self.root), before)
 
@@ -255,8 +292,8 @@ class JavaHelperTests(unittest.TestCase):
                             for ref in method["references"]))
         self.assertFalse(any("getFirst" in item["symbol"] for item in completed["graph"]["external_symbols"]))
         wrong = run(request(self.root, [path], target=RUNTIME))
-        self.assertEqual(wrong["outcome"], "error")
-        self.assertEqual(wrong["error"]["code"], "target_unavailable")
+        self.assertEqual(wrong["outcome"], "ok", wrong)
+        self.assertFalse(any("getFirst" in item["symbol"] for item in wrong["graph"]["external_symbols"]))
 
     def test_content_projection_and_identity(self):
         """Whitespace and child-body changes do not alter parent own content."""
@@ -290,19 +327,19 @@ class JavaHelperTests(unittest.TestCase):
         included = run(request(self.root, [main, test], include_tests=True))
         self.assertTrue(any("Checks" in x["id"] for x in included["graph"]["nodes"]))
 
-    def test_gradle_and_jpms_rejected_without_execution(self):
-        """Unknown project logic and JPMS descriptors fail before a partial graph."""
-        write(self.root, "build.gradle", "throw new RuntimeException('MUST_NOT_EXECUTE')")
+    def test_unimported_gradle_and_jpms_keep_structure(self):
+        """Unimported project logic and JPMS descriptors retain confirmed structure."""
+        write(self.root, "build.gradle", "throw new RuntimeException('UNSUPPORTED_WRAPPER')")
+        write(self.root, "gradle/wrapper/gradle-wrapper.properties", "distributionUrl=https://invalid.example/gradle-10.0-bin.zip")
         path = "src/main/java/p/Main.java"
         write(self.root, path, "package p; class Main {}")
         completed = run(request(self.root, [path]))
-        self.assertEqual(completed["error"]["code"], "unsupported_configuration")
+        self.assertEqual(completed["outcome"], "ok", completed)
         metadata(self.root)
         module = "src/main/java/module-info.java"
         write(self.root, module, "module p { exports p; }")
         completed = run(request(self.root, [path]))
-        self.assertEqual(completed["error"]["code"], "unsupported_configuration")
-        self.assertFalse((self.root / "MUST_NOT_EXECUTE").exists())
+        self.assertEqual(completed["outcome"], "ok", completed)
 
     def test_maven_literal_model_after_eof(self):
         """Literal POM requires no Maven process and finishes after EOF."""
@@ -353,7 +390,7 @@ class Shapes {
         paths = ["a/src/main/java/p/A.java", "b/src/main/java/p/B.java"]
         completed = run(request(self.root, paths))
         self.assertEqual(completed["outcome"], "ok", completed)
-        self.assertEqual(len(completed["evidence"]["configurations"]), 2)
+        self.assertEqual(len(completed["evidence"]["configurations"]), 6)
 
     def test_binding_keys_are_scoped_to_each_maven_module(self):
         """同名类在独立模块中不能借另一模块的 binding key 指向选中节点。"""
@@ -389,12 +426,12 @@ class Shapes {
     def test_actual_maven_parent_overrides_aggregator(self):
         """子模块真正的仓内 parent 必须求值，不能继承无关聚合 POM 的 release。"""
         write(self.root, "pom.xml", "<project><modelVersion>4.0.0</modelVersion><groupId>p</groupId><artifactId>root</artifactId><version>1</version><packaging>pom</packaging><properties><maven.compiler.release>17</maven.compiler.release></properties><modules><module>child</module></modules></project>")
-        write(self.root, "parents/parent/pom.xml", "<project><modelVersion>4.0.0</modelVersion><groupId>p</groupId><artifactId>other</artifactId><version>1</version><properties><maven.compiler.release>21</maven.compiler.release></properties></project>")
+        write(self.root, "parents/parent/pom.xml", "<project><modelVersion>4.0.0</modelVersion><groupId>p</groupId><artifactId>other</artifactId><version>1</version><packaging>pom</packaging><properties><maven.compiler.release>21</maven.compiler.release></properties></project>")
         write(self.root, "child/pom.xml", "<project><modelVersion>4.0.0</modelVersion><parent><groupId>p</groupId><artifactId>other</artifactId><version>1</version><relativePath>../parents/parent/pom.xml</relativePath></parent><artifactId>child</artifactId></project>")
         path = "child/src/main/java/p/Child.java"
         write(self.root, path, "package p; class Child {}")
         result = run(request(self.root, [path]))
-        self.assertEqual(result["error"]["code"], "target_unavailable")
+        self.assertEqual(result["outcome"], "ok", result)
 
     def test_same_source_configuration_union(self):
         """同一声明汇合多个隔离配置的确定与未知关系。"""
@@ -439,15 +476,15 @@ class Shapes {
         self.assertEqual(constructor[0]["scope"], "repository")
         self.assertFalse(any(entry["native_kind"] == "constructor" for entry in result["graph"]["nodes"]))
 
-    def test_real_configuration_error_after_eof(self):
-        """完整输入后的配置错误保留明确失败，不返回图。"""
+    def test_unimported_configuration_recovers_exact_selection_after_eof(self):
+        """完整输入后的未导入配置允许明确选集返回基础图。"""
         path = "src/main/java/p/Foo.java"
         write(self.root, path, "package p; class Foo {}")
-        write(self.root, "build.gradle", "throw new Error('never run')")
+        write(self.root, "build.gradle", "throw new Error('unsupported wrapper')")
+        write(self.root, "gradle/wrapper/gradle-wrapper.properties", "distributionUrl=https://invalid.example/gradle-10.0-bin.zip")
         for _ in range(5):
             result = run(request(self.root, [path]))
-            self.assertEqual(result["outcome"], "error", result)
-            self.assertEqual(result["error"]["code"], "unsupported_configuration")
+            self.assertEqual(result["outcome"], "ok", result)
 
     def test_annotation_brace_does_not_truncate_signature(self):
         """字符串中的左花括号不能截断类型或方法声明头。"""
@@ -479,13 +516,13 @@ class Shapes {
 
     def test_inherited_maven_source_roots(self):
         """父 POM 的主测试目录在子模块继承，默认目录不再属于该模块。"""
-        write(self.root, "pom.xml", "<project><groupId>p</groupId><artifactId>parent</artifactId><version>1</version><modules><module>child</module></modules><properties><maven.compiler.release>17</maven.compiler.release></properties><build><sourceDirectory>sources</sourceDirectory><testSourceDirectory>checks</testSourceDirectory></build></project>")
-        write(self.root, "child/pom.xml", "<project><parent><groupId>p</groupId><artifactId>parent</artifactId><version>1</version></parent><artifactId>child</artifactId></project>")
+        write(self.root, "pom.xml", "<project><modelVersion>4.0.0</modelVersion><groupId>p</groupId><artifactId>parent</artifactId><version>1</version><packaging>pom</packaging><modules><module>child</module></modules><properties><maven.compiler.release>17</maven.compiler.release></properties><build><sourceDirectory>sources</sourceDirectory><testSourceDirectory>checks</testSourceDirectory></build></project>")
+        write(self.root, "child/pom.xml", "<project><modelVersion>4.0.0</modelVersion><parent><groupId>p</groupId><artifactId>parent</artifactId><version>1</version></parent><artifactId>child</artifactId></project>")
         main, test, default = "child/sources/B.java", "child/checks/Check.java", "child/src/main/java/A.java"
         for path, name in [(main, "B"), (test, "Check"), (default, "A")]:
             write(self.root, path, "class " + name + " {}")
         rejected = run(request(self.root, [default]))
-        self.assertEqual(rejected["outcome"], "error", rejected)
+        self.assertEqual(rejected["outcome"], "ok", rejected)
         excluded = run(request(self.root, [main, test]))
         self.assertEqual(excluded["outcome"], "ok", excluded)
         self.assertEqual({x["path"]: x["disposition"] for x in excluded["evidence"]["files"]},

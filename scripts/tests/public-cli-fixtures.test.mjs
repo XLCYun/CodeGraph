@@ -116,3 +116,10 @@ test('all seven public projects retain configuration boundaries and omitted-file
 test('public entry acceptance removes producer-only environment', () => {
   assert.deepEqual(publicEnvironment({ PATH: '/standard/tools', GOROOT: '/go', DOTNET_ROOT: '/dotnet', JAVA_HOME: '/jdk8', JDK_HOME: '/jdk17', CODEGRAPH_NATIVE_HELPERS_CONFIG: '/private.json', CODEGRAPH_GO_SDK: '/build/sdk', CODEGRAPH_GO_TARGET_SDK: '/go', CODEGRAPH_JAVA_TARGET_JDK: '/jdk17', CODEGRAPH_TEST_DISCOVERY_PROBE: '/unexpected/probe' }), { PATH: '/standard/tools', GOROOT: '/go', DOTNET_ROOT: '/dotnet', JAVA_HOME: '/jdk8', JDK_HOME: '/jdk17' });
 });
+
+/** Configless Java is valid and all Maven acceptance POMs use the real model contract. */
+test('Java acceptance retains inferred layout and valid empty Maven model', () => {
+  assert.equal(fixtures.java.implicit, true);
+  assert.ok(Object.keys(fixtures.java.configless).every(name => name.startsWith('src/main/java/')));
+  assert.match(fixtures.java.empty['pom.xml'], /<modelVersion>4\.0\.0<\/modelVersion>/);
+});

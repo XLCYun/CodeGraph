@@ -63,3 +63,11 @@ test('observer keeps exec transitions and genuine nested descendants', () => {
 test('observer reports unavailable Windows creation identity', () => {
   assert.throws(() => observeTree([{ pid: 10, parent: 1, command: 'owner.exe', started: null }], new Map([[10, undefined]])), /creation time unavailable/);
 });
+
+/** A Unix zombie has exited; only a still-executing matching identity is a survivor. */
+test('observer distinguishes exited Unix zombies from live owned descendants', () => {
+  const recorded = { pid: 10, parent: 1, command: 'java', state: 'S' };
+  const observed = new Map([[10, recorded]]);
+  assert.deepEqual(liveObservedProcesses([{ ...recorded, state: 'Z' }], observed), []);
+  assert.equal(liveObservedProcesses([{ ...recorded, state: 'S' }], observed).length, 1);
+});

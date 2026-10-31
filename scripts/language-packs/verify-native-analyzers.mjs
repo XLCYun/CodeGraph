@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { prepareRustNativeTests } from './prepare-rust-native-tests.mjs';
-import { nativeTargets } from './provision-native-toolchains.mjs';
+import { nativeTargets, verifyArchive } from './provision-native-toolchains.mjs';
 import { verificationCommands } from './verification-commands.mjs';
 export { verificationCommands } from './verification-commands.mjs';
 
@@ -21,6 +21,14 @@ export async function validateNativeFixtures(environment, language = 'all') {
     if (!(await fs.stat(executable)).isFile()) throw new Error(`Missing direct analyzer fixture: ${id}`);
   }
   const required = [];
+  if (ids.includes('java')) {
+    const fixtures = JSON.parse(await fs.readFile(path.join(repository, 'resources/gradle-test-distributions.json'), 'utf8'));
+    for (const fixture of fixtures) {
+      const archive = environment[fixture.environment];
+      if (!archive) throw new Error(`Missing real Gradle fixture: ${fixture.environment}`);
+      await verifyArchive(archive, { name: `gradle-${fixture.version}`, algorithm: 'sha256', digest: fixture.sha256 });
+    }
+  }
   if (ids.includes('go')) for (const root of [environment.CODEGRAPH_GO_SDK, environment.CODEGRAPH_GO_TARGET_SDK]) for (const file of ['VERSION', 'src/builtin/builtin.go', 'src/runtime/runtime.go']) required.push(path.join(root, file));
   if (ids.includes('java')) required.push(path.join(environment.CODEGRAPH_JAVA_TARGET_JDK, 'release'), path.join(environment.CODEGRAPH_JAVA_TARGET_JDK, 'lib/jrt-fs.jar'));
   if (ids.includes('java')) required.push(path.join(environment.CODEGRAPH_JAVA_TARGET_8, 'jre/lib/rt.jar'), path.join(repository, 'analyzers/java/build/test-classes/dev/codegraph/java/ComponentDriver.class'));

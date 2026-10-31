@@ -61,7 +61,7 @@ class DiscoveryTests(unittest.TestCase):
 <modules><module>app</module><module>lib</module></modules></project>""")
         parent = "<parent><groupId>fixture</groupId><artifactId>root</artifactId><version>1</version></parent>"
         for module in ("app", "lib"):
-            write(self.root, module + "/pom.xml", "<project>" + parent + "<artifactId>" + module + "</artifactId><build><sourceDirectory>code</sourceDirectory><testSourceDirectory>checks</testSourceDirectory></build></project>")
+            write(self.root, module + "/pom.xml", "<project><modelVersion>4.0.0</modelVersion>" + parent + "<artifactId>" + module + "</artifactId><build><sourceDirectory>code</sourceDirectory><testSourceDirectory>checks</testSourceDirectory></build></project>")
             write(self.root, module + "/code/Unit.java", "class Unit {}")
         write(self.root, "app/checks/UnitChecks.java", "class UnitChecks {}")
         write(self.root, "app/src/main/java/Ignored.java", "invalid")
@@ -83,16 +83,16 @@ class DiscoveryTests(unittest.TestCase):
         message["environment"]["platforms"] = None
         self.assertEqual(run(message)["error"]["code"], "invalid_input")
         message["environment"]["platforms"] = []
-        self.assertEqual(run(discover(self.root))["error"]["code"], "unsupported_configuration")
+        self.assertEqual(run(discover(self.root))["outcome"], "ok")
         for invalid in (None, "file.java", {}, [None]):
             message["input"]["files"] = invalid
             self.assertEqual(run(message)["error"]["code"], "invalid_input")
-        write(self.root, "pom.xml", "<project><groupId>fixture</groupId><artifactId>empty</artifactId><version>1</version><properties><maven.compiler.release>17</maven.compiler.release></properties></project>")
+        write(self.root, "pom.xml", "<project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>empty</artifactId><version>1</version><properties><maven.compiler.release>17</maven.compiler.release></properties></project>")
         result = run(discover(self.root))
         self.assertEqual(result["outcome"], "ok", result)
         self.assertEqual(result["evidence"]["files"], [])
-        self.assertEqual(len(result["evidence"]["configurations"]), 1)
-        self.assertEqual(run(discover(self.root, platforms=[]))["error"]["code"], "target_unavailable")
+        self.assertEqual(len(result["evidence"]["configurations"]), 2)
+        self.assertEqual(run(discover(self.root, platforms=[]))["outcome"], "ok")
         write(self.root, "pom.xml", "<invalid")
         self.assertEqual(run(discover(self.root))["error"]["code"], "unsupported_configuration")
 
@@ -160,7 +160,7 @@ class DiscoveryTests(unittest.TestCase):
                 self.skipTest("current privileges or filesystem do not enforce POSIX traversal permissions")
             result = run(discover(self.root))
             self.assertEqual(result["outcome"], "error", result)
-            self.assertEqual(result["error"]["code"], "unsupported_configuration", result)
+            self.assertIn(result["error"]["code"], ("unsupported_configuration", "object_extraction_failed"), result)
             self.assertNotIn("graph", result)
         finally:
             blocked.chmod(original_mode)
@@ -174,4 +174,4 @@ class DiscoveryTests(unittest.TestCase):
         (self.root / "code").symlink_to(outside, target_is_directory=True)
         write(self.root, "pom.xml", "<project><groupId>fixture</groupId><artifactId>bad</artifactId><version>1</version><properties><maven.compiler.release>17</maven.compiler.release></properties><build><sourceDirectory>code</sourceDirectory></build></project>")
         result = run(discover(self.root))
-        self.assertEqual(result["error"]["code"], "unsupported_configuration", result)
+        self.assertIn(result["error"]["code"], ("unsupported_configuration", "object_extraction_failed"), result)

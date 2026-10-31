@@ -149,7 +149,7 @@ Project targets may still require existing SDKs. For example, a Java 17 project
 needs a matching target JDK even when the analyzer runs on its bundled JDK 25;
 C# needs matching reference assemblies, which a runtime-only .NET installation
 does not provide. Target SDK discovery only reads existing installations. It
-never installs or upgrades SDKs or runs project build scripts.
+never installs or upgrades project SDKs. Java normal analysis includes caller-authorized Maven dependency resolution and Gradle configuration/plugins/buildSrc execution; it requests no business build/test/release/deploy or extra code-generation tasks. See [Java model-import policy](docs/adr/0002-java-project-model-import.md).
 
 C/C++ can generate a source graph without `compile_commands.json` or installed
 project headers. Missing semantic context leaves uncertain fragments opaque and
